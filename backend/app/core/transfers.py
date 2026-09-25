@@ -1,3 +1,4 @@
+import sqlite3
 from bisect import bisect_left, bisect_right
 from collections.abc import Sequence
 from datetime import date
@@ -25,9 +26,19 @@ class Leg(NamedTuple):
     libelle: str
 
 
-def effective_markers(conn) -> list[str]:
+def effective_markers(conn: sqlite3.Connection) -> list[str]:
     """The configured transfer markers, or the built-in default when none are configured."""
     return get_transfer_markers(conn) or list(DEFAULT_TRANSFER_MARKERS)
+
+
+def _deposit_patterns(conn: sqlite3.Connection) -> list[str]:
+    """deposit_pattern of every external savings account (a child's Livret A)."""
+    return [pattern for _code, _label, pattern in savings_accounts(conn) if pattern]
+
+
+def _is_external_deposit(libelle: str, patterns: Sequence[str]) -> bool:
+    """Same case-sensitive substring test as the external-savings pass (SQL instr)."""
+    return any(pattern in libelle for pattern in patterns)
 
 
 def has_transfer_marker(libelle: str, markers: Sequence[str]) -> bool:
@@ -77,7 +88,10 @@ def pair_legs(
     return pairs
 
 
-def _legs(conn, amount_col: str, markers: Sequence[str]) -> list[Leg]:
+def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> list[Leg]:
+    # External-savings deposits are single-legged by design (see recompute_transfers): pairing one
+    # with an unrelated same-amount credit would hide that credit from income.
+    patterns = _deposit_patterns(conn)
     rows = conn.execute(
         f"SELECT id, account_id, {amount_col}, date_operation, libelle FROM transactions "
         f"WHERE {amount_col} > 0 AND account_id IS NOT NULL AND kind_manual = 0 "
@@ -86,11 +100,11 @@ def _legs(conn, amount_col: str, markers: Sequence[str]) -> list[Leg]:
     return [
         Leg(id_, account_id, cents, date.fromisoformat(day).toordinal(), libelle)
         for id_, account_id, cents, day, libelle in rows
-        if has_transfer_marker(libelle, markers)
+        if has_transfer_marker(libelle, markers) and not _is_external_deposit(libelle, patterns)
     ]
 
 
-def _next_group(conn) -> int:
+def _next_group(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COALESCE(MAX(transfer_group_id), 0) FROM transactions").fetchone()[0] + 1
 
 
@@ -147,7 +161,7 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
         return marked
 
 
-def _partner_ids(conn, transaction_id: int) -> list[int]:
+def _partner_ids(conn: sqlite3.Connection, transaction_id: int) -> list[int]:
     """The other leg(s) sharing this row's transfer group, if any."""
     return [
         pid
@@ -159,7 +173,7 @@ def _partner_ids(conn, transaction_id: int) -> list[int]:
     ]
 
 
-def _release(conn, ids: Sequence[int]) -> None:
+def _release(conn: sqlite3.Connection, ids: Sequence[int]) -> None:
     """Hand rows back to automatic detection (recompute_transfers re-derives them)."""
     conn.executemany(
         "UPDATE transactions SET kind_manual = 0, transfer_group_id = NULL WHERE id = ?",
@@ -170,23 +184,28 @@ def _release(conn, ids: Sequence[int]) -> None:
 def pair_manually(db_path: Path, a_id: int, b_id: int) -> int:
     """Force two rows into a manual transfer pair (the user's decision wins over detection: the
     date window and the markers are not checked). Requires one debit and one credit of the same
-    amount on two different accounts. Any previous partner of either leg goes back to automatic
+    amount on two different accounts, neither of them a deposit to an external savings account
+    (those follow their deposit_pattern). Any previous partner of either leg goes back to automatic
     detection, so every manual group keeps exactly two legs. Returns the new group id.
 
     Raises LookupError for an unknown id, ValueError for an invalid pair."""
     if a_id == b_id:
         raise ValueError("A transfer needs two different operations")
     with connect(db_path) as conn:
-        rows = {
-            id_: (account_id, debit, credit)
-            for id_, account_id, debit, credit in conn.execute(
-                "SELECT id, account_id, debit_cents, credit_cents FROM transactions WHERE id IN (?, ?)",
-                (a_id, b_id),
-            )
-        }
+        rows = {}
+        labels = []
+        for id_, account_id, debit, credit, libelle in conn.execute(
+            "SELECT id, account_id, debit_cents, credit_cents, libelle FROM transactions WHERE id IN (?, ?)",
+            (a_id, b_id),
+        ):
+            rows[id_] = (account_id, debit, credit)
+            labels.append(libelle)
         missing = [id_ for id_ in (a_id, b_id) if id_ not in rows]
         if missing:
             raise LookupError(f"No transaction with id {missing[0]}")
+        patterns = _deposit_patterns(conn)
+        if any(_is_external_deposit(label, patterns) for label in labels):
+            raise ValueError("A deposit to an external savings account can't be paired")
         debits = [id_ for id_, (_acc, debit, _credit) in rows.items() if debit > 0]
         credits = [id_ for id_, (_acc, _debit, credit) in rows.items() if credit > 0]
         if len(debits) != 1 or len(credits) != 1:
@@ -218,6 +237,10 @@ def set_transfer_mode(db_path: Path, transaction_id: int, mode: TransferMode) ->
       statement isn't imported); a previous partner goes back to automatic detection.
     - "auto": drop any manual decision on the row and its partner; detection decides again.
 
+    Deposits to an external savings account always go back to detection, whatever the mode: they
+    follow their deposit_pattern, and a manual "not a transfer" would count them both as an
+    expense and as savings.
+
     Raises LookupError for an unknown id."""
     with connect(db_path) as conn:
         if conn.execute("SELECT 1 FROM transactions WHERE id = ?", (transaction_id,)).fetchone() is None:
@@ -241,5 +264,18 @@ def set_transfer_mode(db_path: Path, transaction_id: int, mode: TransferMode) ->
         else:
             touched = [transaction_id, *partners]
             _release(conn, touched)
+        patterns = _deposit_patterns(conn)
+        if patterns:
+            placeholders = ", ".join("?" * len(touched))
+            _release(
+                conn,
+                [
+                    id_
+                    for id_, libelle in conn.execute(
+                        f"SELECT id, libelle FROM transactions WHERE id IN ({placeholders})", touched
+                    )
+                    if _is_external_deposit(libelle, patterns)
+                ],
+            )
     recompute_transfers(db_path)
     return touched

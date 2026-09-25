@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -58,7 +59,7 @@ def _to_model(row: tuple) -> Transaction:
 OVERRIDES_HEADER = ["import_hash", "category_path", "kind", "libelle", "note", "transfer_pair"]
 
 
-def override_rows(conn, path_by_id: dict[int, str]) -> list[list]:
+def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
     """Every manual category/kind/note override as overrides.csv rows (shared by the Settings
     export and reset_db.py's snapshot). Keyed by the stable import_hash; `transfer_pair` holds the
     partner leg's import_hash for a manual transfer pair, so the pair is re-linked on restore."""

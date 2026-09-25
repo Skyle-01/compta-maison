@@ -207,6 +207,36 @@ class TestManualTransfers:
                 )
             }
 
+    # The fictional ENFANT account (conftest) is external savings with pattern "VERS LIVRET ENFANT".
+    DEPOSIT_AND_GIFT = (
+        ("2026-06-10", "2026-06-10", "VIR VERS LIVRET ENFANT", 50, 0, "PERSO"),
+        ("2026-06-10", "2026-06-10", "VIR SEPA MAMIE", 0, 50, "JOINT"),
+    )
+
+    def test_external_deposit_never_auto_paired(self, db):
+        _import(db, *self.DEPOSIT_AND_GIFT)
+        recompute_transfers(db)
+        assert self._state(db) == {
+            "VIR VERS LIVRET ENFANT": ("transfer", 0, False),  # single-legged savings deposit
+            "VIR SEPA MAMIE": ("income", 0, False),  # the gift stays income
+        }
+
+    @pytest.mark.parametrize("modes", [["none"], ["transfer"], ["transfer", "none"]])
+    def test_external_deposit_ignores_manual_modes(self, db, modes):
+        # A manual "not a transfer" would count the deposit as an expense *and* as savings.
+        _import(db, *self.DEPOSIT_AND_GIFT)
+        recompute_transfers(db)
+        for mode in modes:
+            set_transfer_mode(db, self._ids(db)["VIR VERS LIVRET ENFANT"], mode)
+        assert self._state(db)["VIR VERS LIVRET ENFANT"] == ("transfer", 0, False)
+        assert income_and_expenses(db, "2026-06") == (50.0, 0.0)
+
+    def test_pair_manually_rejects_external_deposit(self, db):
+        _import(db, *self.DEPOSIT_AND_GIFT)
+        ids = self._ids(db)
+        with pytest.raises(ValueError, match="external savings"):
+            pair_manually(db, ids["VIR VERS LIVRET ENFANT"], ids["VIR SEPA MAMIE"])
+
     def test_manual_unpair_survives_recompute(self, db):
         _import(db, *self.LEGS)
         recompute_transfers(db)

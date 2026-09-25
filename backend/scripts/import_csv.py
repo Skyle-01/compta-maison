@@ -21,6 +21,7 @@ this script just layers a given set of taxonomy CSVs onto whatever transactions 
 
 import argparse
 import csv
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -193,7 +194,7 @@ def import_overrides(conn, rows: list[dict], path_to_id: dict[str, int]) -> tupl
     return applied, skipped
 
 
-def restore_manual_pairs(conn, rows: list[dict]) -> tuple[int, int]:
+def restore_manual_pairs(conn: sqlite3.Connection, rows: list[dict]) -> tuple[int, int]:
     """Re-link manual transfer pairs from the overrides' `transfer_pair` column (the partner leg's
     import_hash). Runs after import_overrides, which already made both legs manual transfers.
     Returns (restored, unmatched); an unmatched leg (partner not re-imported) stays a single-leg
