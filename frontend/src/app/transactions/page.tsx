@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type Category, type Transaction, formatEuro, frenchMonth, suggestPattern } from "@/lib/api";
+import {
+  api,
+  type Category,
+  type Transaction,
+  type TransferMode,
+  formatEuro,
+  frenchMonth,
+  suggestPattern,
+} from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
 
 const PAGE_SIZE = 50;
@@ -30,6 +38,8 @@ export default function TransactionsPage() {
   const [editPriority, setEditPriority] = useState("100");
   const [editAnchor, setEditAnchor] = useState(false);
   const [matchCount, setMatchCount] = useState<number | null>(null);
+  // Rows ticked for a manual transfer decision (kept across pages/months; at most two).
+  const [selected, setSelected] = useState<Map<number, Transaction>>(new Map());
 
   useEffect(() => {
     // Honour a deep-link from the dashboard warning (?uncategorized=1&month=YYYY-MM); the URL month
@@ -139,6 +149,31 @@ export default function TransactionsPage() {
     }
   }
 
+  function toggleSelected(tx: Transaction) {
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(tx.id)) next.delete(tx.id);
+      else if (next.size < 2) next.set(tx.id, tx);
+      return next;
+    });
+  }
+
+  async function transferAction(action: () => Promise<unknown>, message: string) {
+    setError(null);
+    try {
+      await action();
+      setSelected(new Map());
+      setFlash(message);
+      load();
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  const setMode = (tx: Transaction, mode: TransferMode, message: string) =>
+    transferAction(() => api.setTransferMode(tx.id, mode), message);
+  const selectedRows = [...selected.values()];
+
   const submitDisabled = editCategory == null || (editMode === "rule" && !editPattern.trim());
 
   return (
@@ -176,12 +211,48 @@ export default function TransactionsPage() {
       </div>
 
       {error && <p className="text-sm text-red-700">{error}</p>}
+      {selectedRows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+          <span className="text-zinc-600">
+            {selectedRows.length} sélectionnée(s) :{" "}
+            {selectedRows.map((tx) => `${tx.libelle} (${formatEuro(tx.credit > 0 ? tx.credit : -tx.debit)})`).join(" ↔ ")}
+          </span>
+          {selectedRows.length === 2 ? (
+            <button
+              onClick={() =>
+                transferAction(
+                  () => api.pairTransfer([selectedRows[0].id, selectedRows[1].id]),
+                  "Virement associé.",
+                )
+              }
+              className="rounded bg-zinc-800 px-3 py-0.5 text-xs text-white"
+            >
+              Associer en virement
+            </button>
+          ) : (
+            <button
+              onClick={() => setMode(selectedRows[0], "transfer", "Opération marquée comme virement.")}
+              className="rounded bg-zinc-800 px-3 py-0.5 text-xs text-white"
+              title="Virement vers un compte dont le relevé n’est pas importé — exclu des revenus/dépenses"
+            >
+              Marquer comme virement
+            </button>
+          )}
+          <button
+            onClick={() => setSelected(new Map())}
+            className="rounded border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 hover:bg-white"
+          >
+            Effacer
+          </button>
+        </div>
+      )}
       {flash && <p className="text-sm text-green-700">{flash}</p>}
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-500">
             <tr>
+              <th className="w-6 px-2 py-2" title="Sélectionner pour associer deux opérations en virement" />
               <th className="px-3 py-2 font-medium">Date</th>
               <th className="px-3 py-2 font-medium">Libellé</th>
               <th className="px-3 py-2 font-medium">Compte</th>
@@ -192,6 +263,15 @@ export default function TransactionsPage() {
           <tbody>
             {items.map((tx) => (
               <tr key={tx.id} className="border-t border-zinc-100 align-top">
+                <td className="px-2 py-1.5">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(tx.id)}
+                    disabled={!selected.has(tx.id) && selected.size >= 2}
+                    onChange={() => toggleSelected(tx)}
+                    aria-label="Sélectionner"
+                  />
+                </td>
                 <td className="whitespace-nowrap px-3 py-1.5">{tx.date_valeur}</td>
                 <td className="max-w-md truncate px-3 py-1.5" title={tx.libelle}>
                   {tx.libelle}
@@ -206,12 +286,37 @@ export default function TransactionsPage() {
                 </td>
                 <td className="px-3 py-1.5">
                   {tx.kind === "transfer" ? (
-                    <span
-                      className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-xs text-zinc-500"
-                      title="Virement / mouvement d’épargne — exclu des revenus/dépenses"
-                    >
-                      ⇄ virement
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span
+                        className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-zinc-500"
+                        title="Virement / mouvement d’épargne — exclu des revenus/dépenses"
+                      >
+                        ⇄ virement
+                      </span>
+                      {tx.kind_manual && (
+                        <span className="text-zinc-400" title="Décision manuelle">
+                          ✎
+                        </span>
+                      )}
+                      {(tx.transfer_group_id != null || tx.kind_manual) && (
+                        <button
+                          onClick={() => setMode(tx, "none", "Virement dissocié.")}
+                          className="text-zinc-400 hover:text-zinc-900"
+                          title="Ce n’est pas un virement : compter dans les revenus/dépenses"
+                        >
+                          Dissocier
+                        </button>
+                      )}
+                      {tx.kind_manual && (
+                        <button
+                          onClick={() => setMode(tx, "auto", "Détection automatique rétablie.")}
+                          className="text-zinc-400 hover:text-zinc-900"
+                          title="Revenir à la détection automatique"
+                        >
+                          Auto
+                        </button>
+                      )}
+                    </div>
                   ) : editingTxId === tx.id ? (
                     <div className="space-y-2">
                       <CategoryPicker
@@ -308,6 +413,7 @@ export default function TransactionsPage() {
                   ) : tx.category_id ? (
                     <div className="flex flex-wrap items-center gap-2">
                       <span>{tx.category}</span>
+                      <NotTransferBadge tx={tx} onAuto={() => setMode(tx, "auto", "Détection automatique rétablie.")} />
                       {tx.category_manual ? (
                         <span className="text-xs text-zinc-400" title="Assigné manuellement">
                           ✎
@@ -330,19 +436,22 @@ export default function TransactionsPage() {
                       </button>
                     </div>
                   ) : (
-                    <button
-                      onClick={() => openEditor(tx)}
-                      className="rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-100"
-                    >
-                      Classer
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => openEditor(tx)}
+                        className="rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-100"
+                      >
+                        Classer
+                      </button>
+                      <NotTransferBadge tx={tx} onAuto={() => setMode(tx, "auto", "Détection automatique rétablie.")} />
+                    </div>
                   )}
                 </td>
               </tr>
             ))}
             {items.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-zinc-500">
+                <td colSpan={6} className="px-3 py-6 text-center text-zinc-500">
                   Aucune transaction.
                 </td>
               </tr>
@@ -373,5 +482,18 @@ export default function TransactionsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** A row the user declared "not a transfer": say so, with a way back to automatic detection. */
+function NotTransferBadge({ tx, onAuto }: { tx: Transaction; onAuto: () => void }) {
+  if (!tx.kind_manual) return null;
+  return (
+    <span className="text-xs text-zinc-400" title="Décision manuelle : n’est pas un virement">
+      ✎ pas un virement ·{" "}
+      <button onClick={onAuto} className="hover:text-zinc-900" title="Revenir à la détection automatique">
+        Auto
+      </button>
+    </span>
   );
 }

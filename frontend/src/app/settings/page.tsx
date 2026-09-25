@@ -639,6 +639,8 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <TransferMarkersSection />
+
       <section className="space-y-3">
         <div className="flex items-center">
           <h1 className="text-xl font-semibold">Modifications manuelles</h1>
@@ -772,5 +774,59 @@ export default function SettingsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** Label prefixes that identify a virement for automatic transfer pairing. */
+function TransferMarkersSection() {
+  const [text, setText] = useState("");
+  const [isDefault, setIsDefault] = useState(true);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    api
+      .getTransferMarkers()
+      .then((m) => {
+        setText(m.markers.join("\n"));
+        setIsDefault(m.is_default);
+      })
+      .catch((e) => setStatus(String(e)));
+  }, []);
+
+  async function save() {
+    try {
+      const m = await api.setTransferMarkers(text.split("\n"));
+      setText(m.markers.join("\n"));
+      setIsDefault(m.is_default);
+      setStatus("Enregistré — virements recalculés.");
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  return (
+    <section className="space-y-3">
+      <h1 className="text-xl font-semibold">Virements internes</h1>
+      <p className="text-sm text-zinc-500">
+        Un débit et un crédit de même montant sur deux comptes, à 3 jours d’écart au plus, sont
+        associés en virement (exclus des revenus/dépenses) si les deux libellés commencent par l’un
+        de ces préfixes (un par ligne, sans distinction de casse ; « * » = tout libellé). Liste vide =
+        valeur par défaut. Pour corriger un cas précis, utilisez la page Transactions (Associer /
+        Dissocier).
+      </p>
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={3}
+          className="w-48 rounded border border-zinc-300 px-2 py-1 font-mono text-xs"
+        />
+        <button onClick={save} className="rounded bg-zinc-900 px-3 py-1 text-white">
+          Enregistrer
+        </button>
+        {isDefault && <span className="text-xs text-zinc-400">(par défaut)</span>}
+        {status && <span className="text-xs text-zinc-500">{status}</span>}
+      </div>
+    </section>
   );
 }

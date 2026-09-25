@@ -24,6 +24,18 @@ export interface Transaction {
   note: string | null;
   rule_id: number | null;
   rule_pattern: string | null;
+  /** Shared by the two legs of a transfer (null for a single-legged or non-transfer row). */
+  transfer_group_id: number | null;
+  /** True when the user decided the transfer status (pair, unpair, single-row transfer). */
+  kind_manual: boolean;
+}
+
+/** Manual transfer decision on one row: this row alone is a transfer / not a transfer / automatic. */
+export type TransferMode = "transfer" | "none" | "auto";
+
+export interface TransferMarkers {
+  markers: string[];
+  is_default: boolean;
 }
 
 export interface Account {
@@ -192,6 +204,18 @@ export const api = {
     request(`/api/categories/${id}`, { method: "DELETE" }),
 
   listRules: (): Promise<Rule[]> => request("/api/rules"),
+  pairTransfer(ids: [number, number]): Promise<Transaction[]> {
+    return request("/api/transactions/transfer-pair", json("POST", { transaction_ids: ids }));
+  },
+
+  setTransferMode(id: number, mode: TransferMode): Promise<Transaction[]> {
+    return request(`/api/transactions/${id}/transfer`, json("PUT", { mode }));
+  },
+
+  getTransferMarkers: (): Promise<TransferMarkers> => request("/api/transfer-markers"),
+  setTransferMarkers: (markers: string[]): Promise<TransferMarkers> =>
+    request("/api/transfer-markers", json("PUT", { markers })),
+
   createRule: (r: Omit<Rule, "id">): Promise<Rule> => request("/api/rules", json("POST", r)),
   updateRule: (id: number, r: Omit<Rule, "id">): Promise<Rule> =>
     request(`/api/rules/${id}`, json("PUT", r)),

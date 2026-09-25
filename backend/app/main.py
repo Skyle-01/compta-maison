@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import accounts, categories, dashboard, imports, rules, transactions
+from app.api import accounts, categories, dashboard, imports, rules, transactions, transfer_markers
 from app.db import DEFAULT_DB_PATH, init_db
 
 
@@ -31,6 +31,7 @@ def create_app(db_path: Path = DEFAULT_DB_PATH) -> FastAPI:
     app.include_router(rules.router)
     app.include_router(dashboard.router)
     app.include_router(accounts.router)
+    app.include_router(transfer_markers.router)
     return app
 
 

@@ -24,8 +24,9 @@
 
 - [ ] **Budget targets** — `budget_target` column on categories, actual-vs-target variance on the
   dashboard.
-- [ ] **Manual transfer pair/unpair** — endpoint + UI to override the auto-pairing
-  (`transfer_group_id`, `kind_manual`); auto-detection landed in v3 (`core/transfers.py`).
+- [ ] **List manual transfer decisions in Settings** — pairs/unpairs made on the Transactions page
+  are exported with the overrides but not listed in "Modifications manuelles".
+- [ ] **Per-account transfer markers** — only if a multi-bank household needs different prefixes.
 - [ ] **Export to Excel** — openpyxl report.
 
 ### Backburner
@@ -33,6 +34,12 @@
 - [ ] **Bank API ingestion** — Budget Insight / Powens instead of manual CSV download.
 
 ## Done
+
+- [x] 2026-09-25 — **Stricter transfer detection + manual pair/unpair.** Both legs must start with a
+  transfer marker (`transfer_markers` table / `transfer_markers.csv`, default `VIR`, `*` = any);
+  pairing is bucketed + bisected instead of quadratic; Transactions page can pair two rows, mark a
+  single row as transfer, unpair, or go back to auto. Manual pairs round-trip via the new
+  `transfer_pair` column of `overrides.csv`.
 
 - [x] 2026-06-16 — **French UI complete.** Localised the Import + Settings pages and the shared
   `CategoryPicker` (the last English chrome); the whole frontend is now French. Code, comments, and

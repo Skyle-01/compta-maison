@@ -10,7 +10,7 @@ your machine; nothing is sent anywhere.
 | Path | Holds | Tracked? |
 | --- | --- | --- |
 | `data/` | a **fictional** example config (accounts, categories, rules) | yes |
-| `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `overrides.csv`) | no |
+| `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`) | no |
 | `_inputs/` | your bank statement CSVs | no |
 | `_backups/` | automatic snapshots taken before each rebuild | no |
 | `compta.db` | the SQLite database | no |
@@ -37,11 +37,17 @@ npm install --prefix frontend
    - `rules.csv`: `category_path;pattern;priority;is_income_anchor;description`. A pattern is a
      plain, case-sensitive substring of the bank label. The rule flagged `is_income_anchor=1`
      (your salary) starts each budget month.
+   - `transfer_markers.csv` (optional): one `marker` per line. A debit and a credit of the same
+     amount on two of your accounts, at most 3 days apart, are paired as an internal transfer
+     (left out of income and expenses) only if **both** labels start with one of these prefixes
+     (case-insensitive). The default is `VIR`; `*` accepts any label.
 3. Build the database: `.venv/Scripts/python backend/scripts/reset_db.py --source defaults`.
 4. Run it: `./dev.ps1` (Windows), or `uvicorn app.main:app --port 8000` from `backend/` plus
    `npm run dev --prefix frontend`. Open http://localhost:3000.
 
-After that, edit categories and rules from the app's Settings page. To rebuild while keeping them
+After that, edit categories, rules and transfer markers from the app's Settings page. On the
+Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
+pair; these manual decisions are kept across rebuilds. To rebuild while keeping them
 (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current
 setup to `_backups/<timestamp>/` first. `--source backup` restores the latest snapshot. Copy a
 snapshot's files into `_config/` to make it your new reference setup.

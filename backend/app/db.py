@@ -53,6 +53,12 @@ CREATE TABLE IF NOT EXISTS label_rules (
     description      TEXT
 );
 
+/* Label prefixes identifying a virement for transfer auto-pairing (core/transfers.py).
+   Empty = the built-in default (DEFAULT_TRANSFER_MARKERS); '*' = any label. */
+CREATE TABLE IF NOT EXISTS transfer_markers (
+    marker TEXT PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS transactions (
     id                INTEGER PRIMARY KEY,
     date_operation    TEXT NOT NULL,
@@ -134,6 +140,20 @@ def upsert_accounts(
         "ON CONFLICT(alias) DO UPDATE SET code = excluded.code",
         [(alias.strip().upper(), code) for alias, code in aliases],
     )
+
+
+def get_transfer_markers(conn: sqlite3.Connection) -> list[str]:
+    """The configured transfer markers, in the order they were saved (may be empty)."""
+    return [m for (m,) in conn.execute("SELECT marker FROM transfer_markers ORDER BY rowid")]
+
+
+def replace_transfer_markers(conn: sqlite3.Connection, markers: list[str]) -> list[str]:
+    """Replace the transfer markers (blanks dropped, duplicates removed keeping the first).
+    An empty list means "use the built-in default". Returns the stored list."""
+    cleaned = list(dict.fromkeys(m.strip() for m in markers if m.strip()))
+    conn.execute("DELETE FROM transfer_markers")
+    conn.executemany("INSERT INTO transfer_markers (marker) VALUES (?)", [(m,) for m in cleaned])
+    return cleaned
 
 
 def load_account_aliases(conn: sqlite3.Connection) -> dict[str, str]:

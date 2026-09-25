@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,8 @@ class Transaction(BaseModel):
     rule_pattern: str | None = Field(
         default=None, description="Pattern of the matching rule, for provenance display"
     )
+    transfer_group_id: int | None = Field(default=None, description="Shared by the two legs of a transfer")
+    kind_manual: bool = Field(default=False, description="True when the user decided the transfer status")
 
 
 class TransactionPage(BaseModel):
@@ -46,6 +48,25 @@ class TransactionPatch(BaseModel):
     # caller can update the category, the note, or both in one PATCH.
     category_id: int | None = None
     note: str | None = None
+
+
+class TransferPairIn(BaseModel):
+    transaction_ids: list[int] = Field(min_length=2, max_length=2, description="One debit and one credit")
+
+
+class TransferModeIn(BaseModel):
+    mode: Literal["transfer", "none", "auto"] = Field(
+        description="'transfer' = this row alone is a transfer, 'none' = not a transfer (unpair), "
+        "'auto' = back to automatic detection"
+    )
+
+
+class TransferMarkers(BaseModel):
+    markers: list[str] = Field(description="Label prefixes of a virement; empty = built-in default")
+
+
+class TransferMarkersOut(TransferMarkers):
+    is_default: bool = Field(description="True when no marker is configured and the default applies")
 
 
 class CategoryIn(BaseModel):

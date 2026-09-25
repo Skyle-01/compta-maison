@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from app.api.categories import category_paths, csv_response, reject_group_target
 from app.api.deps import get_db_path
 from app.core.categorize import apply_rules
+from app.core.transfers import pair_manually, set_transfer_mode
 from app.db import (
     connect,
     euros,
@@ -16,6 +17,8 @@ from app.schemas import (
     Transaction,
     TransactionPage,
     TransactionPatch,
+    TransferModeIn,
+    TransferPairIn,
 )
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
@@ -23,7 +26,7 @@ router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 _SELECT = (
     "SELECT t.id, t.date_operation, t.date_valeur, t.budget_month, t.libelle, "
     "t.debit_cents, t.credit_cents, t.account, t.account_id, t.kind, t.category_id, c.name, "
-    "t.category_manual, t.note, t.rule_id, lr.pattern "
+    "t.category_manual, t.note, t.rule_id, lr.pattern, t.transfer_group_id, t.kind_manual "
     "FROM transactions t LEFT JOIN categories c ON c.id = t.category_id "
     "LEFT JOIN label_rules lr ON lr.id = t.rule_id"
 )
@@ -47,7 +50,39 @@ def _to_model(row: tuple) -> Transaction:
         note=row[13],
         rule_id=row[14],
         rule_pattern=row[15],
+        transfer_group_id=row[16],
+        kind_manual=bool(row[17]),
     )
+
+
+OVERRIDES_HEADER = ["import_hash", "category_path", "kind", "libelle", "note", "transfer_pair"]
+
+
+def override_rows(conn, path_by_id: dict[int, str]) -> list[list]:
+    """Every manual category/kind/note override as overrides.csv rows (shared by the Settings
+    export and reset_db.py's snapshot). Keyed by the stable import_hash; `transfer_pair` holds the
+    partner leg's import_hash for a manual transfer pair, so the pair is re-linked on restore."""
+    # Transition guard: reset_db snapshots the LIVE db, which on a pre-`note` schema lacks the column.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
+    note_col = "t.note" if "note" in cols else "NULL"
+    rows = conn.execute(
+        f"SELECT t.import_hash, t.category_id, t.category_manual, t.kind, t.kind_manual, t.libelle, "
+        f"{note_col}, p.import_hash FROM transactions t "
+        "LEFT JOIN transactions p ON t.kind_manual = 1 AND p.kind_manual = 1 "
+        "AND p.transfer_group_id = t.transfer_group_id AND p.id != t.id "
+        "WHERE t.category_manual = 1 OR t.kind_manual = 1 ORDER BY t.date_valeur, t.id"
+    ).fetchall()
+    return [
+        [
+            import_hash,
+            path_by_id.get(category_id, "") if category_manual and category_id else "",
+            kind if kind_manual else "",
+            libelle,
+            note or "",
+            partner_hash or "",
+        ]
+        for import_hash, category_id, category_manual, kind, kind_manual, libelle, note, partner_hash in rows
+    ]
 
 
 @router.get("", response_model=TransactionPage)
@@ -95,26 +130,44 @@ def list_transactions(
 
 @router.get("/export-overrides")
 def export_overrides(db_path: Path = Depends(get_db_path)) -> Response:
-    """Download every manual category/kind override, keyed by the stable import_hash so it
-    survives a delete-and-reseed (re-importable via scripts/import_csv.py --overrides)."""
+    """Download every manual override, keyed by the stable import_hash so it survives a
+    delete-and-rebuild (re-importable via scripts/import_csv.py --overrides)."""
     with connect(db_path) as conn:
-        paths = category_paths(conn)
+        rows = override_rows(conn, category_paths(conn))
+    return csv_response(rows, OVERRIDES_HEADER, "overrides.csv")
+
+
+def _load(db_path: Path, ids: list[int]) -> list[Transaction]:
+    with connect(db_path) as conn:
         rows = conn.execute(
-            "SELECT import_hash, category_id, category_manual, kind, kind_manual, libelle, note "
-            "FROM transactions WHERE category_manual = 1 OR kind_manual = 1 ORDER BY date_valeur, id"
+            f"{_SELECT} WHERE t.id IN ({','.join('?' * len(ids))}) ORDER BY t.date_valeur, t.id", ids
         ).fetchall()
-    out = [
-        [
-            import_hash,
-            paths.get(category_id, "") if category_manual and category_id else "",
-            kind if kind_manual else "",
-            libelle,
-            note or "",
-        ]
-        for import_hash, category_id, category_manual, kind, kind_manual, libelle, note in rows
-    ]
-    header = ["import_hash", "category_path", "kind", "libelle", "note"]
-    return csv_response(out, header, "overrides.csv")
+    return [_to_model(r) for r in rows]
+
+
+@router.post("/transfer-pair", response_model=list[Transaction])
+def pair_transfer(pair: TransferPairIn, db_path: Path = Depends(get_db_path)) -> list[Transaction]:
+    """Force two operations (one debit, one credit, same amount, two accounts) into a transfer."""
+    a_id, b_id = pair.transaction_ids
+    try:
+        pair_manually(db_path, a_id, b_id)
+    except LookupError as exc:
+        raise HTTPException(404, detail=[str(exc)]) from exc
+    except ValueError as exc:
+        raise HTTPException(422, detail=[str(exc)]) from exc
+    return _load(db_path, [a_id, b_id])
+
+
+@router.put("/{transaction_id}/transfer", response_model=list[Transaction])
+def set_transfer(
+    transaction_id: int, body: TransferModeIn, db_path: Path = Depends(get_db_path)
+) -> list[Transaction]:
+    """Manual transfer decision on one row (and its partner): transfer / none (unpair) / auto."""
+    try:
+        touched = set_transfer_mode(db_path, transaction_id, body.mode)
+    except LookupError as exc:
+        raise HTTPException(404, detail=[str(exc)]) from exc
+    return _load(db_path, touched)
 
 
 @router.patch("/{transaction_id}", response_model=Transaction)

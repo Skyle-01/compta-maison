@@ -7,6 +7,8 @@ Wipes and rebuilds the category tree and rules from the two self-contained CSVs 
 format the /api/categories/export and /api/rules/export endpoints produce), then re-applies
 rules and recomputes budget months + transfers over whatever transactions already exist.
 
+With --transfer-markers, also replaces the transfer markers from a transfer_markers.csv.
+
 With --accounts, also upserts the accounts (and their import aliases) from an accounts.csv.
 
 With --overrides, also restores manual category/kind overrides (from
@@ -28,7 +30,7 @@ from app.api.categories import PATH_SEP  # noqa: E402
 from app.core.categorize import apply_rules  # noqa: E402
 from app.core.periods import recompute_budget_months  # noqa: E402
 from app.core.transfers import recompute_transfers  # noqa: E402
-from app.db import DEFAULT_DB_PATH, connect, init_db, upsert_accounts  # noqa: E402
+from app.db import DEFAULT_DB_PATH, connect, init_db, replace_transfer_markers, upsert_accounts  # noqa: E402
 
 REPO_ROOT = BACKEND_DIR.parent
 
@@ -77,6 +79,18 @@ def load_accounts_csv(accounts_csv: Path, db_path: Path) -> int:
         n = import_accounts(conn, _read_csv(accounts_csv))
     print(f"Loaded {n} accounts from {accounts_csv}")
     return n
+
+
+def load_transfer_markers_csv(markers_csv: Path | None, db_path: Path) -> int:
+    """Replace the transfer markers from a transfer_markers.csv (one `marker` column). None
+    leaves the table empty, i.e. the built-in default applies. Returns how many were loaded."""
+    init_db(db_path)
+    markers = [row["marker"] for row in _read_csv(markers_csv)] if markers_csv else []
+    with connect(db_path) as conn:
+        stored = replace_transfer_markers(conn, markers)
+    if markers_csv:
+        print(f"Loaded {len(stored)} transfer markers from {markers_csv}")
+    return len(stored)
 
 
 def import_categories(conn, rows: list[dict]) -> dict[str, int]:
@@ -157,13 +171,45 @@ def import_overrides(conn, rows: list[dict], path_to_id: dict[str, int]) -> tupl
             )
             touched = True
         if row["kind"]:
+            # Drop any auto pairing the fresh import made; manual pairs are re-linked afterwards
+            # by restore_manual_pairs from the transfer_pair column.
             conn.execute(
-                "UPDATE transactions SET kind = ?, kind_manual = 1 WHERE import_hash = ?",
+                "UPDATE transactions SET kind = ?, kind_manual = 1, transfer_group_id = NULL WHERE import_hash = ?",
                 (row["kind"], hash_),
             )
             touched = True
         applied += touched
     return applied, skipped
+
+
+def restore_manual_pairs(conn, rows: list[dict]) -> tuple[int, int]:
+    """Re-link manual transfer pairs from the overrides' `transfer_pair` column (the partner leg's
+    import_hash). Runs after import_overrides, which already made both legs manual transfers.
+    Returns (restored, unmatched); an unmatched leg (partner not re-imported) stays a single-leg
+    manual transfer, still out of the totals. Older files without the column restore no pairs."""
+    pairs = {
+        frozenset((row["import_hash"], row["transfer_pair"]))
+        for row in rows
+        if row.get("transfer_pair") and row["transfer_pair"] != row["import_hash"]
+    }
+    restored = unmatched = 0
+    next_group = conn.execute("SELECT COALESCE(MAX(transfer_group_id), 0) FROM transactions").fetchone()[0] + 1
+    for pair in pairs:
+        ids = [
+            found[0]
+            for hash_ in pair
+            if (found := conn.execute(
+                "SELECT id FROM transactions WHERE import_hash = ? AND kind_manual = 1 AND kind = 'transfer'",
+                (hash_,),
+            ).fetchone())
+        ]
+        if len(ids) != 2:
+            unmatched += 1
+            continue
+        conn.execute("UPDATE transactions SET transfer_group_id = ? WHERE id IN (?, ?)", (next_group, *ids))
+        next_group += 1
+        restored += 1
+    return restored, unmatched
 
 
 def import_csv(
@@ -183,15 +229,18 @@ def import_csv(
         # Manual overrides are applied before the recompute tail: apply_rules skips category_manual=1
         # rows and recompute_transfers leaves kind_manual=1 legs alone, so the overrides survive.
         n_over, n_skip = import_overrides(conn, overrides, path_to_id)
+        n_pairs, n_unpaired = restore_manual_pairs(conn, overrides)
         n_cat = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
 
     recompute_budget_months(db_path)
-    recompute_transfers(db_path)
+    n_transfer_legs = recompute_transfers(db_path)
     apply_rules(db_path)
     summary = f"Imported {n_cat} categories and {n_rules} rules into {db_path}"
     if overrides_csv:
         summary += f"; restored {n_over} overrides ({n_skip} skipped — hash not found)"
-    print(summary)
+        if n_pairs or n_unpaired:
+            summary += f", {n_pairs} manual transfer pairs ({n_unpaired} with a missing leg)"
+    print(summary + f"; {n_transfer_legs} transfer legs flagged")
 
 
 if __name__ == "__main__":
@@ -200,8 +249,11 @@ if __name__ == "__main__":
     parser.add_argument("--rules", type=Path, default=REPO_ROOT / "rules.csv")
     parser.add_argument("--overrides", type=Path, default=None)
     parser.add_argument("--accounts", type=Path, default=None)
+    parser.add_argument("--transfer-markers", type=Path, default=None)
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
     args = parser.parse_args()
     if args.accounts:
         load_accounts_csv(args.accounts, args.db)
+    if args.transfer_markers:
+        load_transfer_markers_csv(args.transfer_markers, args.db)
     import_csv(args.categories, args.rules, args.db, args.overrides)

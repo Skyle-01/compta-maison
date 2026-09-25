@@ -35,16 +35,18 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.api.categories import _load_all  # noqa: E402
+from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
 from app.core.parsing import CsvValidationError, infer_account, parse_csv  # noqa: E402
 from app.db import (  # noqa: E402
     DEFAULT_DB_PATH,
     connect,
+    get_transfer_markers,
     import_transactions,
     init_db,
     load_account_aliases,
     resolve_account_code,
 )
-from scripts.import_csv import import_csv, load_accounts_csv  # noqa: E402
+from scripts.import_csv import import_csv, load_accounts_csv, load_transfer_markers_csv  # noqa: E402
 
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
@@ -125,14 +127,12 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
             "SELECT category_id, pattern, priority, is_income_anchor, description "
             "FROM label_rules ORDER BY priority, id"
         ).fetchall()
-        # Transition guard: this runs against the LIVE db, which on a pre-`note` schema lacks the
-        # column. Select note only when present so the one-time rebuild still snapshots cleanly.
-        cols = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
-        note_col = "note" if "note" in cols else "NULL AS note"
-        override_rows = conn.execute(
-            f"SELECT import_hash, category_id, category_manual, kind, kind_manual, libelle, {note_col} "
-            "FROM transactions WHERE category_manual = 1 OR kind_manual = 1 ORDER BY date_valeur, id"
-        ).fetchall()
+        overrides = override_rows(conn, path_by_id)
+        # A live DB from before transfer markers existed has no such table: skip, default applies.
+        has_markers = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transfer_markers'"
+        ).fetchone()
+        markers = get_transfer_markers(conn) if has_markers else []
 
     _write_csv(
         accounts_csv,
@@ -151,22 +151,12 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
             for category_id, pattern, priority, is_income_anchor, description in rule_rows
         ],
     )
-    _write_csv(
-        overrides_csv,
-        ["import_hash", "category_path", "kind", "libelle", "note"],
-        [
-            [
-                import_hash,
-                path_by_id.get(category_id, "") if category_manual and category_id else "",
-                kind if kind_manual else "",
-                libelle,
-                note or "",
-            ]
-            for import_hash, category_id, category_manual, kind, kind_manual, libelle, note in override_rows
-        ],
-    )
+    _write_csv(overrides_csv, OVERRIDES_HEADER, overrides)
+    if has_markers:  # written even when empty, so a live rebuild keeps "default" as-is
+        _write_csv(out_dir / "transfer_markers.csv", ["marker"], [[m] for m in markers])
     print(
-        f"Exported {len(account_rows)} accounts, {len(cats)} categories, {len(rule_rows)} rules, {len(override_rows)} overrides "
+        f"Exported {len(account_rows)} accounts, {len(cats)} categories, {len(rule_rows)} rules, {len(overrides)} overrides, "
+        f"{len(markers)} transfer markers "
         f"to {out_dir}"
     )
     return cat_csv, rules_csv, overrides_csv
@@ -181,7 +171,12 @@ def _latest_backup(root: Path = BACKUPS_DIR) -> Path:
 
 
 def _rebuild(
-    db_path: Path, accounts_csv: Path, cat_csv: Path, rules_csv: Path, overrides_csv: Path | None
+    db_path: Path,
+    accounts_csv: Path,
+    cat_csv: Path,
+    rules_csv: Path,
+    overrides_csv: Path | None,
+    markers_csv: Path | None = None,
 ) -> None:
     """Fresh DB: load accounts, import _inputs, then load the taxonomy + overrides from the given
     CSVs. Accounts come first so statement filenames resolve; _inputs is imported *before* the
@@ -190,6 +185,7 @@ def _rebuild(
         db_path.unlink()
     init_db(db_path)
     load_accounts_csv(accounts_csv, db_path)
+    load_transfer_markers_csv(markers_csv, db_path)
     n_new = _import_inputs(db_path)
     # import_csv rebuilds cats/rules from the CSVs, reattaches overrides by import_hash, and
     # recomputes periods + transfers + rules over the freshly imported transactions.
@@ -226,12 +222,19 @@ def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
     if not accounts_csv.exists():
         accounts_csv = _defaults_dir() / "accounts.csv"
         print(f"No accounts.csv in {src_dir}; using {accounts_csv}")
+    # Transfer markers are optional (absent = built-in default); a snapshot without the file
+    # borrows the config dir's, like accounts.csv.
+    markers_csv = next(
+        (p for p in (src_dir / "transfer_markers.csv", _defaults_dir() / "transfer_markers.csv") if p.exists()),
+        None,
+    )
     _rebuild(
         db_path,
         accounts_csv,
         src_dir / "categories.csv",
         src_dir / "rules.csv",
         overrides_csv if overrides_csv.exists() else None,
+        markers_csv,
     )
 
 
