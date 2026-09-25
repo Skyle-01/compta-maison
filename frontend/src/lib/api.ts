@@ -5,6 +5,8 @@ export interface ImportResult {
   rows_new: number;
   uncategorized_count: number;
   balance_warnings: Record<string, number>;
+  /** Bank profile that parsed the file ("default" = the built-in format). */
+  profile: string;
 }
 
 export interface Transaction {

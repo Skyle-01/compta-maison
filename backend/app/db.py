@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path(os.environ.get("COMPTA_DB", str(Path(__file__).resolve().parents[2] / "compta.db")))
+# The private config dir (accounts, taxonomy, bank_profiles.toml), gitignored.
+DEFAULT_CONFIG_DIR = Path(os.environ.get("COMPTA_CONFIG_DIR", str(Path(__file__).resolve().parents[2] / "_config")))
 
 SCHEMA_VERSION = 1
 

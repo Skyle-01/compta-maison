@@ -2,9 +2,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
 
-from app.api.deps import get_db_path
+from app.api.deps import get_config_dir, get_db_path
+from app.core.bank_profiles import PROFILES_FILENAME, BankProfileError, load_bank_profiles
 from app.core.categorize import apply_rules, uncategorized_balance
-from app.core.parsing import CsvValidationError, infer_account, parse_csv
+from app.core.parsing import CsvValidationError, infer_account, parse_statement
 from app.core.periods import recompute_budget_months
 from app.core.transfers import recompute_transfers
 from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
@@ -18,8 +19,13 @@ async def upload_csv(
     file: UploadFile,
     account: str = Form(""),
     db_path: Path = Depends(get_db_path),
+    config_dir: Path = Depends(get_config_dir),
 ) -> ImportResult:
-    account = account.strip() or (infer_account(file.filename or "") or "")
+    try:
+        profiles = load_bank_profiles(config_dir)
+    except BankProfileError as exc:
+        raise HTTPException(500, detail=[f"Invalid {PROFILES_FILENAME}: {exc}"]) from exc
+    account = account.strip() or (infer_account(file.filename or "", profiles) or "")
     if not account:
         raise HTTPException(422, detail=["No account given and none inferable from the filename"])
 
@@ -34,7 +40,7 @@ async def upload_csv(
 
     content = await file.read()
     try:
-        rows = parse_csv(content)
+        profile, rows = parse_statement(content, profiles)
     except CsvValidationError as exc:
         raise HTTPException(422, detail=exc.errors) from exc
     for row in rows:
@@ -80,4 +86,5 @@ async def upload_csv(
         rows_new=rows_new,
         uncategorized_count=uncategorized_count,
         balance_warnings=warnings,
+        profile=profile.name,
     )

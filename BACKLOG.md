@@ -27,6 +27,14 @@
 - [ ] **List manual transfer decisions in Settings** — pairs/unpairs made on the Transactions page
   are exported with the overrides but not listed in "Modifications manuelles".
 - [ ] **Per-account transfer markers** — only if a multi-bank household needs different prefixes.
+- [ ] **Upload vs rebuild account string** — the Import page sends the dropdown's account *code*,
+  while `reset_db.py` hashes the raw filename string (e.g. `LIVRET A` vs `LIVRET`). The hashes then
+  differ, so overrides made on UI-imported rows don't reattach after a rebuild. Uploads also aren't
+  copied into `_inputs/`. Fix without touching existing hashes (e.g. send the inferred string, and
+  save uploads to `_inputs/`).
+- [ ] **More bank profile shapes** — header-less exports (positional columns), a separate "Sens"
+  (D/C) column, labels split over several columns, and a `GET /api/imports/infer-account` so the
+  Import page pre-fill uses the profiles' `filename_pattern`.
 - [ ] **Export to Excel** — openpyxl report.
 
 ### Backburner
@@ -34,6 +42,11 @@
 - [ ] **Bank API ingestion** — Budget Insight / Powens instead of manual CSV download.
 
 ## Done
+
+- [x] 2026-09-25 — **Bank profiles.** Other CSV layouts via `_config/bank_profiles.toml` (columns,
+  separator, date format, decimal mark, encodings, signed amount or debit/credit, filename pattern);
+  header auto-detection within the first 30 lines, user profiles before the built-in default; the
+  default format's parsing and `import_hash` are pinned by golden tests.
 
 - [x] 2026-09-25 — **Stricter transfer detection + manual pair/unpair.** Both legs must start with a
   transfer marker (`transfer_markers` table / `transfer_markers.csv`, default `VIR`, `*` = any);

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { api, type Account, type ImportResult, formatEuro, frenchMonth } from "@/lib/api";
 
-/** Mirrors the backend's filename inference, then maps it to a known account code. */
+/** Mirrors the backend's default filename inference (not the custom bank profiles), then maps it
+ * to a known account code. Only a pre-fill: the account can always be picked by hand. */
 function inferAccountCode(filename: string, accounts: Account[]): string {
   const match = filename.match(/^RELEVE_(?:COMPTE_)?(.+?)_\d{4}/);
   if (!match) return "";
@@ -46,7 +47,7 @@ export default function ImportPage() {
       <form onSubmit={submit} className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6">
         <div>
           <label className="mb-1 block text-sm text-zinc-600" htmlFor="file">
-            Fichier de relevé (CSV séparé par des points-virgules)
+            Fichier de relevé (CSV)
           </label>
           <input
             id="file"
@@ -101,6 +102,9 @@ export default function ImportPage() {
             <strong>{result.rows_new}</strong> nouvelle(s) opération(s) importée(s) sur{" "}
             {result.rows_total} dans <strong>{result.account}</strong>
             {result.rows_new === 0 && " (toutes en double — déjà importées)"}.
+          </p>
+          <p className="text-zinc-500">
+            Format : {result.profile === "default" ? "par défaut" : result.profile}
           </p>
           {result.uncategorized_count > 0 && (
             <p className="text-amber-800">

@@ -20,11 +20,12 @@ _backups/<ts>/ **plus** your current _inputs/. Whenever a DB already exists it i
 _backups/<ts>/ before being deleted, so every rebuild leaves a recoverable restore point.
 
 Personal data lives only in gitignored places: _inputs/ (statements), _config/ (your
-accounts.csv, categories.csv, rules.csv and optional overrides.csv), _backups/ and compta.db.
+accounts.csv, categories.csv, rules.csv, optional overrides.csv, transfer_markers.csv and
+bank_profiles.toml), _backups/ and compta.db. Bank profiles are always read from the config dir,
+whatever --source is: they describe how to parse statements, not DB state.
 A source dir without accounts.csv (a snapshot older than accounts.csv) borrows the one from the
 config dir.
 """
-import os
 import argparse
 import csv
 import sys
@@ -36,8 +37,10 @@ sys.path.insert(0, str(BACKEND_DIR))
 
 from app.api.categories import _load_all  # noqa: E402
 from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
-from app.core.parsing import CsvValidationError, infer_account, parse_csv  # noqa: E402
+from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_profiles  # noqa: E402
+from app.core.parsing import CsvValidationError, infer_account, parse_statement  # noqa: E402
 from app.db import (  # noqa: E402
+    DEFAULT_CONFIG_DIR,
     DEFAULT_DB_PATH,
     connect,
     get_transfer_markers,
@@ -52,7 +55,7 @@ REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
 INPUTS_DIR = REPO_ROOT / "_inputs"
 BACKUPS_DIR = REPO_ROOT / "_backups"
-CONFIG_DIR = Path(os.environ.get("COMPTA_CONFIG_DIR", str(REPO_ROOT / "_config")))
+CONFIG_DIR = DEFAULT_CONFIG_DIR
 
 
 def _defaults_dir() -> Path:
@@ -60,7 +63,16 @@ def _defaults_dir() -> Path:
     return CONFIG_DIR if (CONFIG_DIR / "categories.csv").exists() else DATA_DIR
 
 
-def _import_inputs(db_path: Path) -> int:
+def _load_profiles() -> list[BankProfile]:
+    """Bank profiles from the config dir — the same ones the server uses, whatever --source is,
+    so an upload and a rebuild parse a statement (and hash its rows) identically."""
+    try:
+        return load_bank_profiles(CONFIG_DIR)
+    except BankProfileError as exc:
+        sys.exit(f"Invalid {CONFIG_DIR / 'bank_profiles.toml'}: {exc}")
+
+
+def _import_inputs(db_path: Path, profiles: list[BankProfile]) -> int:
     """Import every bank CSV in _inputs/, inferring the account from the filename.
     Files that don't map to a known account or fail to parse are skipped with a note.
     Returns the number of newly inserted transactions (re-runs are deduped by hash)."""
@@ -71,12 +83,12 @@ def _import_inputs(db_path: Path) -> int:
 
     total_new = 0
     for path in sorted(INPUTS_DIR.glob("*.csv")):
-        account = infer_account(path.name)
+        account = infer_account(path.name, profiles)
         if not account or resolve_account_code(account, aliases) is None:
             print(f"Skipping {path.name}: no known account in filename")
             continue
         try:
-            rows = parse_csv(path.read_bytes())
+            profile, rows = parse_statement(path.read_bytes(), profiles)
         except CsvValidationError as exc:
             print(f"Skipping {path.name}: {exc}")
             continue
@@ -91,7 +103,7 @@ def _import_inputs(db_path: Path) -> int:
         with connect(db_path) as conn:
             conn.execute("UPDATE imports SET rows_new = ? WHERE id = ?", (new, import_id))
         total_new += new
-        print(f"Imported {new}/{len(rows)} new rows from {path.name} -> {account}")
+        print(f"Imported {new}/{len(rows)} new rows from {path.name} -> {account} [{profile.name}]")
     return total_new
 
 
@@ -176,7 +188,8 @@ def _rebuild(
     cat_csv: Path,
     rules_csv: Path,
     overrides_csv: Path | None,
-    markers_csv: Path | None = None,
+    markers_csv: Path | None,
+    profiles: list[BankProfile],
 ) -> None:
     """Fresh DB: load accounts, import _inputs, then load the taxonomy + overrides from the given
     CSVs. Accounts come first so statement filenames resolve; _inputs is imported *before* the
@@ -186,7 +199,7 @@ def _rebuild(
     init_db(db_path)
     load_accounts_csv(accounts_csv, db_path)
     load_transfer_markers_csv(markers_csv, db_path)
-    n_new = _import_inputs(db_path)
+    n_new = _import_inputs(db_path, profiles)
     # import_csv rebuilds cats/rules from the CSVs, reattaches overrides by import_hash, and
     # recomputes periods + transfers + rules over the freshly imported transactions.
     import_csv(cat_csv, rules_csv, db_path, overrides_csv)
@@ -194,6 +207,8 @@ def _rebuild(
 
 
 def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
+    # A broken bank_profiles.toml stops here, before the snapshot and the delete.
+    profiles = _load_profiles()
     # Resolve the backup target BEFORE the safety snapshot, so the snapshot can't shadow "latest".
     backup_dir = (from_dir or _latest_backup(BACKUPS_DIR)) if source == "backup" else None
 
@@ -235,6 +250,7 @@ def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
         src_dir / "rules.csv",
         overrides_csv if overrides_csv.exists() else None,
         markers_csv,
+        profiles,
     )
 
 

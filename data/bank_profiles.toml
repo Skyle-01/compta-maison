@@ -1,0 +1,29 @@
+# Bank CSV formats beyond the built-in one. Copy this file to _config/bank_profiles.toml only if
+# your bank's export isn't the default format:
+#   separator ";", encoding UTF-8 (else Windows-1252), dates dd/mm/yyyy, comma decimals, columns
+#   "Date operation";"Date valeur";"Libelle";"Debit";"Credit", filenames RELEVE_[COMPTE_]<ACCOUNT>_<yyyy>…
+#
+# Each statement is matched against these profiles in order, then against the built-in default:
+# the first profile whose columns all appear on one of the file's first 30 lines parses it (lines
+# above the header, like an account number or a balance, are skipped).
+#
+# Once statements have been imported with a profile, don't change how it reads them (columns,
+# dates, amounts): the parsed values identify each operation, so they would be imported again
+# and manual changes would no longer reattach after a rebuild.
+
+[[profile]]
+name = "banque-exemple"              # shown in the import result; "default" is reserved
+delimiter = ","                      # default ";" (use "\t" for tabs)
+encoding = ["utf-8-sig", "cp1252"]   # default; tried in order (a string or a list), keep utf-8 first
+date_format = "%Y-%m-%d"             # default "%d/%m/%Y" (Python strptime codes)
+decimal = "."                        # default ","; with "." commas are read as thousands separators
+date_operation = "Date"              # column names, as written in the file's header
+# date_valeur = "Date de valeur"     # optional; without it the operation date is used
+libelle = "Libellé"
+amount = "Montant"                   # one signed column (negative = debit)...
+# debit = "Débit"                    # ...or two unsigned columns, never both forms
+# credit = "Crédit"
+# Where to find the account in the filename: a regex with an "account" group ("_" become spaces),
+# matched against the aliases of accounts.csv. Needed to rebuild from _inputs/; on upload you can
+# also pick the account by hand. Single quotes: a literal string, no backslash escaping.
+filename_pattern = '^export_(?P<account>.+?)_\d{8}'

@@ -13,6 +13,7 @@ class ImportResult(BaseModel):
         default_factory=dict,
         description="budget_month -> credit-debit difference of uncategorised rows, when above tolerance",
     )
+    profile: str = Field("default", description="Name of the bank profile that parsed the file")
 
 
 class Transaction(BaseModel):

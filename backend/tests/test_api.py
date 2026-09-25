@@ -1,3 +1,11 @@
+import shutil
+from pathlib import Path
+
+import pytest
+
+from app.db import connect
+from tests.test_parsing import GOLDEN_HASHES, GOLDEN_ROWS, _csv
+
 SAMPLE_CSV = (
     '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
     '"05/06/2026";"05/06/2026";"VIR EMPLOYEUR SALAIRE";"";"2500,00"\n'
@@ -7,12 +15,30 @@ SAMPLE_CSV = (
 ).encode("utf-8")
 
 
-def _upload(client, filename="RELEVE_COMPTE_JOINT_2026_06_08.csv", account=""):
+# A statement in the format of the example profile (data/bank_profiles.toml).
+EXAMPLE_PROFILES = Path(__file__).resolve().parents[2] / "data" / "bank_profiles.toml"
+PROFILE_FILENAME = "export_COMPTE_PERSO_20260601.csv"
+PROFILE_CSV = (
+    "Date,Libellé,Montant\n"
+    "2026-06-01,CARTE BOULANGERIE,-4.20\n"
+    '2026-06-02,VIR EMPLOYEUR SALAIRE,"2,500.00"\n'
+).encode("utf-8")
+
+
+def _upload(client, filename="RELEVE_COMPTE_JOINT_2026_06_08.csv", account="", content=SAMPLE_CSV):
     return client.post(
         "/api/imports",
-        files={"file": (filename, SAMPLE_CSV, "text/csv")},
+        files={"file": (filename, content, "text/csv")},
         data={"account": account},
     )
+
+
+def _write_profiles(tmp_path) -> Path:
+    """Install the example bank profiles in the test's config dir (tmp_path/_config)."""
+    config = tmp_path / "_config"
+    config.mkdir(exist_ok=True)
+    shutil.copy(EXAMPLE_PROFILES, config / "bank_profiles.toml")
+    return config
 
 
 def _category_id(client, name: str) -> int:
@@ -60,6 +86,34 @@ class TestImports:
             data={"account": "WEIRD"},
         )
         assert resp.status_code == 422
+
+    def test_upload_with_user_profile(self, seeded_db, client, tmp_path):
+        _write_profiles(tmp_path)
+        resp = _upload(client, filename=PROFILE_FILENAME, content=PROFILE_CSV)
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert (body["account"], body["profile"], body["rows_new"]) == ("COMPTE PERSO", "banque-exemple", 2)
+        with connect(seeded_db) as conn:
+            rows = conn.execute(
+                "SELECT account_id, debit_cents, credit_cents FROM transactions ORDER BY date_operation"
+            ).fetchall()
+        assert rows == [("PERSO", 420, 0), ("PERSO", 0, 250000)]
+
+    def test_upload_default_import_hash_frozen_with_profiles(self, seeded_db, client, tmp_path):
+        _write_profiles(tmp_path)
+        resp = _upload(client, content=_csv(*GOLDEN_ROWS))
+        assert resp.json()["profile"] == "default"
+        with connect(seeded_db) as conn:
+            hashes = [h for (h,) in conn.execute("SELECT import_hash FROM transactions ORDER BY id")]
+        assert hashes == GOLDEN_HASHES
+
+    def test_invalid_profiles_file_rejected(self, client, tmp_path):
+        config = tmp_path / "_config"
+        config.mkdir()
+        (config / "bank_profiles.toml").write_text("[[profile]]\nname = 'incomplet'\n", encoding="utf-8")
+        resp = _upload(client)
+        assert resp.status_code == 500
+        assert "bank_profiles.toml" in resp.json()["detail"][0]
 
 
 class TestTransactions:
@@ -771,3 +825,47 @@ class TestResetDb:
 
         assert seeded_db.exists()
         assert self._mystery_row(seeded_db) == (1, "courses", "cadeau")
+
+    def test_inputs_use_user_profiles(self, tmp_path, monkeypatch):
+        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        _write_profiles(tmp_path)
+        (tmp_path / "_inputs" / PROFILE_FILENAME).write_bytes(PROFILE_CSV)
+        db_path = tmp_path / "new.db"
+
+        reset_db.reset(db_path, "defaults", None)
+
+        with connect(db_path) as conn:
+            by_account = dict(conn.execute("SELECT account_id, COUNT(*) FROM transactions GROUP BY account_id"))
+        assert by_account == {"JOINT": 4, "PERSO": 2}
+
+    def test_live_rebuild_with_profiles_keeps_overrides(self, seeded_db, client, tmp_path, monkeypatch):
+        # An upload and a rebuild parse the statement with the same profile, so the override made
+        # on the uploaded row reattaches to the rebuilt one by import_hash.
+        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        _write_profiles(tmp_path)
+        (tmp_path / "_inputs" / PROFILE_FILENAME).write_bytes(PROFILE_CSV)
+        _upload(client, filename=PROFILE_FILENAME, content=PROFILE_CSV)
+        row = client.get("/api/transactions", params={"libelle_contains": "BOULANGERIE"}).json()["items"][0]
+        client.patch(
+            f"/api/transactions/{row['id']}", json={"category_id": _category_id(client, "courses"), "note": "pain"}
+        )
+
+        reset_db.reset(seeded_db, "live", None)
+
+        with connect(seeded_db) as conn:
+            assert conn.execute(
+                "SELECT t.category_manual, c.name, t.note FROM transactions t "
+                "JOIN categories c ON c.id = t.category_id WHERE t.libelle = 'CARTE BOULANGERIE'"
+            ).fetchone() == (1, "courses", "pain")
+
+    def test_invalid_profiles_exit_before_delete(self, seeded_db, tmp_path, monkeypatch):
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
+        config = tmp_path / "_config"
+        config.mkdir()
+        (config / "bank_profiles.toml").write_text("pas du toml [", encoding="utf-8")
+
+        with pytest.raises(SystemExit, match="bank_profiles.toml"):
+            reset_db.reset(seeded_db, "live", None)
+
+        assert seeded_db.exists()
+        assert not backups.exists()
