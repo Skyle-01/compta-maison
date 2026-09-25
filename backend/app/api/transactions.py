@@ -56,19 +56,33 @@ def _to_model(row: tuple) -> Transaction:
     )
 
 
-OVERRIDES_HEADER = ["import_hash", "category_path", "kind", "libelle", "note", "transfer_pair"]
+OVERRIDES_HEADER = [
+    "import_hash",
+    "category_path",
+    "kind",
+    "libelle",
+    "note",
+    "transfer_pair",
+    "account_id",
+    "date_operation",
+    "debit_cents",
+    "credit_cents",
+]
 
 
 def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
     """Every manual category/kind/note override as overrides.csv rows (shared by the Settings
     export and reset_db.py's snapshot). Keyed by the stable import_hash; `transfer_pair` holds the
-    partner leg's import_hash for a manual transfer pair, so the pair is re-linked on restore."""
+    partner leg's import_hash for a manual transfer pair, so the pair is re-linked on restore.
+    The trailing identity columns (account, date, libellé, amounts) let a restore find a row whose
+    hash changed, e.g. one uploaded under the account code and rebuilt under the filename alias."""
     # Transition guard: reset_db snapshots the LIVE db, which on a pre-`note` schema lacks the column.
     cols = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
     note_col = "t.note" if "note" in cols else "NULL"
     rows = conn.execute(
         f"SELECT t.import_hash, t.category_id, t.category_manual, t.kind, t.kind_manual, t.libelle, "
-        f"{note_col}, p.import_hash FROM transactions t "
+        f"{note_col}, p.import_hash, t.account_id, t.date_operation, t.debit_cents, t.credit_cents "
+        "FROM transactions t "
         "LEFT JOIN transactions p ON t.kind_manual = 1 AND p.kind_manual = 1 "
         "AND p.transfer_group_id = t.transfer_group_id AND p.id != t.id "
         "WHERE t.category_manual = 1 OR t.kind_manual = 1 ORDER BY t.date_valeur, t.id"
@@ -81,8 +95,25 @@ def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[
             libelle,
             note or "",
             partner_hash or "",
+            account_id or "",
+            date_operation,
+            debit_cents,
+            credit_cents,
         ]
-        for import_hash, category_id, category_manual, kind, kind_manual, libelle, note, partner_hash in rows
+        for (
+            import_hash,
+            category_id,
+            category_manual,
+            kind,
+            kind_manual,
+            libelle,
+            note,
+            partner_hash,
+            account_id,
+            date_operation,
+            debit_cents,
+            credit_cents,
+        ) in rows
     ]
 
 

@@ -10,6 +10,11 @@ DEFAULT_DB_PATH = Path(os.environ.get("COMPTA_DB", str(Path(__file__).resolve().
 DEFAULT_CONFIG_DIR = Path(
     os.environ.get("COMPTA_CONFIG_DIR", str(Path(__file__).resolve().parents[2] / "_config"))
 )
+# The bank-statement archive (gitignored): reset_db.py rebuilds every transaction from it, and the
+# Import page copies each upload there.
+DEFAULT_INPUTS_DIR = Path(
+    os.environ.get("COMPTA_INPUTS_DIR", str(Path(__file__).resolve().parents[2] / "_inputs"))
+)
 
 SCHEMA_VERSION = 1
 

@@ -12,7 +12,8 @@ With --transfer-markers, also replaces the transfer markers from a transfer_mark
 With --accounts, also upserts the accounts (and their import aliases) from an accounts.csv.
 
 With --overrides, also restores manual category/kind overrides (from
-/api/transactions/export-overrides), matched to transactions by their stable import_hash.
+/api/transactions/export-overrides), matched to transactions by their stable import_hash (or, for
+a hash no longer in the DB, by account + date + libellé + amounts).
 
 It does NOT import transactions (no _inputs handling) — that's reset_db.py's job. For a full
 rebuild (fresh DB + _inputs + taxonomy + overrides from defaults/live/a backup) use reset_db.py;
@@ -152,15 +153,56 @@ def import_rules(conn, rows: list[dict], path_to_id: dict[str, int]) -> int:
     return count
 
 
-def import_overrides(conn, rows: list[dict], path_to_id: dict[str, int]) -> tuple[int, int]:
-    """Re-apply manual category/kind overrides, matching transactions by import_hash.
-    Returns (applied, skipped). A skipped row = a hash not in this DB (statement not imported)
-    or an override pointing at an unknown category path."""
+def resolve_overrides(conn: sqlite3.Connection, rows: list[dict]) -> dict[str, int]:
+    """Map each override row's import_hash to the transaction it applies to.
+
+    By import_hash first. A hash not in the DB falls back to the row's identity columns (account,
+    operation date, libellé, amounts): a row uploaded under the account code used to hash
+    differently from the same row rebuilt from _inputs/ under the filename alias. Identical
+    operations are matched in order, never twice. Rows found neither way are left out; files
+    older than the identity columns match by hash only."""
+    ids: dict[str, int] = {}
+    pending: list[dict] = []
+    for row in rows:
+        found = conn.execute(
+            "SELECT id FROM transactions WHERE import_hash = ?", (row["import_hash"],)
+        ).fetchone()
+        if found:
+            ids[row["import_hash"]] = found[0]
+        else:
+            pending.append(row)
+    claimed = set(ids.values())
+    for row in pending:
+        if not (row.get("account_id") and row.get("date_operation") and row.get("debit_cents")):
+            continue
+        candidates = conn.execute(
+            "SELECT id FROM transactions WHERE account_id = ? AND date_operation = ? AND libelle = ? "
+            "AND debit_cents = ? AND credit_cents = ? ORDER BY id",
+            (
+                row["account_id"],
+                row["date_operation"],
+                row["libelle"],
+                int(row["debit_cents"]),
+                int(row["credit_cents"] or 0),
+            ),
+        ).fetchall()
+        free = next((id_ for (id_,) in candidates if id_ not in claimed), None)
+        if free is not None:
+            ids[row["import_hash"]] = free
+            claimed.add(free)
+    return ids
+
+
+def import_overrides(
+    conn, rows: list[dict], path_to_id: dict[str, int], ids_by_hash: dict[str, int]
+) -> tuple[int, int]:
+    """Re-apply manual category/kind overrides to the transactions resolve_overrides found.
+    Returns (applied, skipped). A skipped row = a transaction not in this DB (statement not
+    imported) or an override pointing at an unknown category path."""
     applied = skipped = 0
     for row in rows:
-        hash_ = row["import_hash"]
-        present = conn.execute("SELECT 1 FROM transactions WHERE import_hash = ?", (hash_,)).fetchone()
-        if not present:
+        id_ = ids_by_hash.get(row["import_hash"])
+        if id_ is None:
             skipped += 1
             continue
         touched = False
@@ -170,31 +212,29 @@ def import_overrides(conn, rows: list[dict], path_to_id: dict[str, int]) -> tupl
                 print(f"Skipping category override for unknown path: {row['category_path']!r}")
             else:
                 conn.execute(
-                    "UPDATE transactions SET category_id = ?, category_manual = 1, rule_id = NULL "
-                    "WHERE import_hash = ?",
-                    (category_id, hash_),
+                    "UPDATE transactions SET category_id = ?, category_manual = 1, rule_id = NULL WHERE id = ?",
+                    (category_id, id_),
                 )
                 touched = True
         # note column is optional (older exports predate it); row.get tolerates its absence.
         if row.get("note"):
-            conn.execute(
-                "UPDATE transactions SET note = ? WHERE import_hash = ?",
-                (row["note"], hash_),
-            )
+            conn.execute("UPDATE transactions SET note = ? WHERE id = ?", (row["note"], id_))
             touched = True
         if row["kind"]:
             # Drop any auto pairing the fresh import made; manual pairs are re-linked afterwards
             # by restore_manual_pairs from the transfer_pair column.
             conn.execute(
-                "UPDATE transactions SET kind = ?, kind_manual = 1, transfer_group_id = NULL WHERE import_hash = ?",
-                (row["kind"], hash_),
+                "UPDATE transactions SET kind = ?, kind_manual = 1, transfer_group_id = NULL WHERE id = ?",
+                (row["kind"], id_),
             )
             touched = True
         applied += touched
     return applied, skipped
 
 
-def restore_manual_pairs(conn: sqlite3.Connection, rows: list[dict]) -> tuple[int, int]:
+def restore_manual_pairs(
+    conn: sqlite3.Connection, rows: list[dict], ids_by_hash: dict[str, int]
+) -> tuple[int, int]:
     """Re-link manual transfer pairs from the overrides' `transfer_pair` column (the partner leg's
     import_hash). Runs after import_overrides, which already made both legs manual transfers.
     Returns (restored, unmatched); an unmatched leg (partner not re-imported) stays a single-leg
@@ -210,14 +250,13 @@ def restore_manual_pairs(conn: sqlite3.Connection, rows: list[dict]) -> tuple[in
     )
     for pair in pairs:
         ids = [
-            found[0]
+            ids_by_hash[hash_]
             for hash_ in pair
-            if (
-                found := conn.execute(
-                    "SELECT id FROM transactions WHERE import_hash = ? AND kind_manual = 1 AND kind = 'transfer'",
-                    (hash_,),
-                ).fetchone()
-            )
+            if hash_ in ids_by_hash
+            and conn.execute(
+                "SELECT 1 FROM transactions WHERE id = ? AND kind_manual = 1 AND kind = 'transfer'",
+                (ids_by_hash[hash_],),
+            ).fetchone()
         ]
         if len(ids) != 2:
             unmatched += 1
@@ -244,8 +283,9 @@ def import_csv(
         n_rules = import_rules(conn, rules, path_to_id)
         # Manual overrides are applied before the recompute tail: apply_rules skips category_manual=1
         # rows and recompute_transfers leaves kind_manual=1 legs alone, so the overrides survive.
-        n_over, n_skip = import_overrides(conn, overrides, path_to_id)
-        n_pairs, n_unpaired = restore_manual_pairs(conn, overrides)
+        ids_by_hash = resolve_overrides(conn, overrides)
+        n_over, n_skip = import_overrides(conn, overrides, path_to_id, ids_by_hash)
+        n_pairs, n_unpaired = restore_manual_pairs(conn, overrides, ids_by_hash)
         n_cat = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
 
     recompute_budget_months(db_path)
@@ -253,7 +293,7 @@ def import_csv(
     apply_rules(db_path)
     summary = f"Imported {n_cat} categories and {n_rules} rules into {db_path}"
     if overrides_csv:
-        summary += f"; restored {n_over} overrides ({n_skip} skipped — hash not found)"
+        summary += f"; restored {n_over} overrides ({n_skip} skipped — transaction not found)"
         if n_pairs or n_unpaired:
             summary += f", {n_pairs} manual transfer pairs ({n_unpaired} with a missing leg)"
     print(summary + f"; {n_transfer_legs} transfer legs flagged")

@@ -7,6 +7,8 @@ export interface ImportResult {
   balance_warnings: Record<string, number>;
   /** Bank profile that parsed the file ("default" = the built-in format). */
   profile: string;
+  /** File name the statement was copied to in _inputs/ (null: not copied, a rebuild will miss it). */
+  archived_as: string | null;
 }
 
 export interface Transaction {

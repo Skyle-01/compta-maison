@@ -14,6 +14,9 @@ class ImportResult(BaseModel):
         description="budget_month -> credit-debit difference of uncategorised rows, when above tolerance",
     )
     profile: str = Field("default", description="Name of the bank profile that parsed the file")
+    archived_as: str | None = Field(
+        None, description="File name the statement was copied to in _inputs/; None if it couldn't be"
+    )
 
 
 class Transaction(BaseModel):

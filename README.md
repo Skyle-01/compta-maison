@@ -52,7 +52,9 @@ The commands below assume the virtualenv is active.
    `cd backend && python -m uvicorn app.main:app --port 8000` and `npm run dev --prefix frontend`.
    Open http://localhost:3000.
 
-After that, edit categories, rules and transfer markers from the app's Settings page. On the
+After that, import new statements from the Import page: each upload is also copied to `_inputs/`
+(under its own name, or `RELEVE_<account>_<date>_<name>.csv` when you picked the account by hand),
+so a rebuild keeps it. Edit categories, rules and transfer markers from the app's Settings page. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
 pair; these manual decisions are kept across rebuilds. To rebuild while keeping them
 (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current

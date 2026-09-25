@@ -30,8 +30,10 @@ TEST_ACCOUNT_ALIASES = [(code, code) for code, *_ in TEST_ACCOUNTS] + [
 @pytest.fixture(autouse=True)
 def _no_private_config(tmp_path, monkeypatch):
     """Keep the developer's private _config/ (e.g. bank_profiles.toml) out of every app a test
-    creates; tests that need a config write it to tmp_path/_config."""
+    creates, and keep uploads out of their _inputs/; tests that need a config write it to
+    tmp_path/_config, uploads land in tmp_path/_inputs."""
     monkeypatch.setattr("app.main.DEFAULT_CONFIG_DIR", tmp_path / "_config")
+    monkeypatch.setattr("app.main.DEFAULT_INPUTS_DIR", tmp_path / "_inputs")
 
 
 def cat_id(db_path: Path, name: str) -> int:

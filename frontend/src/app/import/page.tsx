@@ -106,6 +106,16 @@ export default function ImportPage() {
           <p className="text-zinc-500">
             Format : {result.profile === "default" ? "par défaut" : result.profile}
           </p>
+          {result.archived_as ? (
+            <p className="text-zinc-500">
+              Copié dans <code>_inputs/</code> sous « {result.archived_as} ».
+            </p>
+          ) : (
+            <p className="text-amber-800">
+              Fichier non copié dans <code>_inputs/</code> : ajoutez-le à la main sous un nom qui
+              désigne le compte, sinon une reconstruction de la base l’oubliera.
+            </p>
+          )}
           {result.uncategorized_count > 0 && (
             <p className="text-amber-800">
               {result.uncategorized_count} opération(s) des mois concernés sont sans catégorie.

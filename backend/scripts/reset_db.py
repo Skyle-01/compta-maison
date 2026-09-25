@@ -43,6 +43,7 @@ from app.core.parsing import CsvValidationError, infer_account, parse_statement 
 from app.db import (  # noqa: E402
     DEFAULT_CONFIG_DIR,
     DEFAULT_DB_PATH,
+    DEFAULT_INPUTS_DIR,
     connect,
     get_transfer_markers,
     import_transactions,
@@ -54,7 +55,7 @@ from scripts.import_csv import import_csv, load_accounts_csv, load_transfer_mark
 
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
-INPUTS_DIR = REPO_ROOT / "_inputs"
+INPUTS_DIR = DEFAULT_INPUTS_DIR
 BACKUPS_DIR = REPO_ROOT / "_backups"
 CONFIG_DIR = DEFAULT_CONFIG_DIR
 

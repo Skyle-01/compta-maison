@@ -596,9 +596,14 @@ class TestExport:
         client.patch(f"/api/transactions/{tx['id']}", json={"category_id": courses})
 
         body = client.get("/api/transactions/export-overrides").content.decode("utf-8-sig")
-        assert body.splitlines()[0] == "import_hash;category_path;kind;libelle;note;transfer_pair"
+        assert body.splitlines()[0] == (
+            "import_hash;category_path;kind;libelle;note;transfer_pair;"
+            "account_id;date_operation;debit_cents;credit_cents"
+        )
         line = next(line for line in body.splitlines()[1:] if "MYSTERY SHOP" in line)
-        assert ";variable / courses;;MYSTERY SHOP;" in line  # manual category, no kind override, no note
+        assert (
+            ";variable / courses;;MYSTERY SHOP;;;JOINT;2026-06-08;1000;0" in line
+        )  # manual, no kind, no note
 
     def test_overrides_round_trip(self, seeded_db, client, tmp_path):
         from fastapi.testclient import TestClient
@@ -924,3 +929,97 @@ class TestResetDb:
 
         assert seeded_db.exists()
         assert not backups.exists()
+
+
+class TestUploadMatchesRebuild:
+    """An upload hashes its rows like reset_db.py rebuilds them, and lands in _inputs/, so manual
+    overrides made after an upload survive a rebuild."""
+
+    LIVRET_FILE = "RELEVE_LIVRET_A_2026_06_08.csv"
+
+    def _reset_db(self, tmp_path, monkeypatch):
+        import scripts.reset_db as reset_db
+
+        # Same _inputs/ as the app (conftest), so the rebuild reads what the upload archived.
+        monkeypatch.setattr(reset_db, "INPUTS_DIR", tmp_path / "_inputs")
+        monkeypatch.setattr(reset_db, "BACKUPS_DIR", tmp_path / "_backups")
+        monkeypatch.setattr(reset_db, "CONFIG_DIR", tmp_path / "_config")
+        return reset_db
+
+    @staticmethod
+    def _mystery(db_path):
+        with connect(db_path) as conn:
+            return conn.execute(
+                "SELECT t.account, t.category_manual, c.name, t.note FROM transactions t "
+                "LEFT JOIN categories c ON c.id = t.category_id WHERE t.libelle = 'MYSTERY SHOP'"
+            ).fetchone()
+
+    def _set_override(self, client):
+        row = client.get("/api/transactions", params={"libelle_contains": "MYSTERY"}).json()["items"][0]
+        client.patch(
+            f"/api/transactions/{row['id']}",
+            json={"category_id": _category_id(client, "courses"), "note": "cadeau"},
+        )
+
+    def test_picked_code_hashes_with_filename_alias(self, client, tmp_path):
+        resp = _upload(client, filename=self.LIVRET_FILE, account="LIVRET")
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["account"] == "LIVRET A"  # what reset_db.py infers from the filename
+        assert body["archived_as"] == self.LIVRET_FILE
+        assert (tmp_path / "_inputs" / self.LIVRET_FILE).read_bytes() == SAMPLE_CSV
+
+    def test_override_survives_rebuild(self, seeded_db, client, tmp_path, monkeypatch):
+        reset_db = self._reset_db(tmp_path, monkeypatch)
+        _upload(client, filename=self.LIVRET_FILE, account="LIVRET")
+        self._set_override(client)
+
+        reset_db.reset(seeded_db, "live", None)
+
+        assert self._mystery(seeded_db) == ("LIVRET A", 1, "courses", "cadeau")
+
+    def test_hand_picked_account_is_archived_under_an_inferable_name(
+        self, seeded_db, client, tmp_path, monkeypatch
+    ):
+        reset_db = self._reset_db(tmp_path, monkeypatch)
+        body = _upload(client, filename="export.csv", account="PERSO").json()
+        assert body["account"] == "PERSO"
+        assert body["archived_as"].startswith("RELEVE_PERSO_") and body["archived_as"].endswith("_export.csv")
+        self._set_override(client)
+
+        reset_db.reset(seeded_db, "live", None)
+
+        assert self._mystery(seeded_db) == ("PERSO", 1, "courses", "cadeau")
+
+    def test_archive_never_overwrites(self, client, tmp_path):
+        inputs = tmp_path / "_inputs"
+        inputs.mkdir()
+        (inputs / self.LIVRET_FILE).write_bytes(b"another statement")
+
+        first = _upload(client, filename=self.LIVRET_FILE).json()["archived_as"]
+        again = _upload(client, filename=self.LIVRET_FILE).json()["archived_as"]
+
+        assert first == again == "RELEVE_LIVRET_A_2026_06_08 (2).csv"
+        assert (inputs / self.LIVRET_FILE).read_bytes() == b"another statement"
+        assert {p.name for p in inputs.iterdir()} == {self.LIVRET_FILE, first}
+
+    def test_rebuild_reattaches_overrides_of_rows_hashed_with_the_code(
+        self, seeded_db, client, tmp_path, monkeypatch
+    ):
+        # A DB from before the fix holds rows uploaded under the code: their hash isn't the one the
+        # rebuild computes, so the override is found again by account, date, libellé and amounts.
+        from app.core.parsing import parse_csv
+        from app.db import import_transactions
+
+        reset_db = self._reset_db(tmp_path, monkeypatch)
+        rows = parse_csv(SAMPLE_CSV)
+        for row in rows:
+            row["account"] = "LIVRET"
+        import_transactions(rows, seeded_db)
+        (tmp_path / "_inputs").mkdir()
+        (tmp_path / "_inputs" / self.LIVRET_FILE).write_bytes(SAMPLE_CSV)
+        self._set_override(client)
+
+        reset_db.reset(seeded_db, "live", None)
+
+        assert self._mystery(seeded_db) == ("LIVRET A", 1, "courses", "cadeau")
