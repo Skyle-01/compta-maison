@@ -19,7 +19,7 @@ Every folder starting with `_` is gitignored.
 
 ## Setup
 
-Requires Python 3.11+ and Node.js 20.9+.
+Requires Python 3.11+ and Node.js 22.12+.
 
 ```bash
 python -m venv .venv
@@ -89,7 +89,7 @@ debit) or separate debit and credit columns. The example file documents every ke
 pip install -r backend/requirements-dev.txt     # pytest, ruff
 python -m pytest backend/tests
 ruff check backend && ruff format --check backend
-npm run lint --prefix frontend && npm run build --prefix frontend
+npm run lint --prefix frontend && npm test --prefix frontend && npm run build --prefix frontend
 ```
 
 Known bugs and ideas live in [`backlog/`](backlog/), one file per item.
