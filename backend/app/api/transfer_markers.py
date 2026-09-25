@@ -12,9 +12,7 @@ router = APIRouter(prefix="/api/transfer-markers", tags=["transfers"])
 
 def _current(db_path: Path) -> TransferMarkersOut:
     with connect(db_path) as conn:
-        return TransferMarkersOut(
-            markers=effective_markers(conn), is_default=not get_transfer_markers(conn)
-        )
+        return TransferMarkersOut(markers=effective_markers(conn), is_default=not get_transfer_markers(conn))
 
 
 @router.get("", response_model=TransferMarkersOut)

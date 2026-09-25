@@ -26,46 +26,56 @@ class TestRecomputeBudgetMonths:
     def test_no_anchor_rule_is_noop(self, seeded_db):
         with connect(seeded_db) as conn:
             conn.execute("UPDATE label_rules SET is_income_anchor = 0")
-        _import(seeded_db,
-                ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"),
+        )
         assert recompute_budget_months(seeded_db) == 0
 
     def test_spending_after_paycheck_rolls_into_next_month(self, seeded_db):
-        _import(seeded_db,
-                ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"),
-                ("2026-05-27", "2026-05-27", "CARTE BOULANGERIE", 5, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"),
+            ("2026-05-27", "2026-05-27", "CARTE BOULANGERIE", 5, 0, "JOINT"),
+        )
         recompute_budget_months(seeded_db)
         months = _months(seeded_db)
-        assert months["VIR EMPLOYEUR"] == "2026-06"       # salary pays for June
-        assert months["CARTE LECLERC"] == "2026-06"        # spent from the June paycheck
-        assert months["CARTE BOULANGERIE"] == "2026-05"    # before the deposit
+        assert months["VIR EMPLOYEUR"] == "2026-06"  # salary pays for June
+        assert months["CARTE LECLERC"] == "2026-06"  # spent from the June paycheck
+        assert months["CARTE BOULANGERIE"] == "2026-05"  # before the deposit
 
     def test_period_closes_at_next_paycheck(self, seeded_db):
-        _import(seeded_db,
-                ("2026-04-28", "2026-04-28", "VIR EMPLOYEUR AVRIL", 0, 2500, "PERSO"),
-                ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR MAI", 0, 2500, "PERSO"),
-                ("2026-05-15", "2026-05-15", "CARTE MID MAY", 20, 0, "JOINT"),
-                ("2026-05-29", "2026-05-29", "CARTE END MAY", 20, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-04-28", "2026-04-28", "VIR EMPLOYEUR AVRIL", 0, 2500, "PERSO"),
+            ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR MAI", 0, 2500, "PERSO"),
+            ("2026-05-15", "2026-05-15", "CARTE MID MAY", 20, 0, "JOINT"),
+            ("2026-05-29", "2026-05-29", "CARTE END MAY", 20, 0, "JOINT"),
+        )
         recompute_budget_months(seeded_db)
         months = _months(seeded_db)
         assert months["CARTE MID MAY"] == "2026-05"
         assert months["CARTE END MAY"] == "2026-06"
 
     def test_salary_early_in_month_opens_same_month(self, seeded_db):
-        _import(seeded_db,
-                ("2026-06-02", "2026-06-02", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-06-10", "2026-06-10", "CARTE LECLERC", 30, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-06-02", "2026-06-02", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-06-10", "2026-06-10", "CARTE LECLERC", 30, 0, "JOINT"),
+        )
         recompute_budget_months(seeded_db)
         months = _months(seeded_db)
         assert months["VIR EMPLOYEUR"] == "2026-06"
         assert months["CARTE LECLERC"] == "2026-06"
 
     def test_idempotent(self, seeded_db):
-        _import(seeded_db,
-                ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"),
+        )
         first = recompute_budget_months(seeded_db)
         assert first > 0
         assert recompute_budget_months(seeded_db) == 0

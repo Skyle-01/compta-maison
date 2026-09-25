@@ -15,7 +15,9 @@ def apply_rules(db_path: Path = DEFAULT_DB_PATH) -> None:
     """
     with connect(db_path) as conn:
         conn.execute("UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE category_manual = 0")
-        rules = conn.execute("SELECT id, category_id, pattern FROM label_rules ORDER BY priority, id").fetchall()
+        rules = conn.execute(
+            "SELECT id, category_id, pattern FROM label_rules ORDER BY priority, id"
+        ).fetchall()
         for rule_id, category_id, pattern in rules:
             conn.execute(
                 "UPDATE transactions SET category_id = ?, rule_id = ? "
@@ -96,7 +98,9 @@ def category_tree(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> 
     external one (the kids' Livret A) carries the libellé substring its deposits match instead,
     since those rows live on the checking account that funded them."""
     with connect(db_path) as conn:
-        categories = conn.execute("SELECT id, name, parent_id FROM categories ORDER BY parent_id, id").fetchall()
+        categories = conn.execute(
+            "SELECT id, name, parent_id FROM categories ORDER BY parent_id, id"
+        ).fetchall()
         query = (
             "SELECT category_id, COALESCE(SUM(credit_cents), 0), COALESCE(SUM(debit_cents), 0) "
             f"FROM transactions WHERE category_id IS NOT NULL AND {real_flow_clause()}"

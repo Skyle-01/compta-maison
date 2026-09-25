@@ -150,7 +150,8 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
 def _partner_ids(conn, transaction_id: int) -> list[int]:
     """The other leg(s) sharing this row's transfer group, if any."""
     return [
-        pid for (pid,) in conn.execute(
+        pid
+        for (pid,) in conn.execute(
             "SELECT p.id FROM transactions t JOIN transactions p "
             "ON p.transfer_group_id = t.transfer_group_id AND p.id != t.id WHERE t.id = ?",
             (transaction_id,),

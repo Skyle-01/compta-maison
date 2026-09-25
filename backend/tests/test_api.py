@@ -19,9 +19,7 @@ SAMPLE_CSV = (
 EXAMPLE_PROFILES = Path(__file__).resolve().parents[2] / "data" / "bank_profiles.toml"
 PROFILE_FILENAME = "export_COMPTE_PERSO_20260601.csv"
 PROFILE_CSV = (
-    "Date,Libellé,Montant\n"
-    "2026-06-01,CARTE BOULANGERIE,-4.20\n"
-    '2026-06-02,VIR EMPLOYEUR SALAIRE,"2,500.00"\n'
+    'Date,Libellé,Montant\n2026-06-01,CARTE BOULANGERIE,-4.20\n2026-06-02,VIR EMPLOYEUR SALAIRE,"2,500.00"\n'
 ).encode()
 
 
@@ -161,9 +159,7 @@ class TestTransactions:
         _upload(client)
         tx = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
         courses = _category_id(client, "courses")
-        resp = client.patch(
-            f"/api/transactions/{tx['id']}", json={"category_id": courses, "note": "cadeau"}
-        )
+        resp = client.patch(f"/api/transactions/{tx['id']}", json={"category_id": courses, "note": "cadeau"})
         assert resp.status_code == 200
         assert resp.json()["category"] == "courses"
         assert resp.json()["note"] == "cadeau"
@@ -219,7 +215,9 @@ class TestTransactions:
     def test_override_rejects_group_category(self, seeded_db, client):
         _upload(client)
         tx = client.get("/api/transactions").json()["items"][0]
-        resp = client.patch(f"/api/transactions/{tx['id']}", json={"category_id": _category_id(client, "variable")})
+        resp = client.patch(
+            f"/api/transactions/{tx['id']}", json={"category_id": _category_id(client, "variable")}
+        )
         assert resp.status_code == 422  # 'variable' is a group; leaf-only assignment
 
     def test_uncategorized_filter_excludes_transfers(self, seeded_db, client):
@@ -273,7 +271,10 @@ class TestTransferApi:
     def test_false_positive_not_paired_and_fields_exposed(self, db, client):
         rows = _upload_transfers(client)
         assert rows["VIR vers COMPTE JOINT"]["kind"] == "transfer"
-        assert rows["VIR vers COMPTE JOINT"]["transfer_group_id"] == rows["VIR de COMPTE PERSO"]["transfer_group_id"]
+        assert (
+            rows["VIR vers COMPTE JOINT"]["transfer_group_id"]
+            == rows["VIR de COMPTE PERSO"]["transfer_group_id"]
+        )
         assert rows["VIR vers COMPTE JOINT"]["kind_manual"] is False
         assert rows["CARTE 12/06 SUPERMARCHE"]["kind"] == "expense"  # same amount, not a virement
         assert rows["CARTE 12/06 SUPERMARCHE"]["transfer_group_id"] is None
@@ -289,9 +290,18 @@ class TestTransferApi:
         assert all(leg["kind_manual"] for leg in legs)
 
         two_debits = [card, rows["VIR vers COMPTE JOINT"]["id"]]
-        assert client.post("/api/transactions/transfer-pair", json={"transaction_ids": two_debits}).status_code == 422
-        assert client.post("/api/transactions/transfer-pair", json={"transaction_ids": [card, 9999]}).status_code == 404
-        assert client.post("/api/transactions/transfer-pair", json={"transaction_ids": [card]}).status_code == 422
+        assert (
+            client.post("/api/transactions/transfer-pair", json={"transaction_ids": two_debits}).status_code
+            == 422
+        )
+        assert (
+            client.post("/api/transactions/transfer-pair", json={"transaction_ids": [card, 9999]}).status_code
+            == 404
+        )
+        assert (
+            client.post("/api/transactions/transfer-pair", json={"transaction_ids": [card]}).status_code
+            == 422
+        )
 
     def test_transfer_mode_unpair_endpoint(self, db, client):
         rows = _upload_transfers(client)
@@ -299,7 +309,10 @@ class TestTransferApi:
         resp = client.put(f"/api/transactions/{leg}/transfer", json={"mode": "none"})
         assert resp.status_code == 200
         assert {t["kind"] for t in resp.json()} == {"income", "expense"}
-        uncategorized = {t["libelle"] for t in client.get("/api/transactions", params={"uncategorized": True}).json()["items"]}
+        uncategorized = {
+            t["libelle"]
+            for t in client.get("/api/transactions", params={"uncategorized": True}).json()["items"]
+        }
         assert {"VIR vers COMPTE JOINT", "VIR de COMPTE PERSO"} <= uncategorized
         assert client.put(f"/api/transactions/{leg}/transfer", json={"mode": "bogus"}).status_code == 422
         assert client.put("/api/transactions/9999/transfer", json={"mode": "auto"}).status_code == 404
@@ -421,7 +434,9 @@ class TestRules:
         assert resp.status_code == 422
 
     def test_rule_rejects_group_category(self, seeded_db, client):
-        resp = client.post("/api/rules", json={"category_id": _category_id(client, "variable"), "pattern": "X"})
+        resp = client.post(
+            "/api/rules", json={"category_id": _category_id(client, "variable"), "pattern": "X"}
+        )
         assert resp.status_code == 422  # 'variable' is a group; rules must target a leaf
 
     def test_anchor_rule_mutation_moves_periods(self, seeded_db, client):
@@ -479,7 +494,9 @@ class TestDashboard:
             emprunt = conn.execute(
                 "INSERT INTO categories (name, parent_id) VALUES ('Emprunt', ?)", (deficit,)
             ).lastrowid
-            conn.execute("INSERT INTO label_rules (category_id, pattern) VALUES (?, 'VERSEMENT PEL')", (epargne,))
+            conn.execute(
+                "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'VERSEMENT PEL')", (epargne,)
+            )
         rows = [
             ("2026-06-02", "VIR PRET CONSO", 0, 1000, "PERSO"),
             ("2026-06-03", "VERSEMENT PEL", 200, 0, "PERSO"),
@@ -488,7 +505,14 @@ class TestDashboard:
         ]
         import_transactions(
             [
-                {"Date operation": d, "Date valeur": d, "Libelle": lib, "Debit": deb, "Credit": cre, "account": acc}
+                {
+                    "Date operation": d,
+                    "Date valeur": d,
+                    "Libelle": lib,
+                    "Debit": deb,
+                    "Credit": cre,
+                    "account": acc,
+                }
                 for d, lib, deb, cre, acc in rows
             ],
             db,
@@ -504,6 +528,7 @@ class TestDashboard:
         _upload(client)
         body = client.get("/api/dashboard").json()
         assert body["month"] == "2026-06"
+
 
 class TestExport:
     def test_export_categories_csv(self, seeded_db, client):
@@ -542,8 +567,13 @@ class TestExport:
         # Give a rule a description so the round-trip actually proves descriptions survive.
         client.post(
             "/api/rules",
-            json={"category_id": _category_id(client, "bar"), "pattern": "GUINNESS",
-                  "priority": 9, "is_income_anchor": False, "description": "pub du vendredi"},
+            json={
+                "category_id": _category_id(client, "bar"),
+                "pattern": "GUINNESS",
+                "priority": 9,
+                "is_income_anchor": False,
+                "description": "pub du vendredi",
+            },
         )
 
         cats_csv = tmp_path / "categories.csv"
@@ -586,7 +616,9 @@ class TestExport:
             json={"category_id": _category_id(client, "courses"), "note": "remboursé par Léa"},
         )
         with connect(seeded_db) as conn:
-            conn.execute("UPDATE transactions SET kind = 'income', kind_manual = 1 WHERE libelle = 'BAR ANGELUS'")
+            conn.execute(
+                "UPDATE transactions SET kind = 'income', kind_manual = 1 WHERE libelle = 'BAR ANGELUS'"
+            )
 
         cats = tmp_path / "categories.csv"
         rules = tmp_path / "rules.csv"
@@ -628,7 +660,9 @@ class TestExport:
             json={"category_id": _category_id(client, "courses"), "note": "à vérifier"},
         )
         with connect(seeded_db) as conn:
-            conn.execute("UPDATE transactions SET kind = 'income', kind_manual = 1 WHERE libelle = 'BAR ANGELUS'")
+            conn.execute(
+                "UPDATE transactions SET kind = 'income', kind_manual = 1 WHERE libelle = 'BAR ANGELUS'"
+            )
 
         cat_csv, rules_csv, overrides_csv = export_current(seeded_db, tmp_path / "snap")
         assert cat_csv.read_bytes() == client.get("/api/categories/export").content
@@ -648,7 +682,12 @@ class TestTransferOverrides:
         rows = _upload_transfers(client)
         client.post(
             "/api/transactions/transfer-pair",
-            json={"transaction_ids": [rows["CARTE 12/06 SUPERMARCHE"]["id"], rows["VIR SEPA RECU /DE AMI"]["id"]]},
+            json={
+                "transaction_ids": [
+                    rows["CARTE 12/06 SUPERMARCHE"]["id"],
+                    rows["VIR SEPA RECU /DE AMI"]["id"],
+                ]
+            },
         )
         client.put(f"/api/transactions/{rows['VIR vers COMPTE JOINT']['id']}/transfer", json={"mode": "none"})
         body = client.get("/api/transactions/export-overrides").content
@@ -684,7 +723,9 @@ class TestTransferOverrides:
 
         _upload(client)
         with connect(seeded_db) as conn:
-            hash_ = conn.execute("SELECT import_hash FROM transactions WHERE libelle = 'MYSTERY SHOP'").fetchone()[0]
+            hash_ = conn.execute(
+                "SELECT import_hash FROM transactions WHERE libelle = 'MYSTERY SHOP'"
+            ).fetchone()[0]
         cats, rules, overrides = tmp_path / "c.csv", tmp_path / "r.csv", tmp_path / "o.csv"
         cats.write_bytes(client.get("/api/categories/export").content)
         rules.write_bytes(client.get("/api/rules/export").content)
@@ -748,7 +789,13 @@ class TestResetDb:
 
         reset_db.reset(db_path, "defaults", None)  # no _config/ -> the fictional data/ example
 
-        assert [code for code, *_ in self._accounts(db_path)] == ["PERSO", "JOINT", "LIVRET", "LOCATIF", "ENFANT"]
+        assert [code for code, *_ in self._accounts(db_path)] == [
+            "PERSO",
+            "JOINT",
+            "LIVRET",
+            "LOCATIF",
+            "ENFANT",
+        ]
         assert self._count(db_path, "label_rules") > 0
         assert self._count(db_path, "transactions") == 4  # the sample statement resolved to JOINT
 
@@ -777,7 +824,10 @@ class TestResetDb:
 
         with connect(db_path) as conn:
             assert conn.execute("SELECT DISTINCT account_id FROM transactions").fetchall() == [("MAIN",)]
-            assert conn.execute("SELECT COUNT(*) FROM transactions WHERE category_id IS NOT NULL").fetchone()[0] == 1
+            assert (
+                conn.execute("SELECT COUNT(*) FROM transactions WHERE category_id IS NOT NULL").fetchone()[0]
+                == 1
+            )
 
     def test_live_snapshots_and_preserves_overrides(self, seeded_db, client, tmp_path, monkeypatch):
         reset_db, backups = self._isolate(tmp_path, monkeypatch)
@@ -837,7 +887,9 @@ class TestResetDb:
         reset_db.reset(db_path, "defaults", None)
 
         with connect(db_path) as conn:
-            by_account = dict(conn.execute("SELECT account_id, COUNT(*) FROM transactions GROUP BY account_id"))
+            by_account = dict(
+                conn.execute("SELECT account_id, COUNT(*) FROM transactions GROUP BY account_id")
+            )
         assert by_account == {"JOINT": 4, "PERSO": 2}
 
     def test_live_rebuild_with_profiles_keeps_overrides(self, seeded_db, client, tmp_path, monkeypatch):
@@ -849,7 +901,8 @@ class TestResetDb:
         _upload(client, filename=PROFILE_FILENAME, content=PROFILE_CSV)
         row = client.get("/api/transactions", params={"libelle_contains": "BOULANGERIE"}).json()["items"][0]
         client.patch(
-            f"/api/transactions/{row['id']}", json={"category_id": _category_id(client, "courses"), "note": "pain"}
+            f"/api/transactions/{row['id']}",
+            json={"category_id": _category_id(client, "courses"), "note": "pain"},
         )
 
         reset_db.reset(seeded_db, "live", None)

@@ -21,9 +21,11 @@ def _import(db, *rows):
 
 def _categories(db) -> dict[str, str | None]:
     with connect(db) as conn:
-        return dict(conn.execute(
-            "SELECT t.libelle, c.name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id"
-        ).fetchall())
+        return dict(
+            conn.execute(
+                "SELECT t.libelle, c.name FROM transactions t LEFT JOIN categories c ON c.id = t.category_id"
+            ).fetchall()
+        )
 
 
 def _find(node: dict, name: str) -> dict:
@@ -38,19 +40,23 @@ def _find(node: dict, name: str) -> dict:
 
 class TestApplyRules:
     def test_substring_match(self, seeded_db):
-        _import(seeded_db,
-                ("2026-06-01", "2026-06-01", "VIR EMPLOYEUR SALAIRE", 0, 2500, "PERSO"),
-                ("2026-06-02", "2026-06-02", "LOYER", 800, 0, "PERSO"))
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "VIR EMPLOYEUR SALAIRE", 0, 2500, "PERSO"),
+            ("2026-06-02", "2026-06-02", "LOYER", 800, 0, "PERSO"),
+        )
         apply_rules(seeded_db)
         cats = _categories(seeded_db)
         assert cats["VIR EMPLOYEUR SALAIRE"] == "salaire"
         assert cats["LOYER"] is None
 
     def test_multiple_patterns_or_logic(self, seeded_db):
-        _import(seeded_db,
-                ("2026-06-01", "2026-06-01", "SUPERMARCHE E.LECLERC", 50, 0, "JOINT"),
-                ("2026-06-02", "2026-06-02", "LECLERC EXPRESS", 30, 0, "JOINT"),
-                ("2026-06-03", "2026-06-03", "BOULANGERIE", 5, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "SUPERMARCHE E.LECLERC", 50, 0, "JOINT"),
+            ("2026-06-02", "2026-06-02", "LECLERC EXPRESS", 30, 0, "JOINT"),
+            ("2026-06-03", "2026-06-03", "BOULANGERIE", 5, 0, "JOINT"),
+        )
         apply_rules(seeded_db)
         cats = _categories(seeded_db)
         assert cats["SUPERMARCHE E.LECLERC"] == "courses"
@@ -63,9 +69,11 @@ class TestApplyRules:
                 "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'VIR PRET (ECH)')",
                 (cat_id(seeded_db, "courses"),),
             )
-        _import(seeded_db,
-                ("2026-06-01", "2026-06-01", "VIR PRET (ECH)", 500, 0, "PERSO"),
-                ("2026-06-02", "2026-06-02", "VIR PRET ECH", 200, 0, "PERSO"))
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "VIR PRET (ECH)", 500, 0, "PERSO"),
+            ("2026-06-02", "2026-06-02", "VIR PRET ECH", 200, 0, "PERSO"),
+        )
         apply_rules(seeded_db)
         cats = _categories(seeded_db)
         assert cats["VIR PRET (ECH)"] == "courses"
@@ -77,7 +85,9 @@ class TestApplyRules:
         set_transaction_category(1, cat_id(seeded_db, "bar"), seeded_db)
         apply_rules(seeded_db)
         with connect(seeded_db) as conn:
-            row = conn.execute("SELECT category_id, category_manual FROM transactions WHERE id = 1").fetchone()
+            row = conn.execute(
+                "SELECT category_id, category_manual FROM transactions WHERE id = 1"
+            ).fetchone()
         assert row == (cat_id(seeded_db, "bar"), 1)
 
     def test_lowest_priority_wins(self, seeded_db):
@@ -94,10 +104,12 @@ class TestApplyRules:
 
 class TestCategoryTree:
     def test_parent_sums_children(self, seeded_db):
-        _import(seeded_db,
-                ("2026-06-01", "2026-06-01", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-06-02", "2026-06-02", "SUPERMARCHE", 60, 0, "JOINT"),
-                ("2026-06-03", "2026-06-03", "BAR ANGELUS", 20, 0, "PERSO"))
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-06-02", "2026-06-02", "SUPERMARCHE", 60, 0, "JOINT"),
+            ("2026-06-03", "2026-06-03", "BAR ANGELUS", 20, 0, "PERSO"),
+        )
         apply_rules(seeded_db)
         tree = category_tree(seeded_db, "2026-06")
 
@@ -115,17 +127,21 @@ class TestCategoryTree:
 
     def test_exact_cents_arithmetic(self, seeded_db):
         # 0.1 + 0.2 style float traps must not leak into totals
-        _import(seeded_db,
-                ("2026-06-01", "2026-06-01", "SUPERMARCHE A", 0.10, 0, "JOINT"),
-                ("2026-06-02", "2026-06-02", "SUPERMARCHE B", 0.20, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "SUPERMARCHE A", 0.10, 0, "JOINT"),
+            ("2026-06-02", "2026-06-02", "SUPERMARCHE B", 0.20, 0, "JOINT"),
+        )
         apply_rules(seeded_db)
         tree = category_tree(seeded_db, "2026-06")
         assert _find(tree, "courses")["debit"] == 0.3
 
     def test_month_filter(self, seeded_db):
-        _import(seeded_db,
-                ("2026-05-10", "2026-05-10", "SUPERMARCHE", 100, 0, "JOINT"),
-                ("2026-06-10", "2026-06-10", "SUPERMARCHE", 60, 0, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-05-10", "2026-05-10", "SUPERMARCHE", 100, 0, "JOINT"),
+            ("2026-06-10", "2026-06-10", "SUPERMARCHE", 60, 0, "JOINT"),
+        )
         apply_rules(seeded_db)
         tree = category_tree(seeded_db, "2026-06")
         assert tree["debit"] == 60
@@ -133,9 +149,11 @@ class TestCategoryTree:
 
 class TestUncategorizedBalance:
     def test_balanced_transfers(self, seeded_db):
-        _import(seeded_db,
-                ("2026-06-01", "2026-06-01", "VIR INTERNE", 100, 0, "PERSO"),
-                ("2026-06-01", "2026-06-01", "VIR INTERNE RECU", 0, 100, "JOINT"))
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "VIR INTERNE", 100, 0, "PERSO"),
+            ("2026-06-01", "2026-06-01", "VIR INTERNE RECU", 0, 100, "JOINT"),
+        )
         apply_rules(seeded_db)
         stats = uncategorized_balance(seeded_db, "2026-06")
         assert stats["count"] == 2
@@ -193,9 +211,11 @@ class TestSavingsTreeNodes:
 
     def test_nets_per_month_to_one_sign(self, db):
         # A deposit and a withdrawal in the same month cancel; only the net épargne shows.
-        _import(db,
-                ("2026-06-05", "2026-06-05", "VIR de COMPTE", 0, 500, "LIVRET"),
-                ("2026-06-20", "2026-06-20", "RETRAIT LIVRET", 200, 0, "LIVRET"))
+        _import(
+            db,
+            ("2026-06-05", "2026-06-05", "VIR de COMPTE", 0, 500, "LIVRET"),
+            ("2026-06-20", "2026-06-20", "RETRAIT LIVRET", 200, 0, "LIVRET"),
+        )
         tree = category_tree(db, "2026-06")
         assert _find(_find(tree, "Épargne"), "Livret A")["balance"] == -300
         assert _find(tree, "Déficit") == {}
@@ -203,9 +223,11 @@ class TestSavingsTreeNodes:
     def test_aggregate_view_shows_both_sides(self, db):
         # Saved in May, dipped in June: the all-months view surfaces both, instead of netting
         # them to one number (the bug where désépargne "disappeared").
-        _import(db,
-                ("2026-05-10", "2026-05-10", "VIR de COMPTE", 0, 500, "LIVRET"),
-                ("2026-06-20", "2026-06-20", "RETRAIT LIVRET", 200, 0, "LIVRET"))
+        _import(
+            db,
+            ("2026-05-10", "2026-05-10", "VIR de COMPTE", 0, 500, "LIVRET"),
+            ("2026-06-20", "2026-06-20", "RETRAIT LIVRET", 200, 0, "LIVRET"),
+        )
         tree = category_tree(db)  # all months
         assert _find(_find(tree, "Épargne"), "Livret A")["balance"] == -500
         assert _find(_find(tree, "Déficit"), "Livret A")["balance"] == 200
@@ -229,10 +251,12 @@ class TestSavingsTreeNodes:
     def test_single_legged_savings_excluded_from_transfers_summary(self, db):
         # A paired internal transfer (PERSO -> LIVRET) plus a single-legged external-savings
         # deposit. Only the paired one is an "internal transfer"; both stay out of real flows.
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-11", "2026-06-11", "VIR de COMPTE", 0, 500, "LIVRET"),
-                ("2026-06-12", "2026-06-12", "VERS LIVRET ENFANT", 25, 0, "JOINT"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-11", "2026-06-11", "VIR de COMPTE", 0, 500, "LIVRET"),
+            ("2026-06-12", "2026-06-12", "VERS LIVRET ENFANT", 25, 0, "JOINT"),
+        )
         recompute_transfers(db)
         assert transfers_summary(db, "2026-06") == {"count": 1, "total": 500.0}  # paired only
         assert income_and_expenses(db, "2026-06") == (0.0, 0.0)  # both excluded from real flows
@@ -258,11 +282,13 @@ class TestMonthlyTotals:
     """The per-month trend series feeding the dashboard sparkline and card deltas."""
 
     def test_per_month_oldest_first_matches_single_month(self, seeded_db):
-        _import(seeded_db,
-                ("2026-05-10", "2026-05-10", "VIR EMPLOYEUR", 0, 2000, "PERSO"),
-                ("2026-05-12", "2026-05-12", "SUPERMARCHE", 100, 0, "JOINT"),
-                ("2026-06-10", "2026-06-10", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-06-12", "2026-06-12", "BAR ANGELUS", 20, 0, "PERSO"))
+        _import(
+            seeded_db,
+            ("2026-05-10", "2026-05-10", "VIR EMPLOYEUR", 0, 2000, "PERSO"),
+            ("2026-05-12", "2026-05-12", "SUPERMARCHE", 100, 0, "JOINT"),
+            ("2026-06-10", "2026-06-10", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-06-12", "2026-06-12", "BAR ANGELUS", 20, 0, "PERSO"),
+        )
         apply_rules(seeded_db)
         rows = monthly_totals(seeded_db)
         assert [r["month"] for r in rows] == ["2026-05", "2026-06"]  # oldest first
@@ -271,16 +297,16 @@ class TestMonthlyTotals:
         assert (may["income"], may["expenses"]) == income_and_expenses(seeded_db, "2026-05")
 
     def test_reste_includes_savings_and_matches_tree_total(self, seeded_db):
-        _import(seeded_db,
-                ("2026-06-10", "2026-06-10", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
-                ("2026-06-11", "2026-06-11", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-12", "2026-06-12", "VIR de COMPTE", 0, 500, "LIVRET"),
-                ("2026-06-13", "2026-06-13", "BAR ANGELUS", 20, 0, "PERSO"))
+        _import(
+            seeded_db,
+            ("2026-06-10", "2026-06-10", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-06-11", "2026-06-11", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-12", "2026-06-12", "VIR de COMPTE", 0, 500, "LIVRET"),
+            ("2026-06-13", "2026-06-13", "BAR ANGELUS", 20, 0, "PERSO"),
+        )
         apply_rules(seeded_db)
         recompute_transfers(seeded_db)  # pairs the LIVRET leg out of income/expenses
         row = next(r for r in monthly_totals(seeded_db) if r["month"] == "2026-06")
         assert (row["epargne"], row["desepargne"]) == (500, 0)
-        assert row["reste"] == round(
-            row["income"] - row["expenses"] - row["epargne"] + row["desepargne"], 2
-        )
+        assert row["reste"] == round(row["income"] - row["expenses"] - row["epargne"] + row["desepargne"], 2)
         assert row["reste"] == category_tree(seeded_db, "2026-06")["balance"]

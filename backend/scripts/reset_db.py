@@ -26,6 +26,7 @@ whatever --source is: they describe how to parse statements, not DB state.
 A source dir without accounts.csv (a snapshot older than accounts.csv) borrows the one from the
 config dir.
 """
+
 import argparse
 import csv
 import sys
@@ -240,7 +241,11 @@ def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
     # Transfer markers are optional (absent = built-in default); a snapshot without the file
     # borrows the config dir's, like accounts.csv.
     markers_csv = next(
-        (p for p in (src_dir / "transfer_markers.csv", _defaults_dir() / "transfer_markers.csv") if p.exists()),
+        (
+            p
+            for p in (src_dir / "transfer_markers.csv", _defaults_dir() / "transfer_markers.csv")
+            if p.exists()
+        ),
         None,
     )
     _rebuild(

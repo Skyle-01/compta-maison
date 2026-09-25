@@ -67,8 +67,7 @@ def create_rule(rule: RuleIn, db_path: Path = Depends(get_db_path)) -> RuleOut:
             cur = conn.execute(
                 "INSERT INTO label_rules (category_id, pattern, priority, is_income_anchor, description) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (rule.category_id, rule.pattern, rule.priority, int(rule.is_income_anchor),
-                 rule.description),
+                (rule.category_id, rule.pattern, rule.priority, int(rule.is_income_anchor), rule.description),
             )
             rule_id = cur.lastrowid
     except sqlite3.IntegrityError as exc:
@@ -85,8 +84,14 @@ def update_rule(rule_id: int, rule: RuleIn, db_path: Path = Depends(get_db_path)
             cur = conn.execute(
                 "UPDATE label_rules SET category_id = ?, pattern = ?, priority = ?, "
                 "is_income_anchor = ?, description = ? WHERE id = ?",
-                (rule.category_id, rule.pattern, rule.priority, int(rule.is_income_anchor),
-                 rule.description, rule_id),
+                (
+                    rule.category_id,
+                    rule.pattern,
+                    rule.priority,
+                    int(rule.is_income_anchor),
+                    rule.description,
+                    rule_id,
+                ),
             )
             if cur.rowcount == 0:
                 raise HTTPException(404, detail=[f"No rule with id {rule_id}"])

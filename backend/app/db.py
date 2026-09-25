@@ -7,7 +7,9 @@ from pathlib import Path
 
 DEFAULT_DB_PATH = Path(os.environ.get("COMPTA_DB", str(Path(__file__).resolve().parents[2] / "compta.db")))
 # The private config dir (accounts, taxonomy, bank_profiles.toml), gitignored.
-DEFAULT_CONFIG_DIR = Path(os.environ.get("COMPTA_CONFIG_DIR", str(Path(__file__).resolve().parents[2] / "_config")))
+DEFAULT_CONFIG_DIR = Path(
+    os.environ.get("COMPTA_CONFIG_DIR", str(Path(__file__).resolve().parents[2] / "_config"))
+)
 
 SCHEMA_VERSION = 1
 
@@ -175,7 +177,9 @@ def resolve_account_code(raw: str, aliases: dict[str, str]) -> str | None:
     return None
 
 
-def _row_hash(account: str, date_op: str, libelle: str, debit: float, credit: float, occurrence: int = 0) -> str:
+def _row_hash(
+    account: str, date_op: str, libelle: str, debit: float, credit: float, occurrence: int = 0
+) -> str:
     """Identity of one operation. Amounts are hashed as euro floats (not cents) and
     `occurrence` stays out of the key when 0 so hashes of rows imported by earlier
     versions remain valid. Never change this formula for occurrence 0.
@@ -202,6 +206,7 @@ def connect(db_path: Path = DEFAULT_DB_PATH) -> Iterator[sqlite3.Connection]:
 # Schema initialisation
 # ---------------------------------------------------------------------------
 
+
 def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
     """Create the schema if absent. Idempotent. Seeds no accounts (they're user data — see
     upsert_accounts; reset_db.py loads them from accounts.csv).
@@ -222,7 +227,10 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
 # Imports and assignments
 # ---------------------------------------------------------------------------
 
-def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH, import_id: int | None = None) -> int:
+
+def import_transactions(
+    rows: list[dict], db_path: Path = DEFAULT_DB_PATH, import_id: int | None = None
+) -> int:
     """Insert rows into the transactions table, skipping duplicates.
 
     Each row must carry the keys produced by core.parsing.parse_csv plus 'account'.
@@ -267,8 +275,19 @@ def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH, impor
                     "(date_operation, date_valeur, budget_month, libelle, debit_cents, credit_cents, "
                     "account, account_id, kind, import_id, import_hash) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (date_op, date_val, budget_month, libelle, debit_cents, credit_cents,
-                     account, account_id, kind, import_id, h),
+                    (
+                        date_op,
+                        date_val,
+                        budget_month,
+                        libelle,
+                        debit_cents,
+                        credit_cents,
+                        account,
+                        account_id,
+                        kind,
+                        import_id,
+                        h,
+                    ),
                 )
                 inserted += 1
             except sqlite3.IntegrityError:
@@ -276,7 +295,9 @@ def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH, impor
     return inserted
 
 
-def set_transaction_category(transaction_id: int, category_id: int | None, db_path: Path = DEFAULT_DB_PATH) -> bool:
+def set_transaction_category(
+    transaction_id: int, category_id: int | None, db_path: Path = DEFAULT_DB_PATH
+) -> bool:
     """Manually assign (or clear) a transaction's category. Returns False if the id is unknown."""
     manual = 1 if category_id else 0
     with connect(db_path) as conn:

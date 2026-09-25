@@ -64,7 +64,8 @@ async def upload_csv(
     # Months affected by this file, read back after the paycheck-period recompute.
     with connect(db_path) as conn:
         months = [
-            m for (m,) in conn.execute(
+            m
+            for (m,) in conn.execute(
                 "SELECT DISTINCT budget_month FROM transactions WHERE import_id = ? ORDER BY budget_month",
                 (import_id,),
             )

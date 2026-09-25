@@ -66,7 +66,7 @@ class TestImportTransactions:
         df1 = _make_df(("2026-06-01", "2026-06-01", "EMPLOYEUR", 0, 2500, "PERSO"))
         df2 = _make_df(
             ("2026-06-01", "2026-06-01", "EMPLOYEUR", 0, 2500, "PERSO"),  # duplicate
-            ("2026-06-03", "2026-06-03", "BOULANGERIE", 5, 0, "PERSO"),   # new
+            ("2026-06-03", "2026-06-03", "BOULANGERIE", 5, 0, "PERSO"),  # new
         )
         import_transactions(df1, db)
         assert import_transactions(df2, db) == 1
@@ -79,7 +79,9 @@ class TestSetTransactionCategory:
         courses = cat_id(seeded_db, "courses")
         assert set_transaction_category(1, courses, seeded_db) is True
         with connect(seeded_db) as conn:
-            row = conn.execute("SELECT category_id, category_manual FROM transactions WHERE id = 1").fetchone()
+            row = conn.execute(
+                "SELECT category_id, category_manual FROM transactions WHERE id = 1"
+            ).fetchone()
         assert row == (courses, 1)
 
     def test_clear_resets_manual_flag(self, seeded_db):
@@ -88,7 +90,9 @@ class TestSetTransactionCategory:
         set_transaction_category(1, cat_id(seeded_db, "courses"), seeded_db)
         set_transaction_category(1, None, seeded_db)
         with connect(seeded_db) as conn:
-            row = conn.execute("SELECT category_id, category_manual FROM transactions WHERE id = 1").fetchone()
+            row = conn.execute(
+                "SELECT category_id, category_manual FROM transactions WHERE id = 1"
+            ).fetchone()
         assert row == (None, 0)
 
     def test_unknown_id_returns_false(self, seeded_db):

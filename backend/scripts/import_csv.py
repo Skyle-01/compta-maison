@@ -18,6 +18,7 @@ It does NOT import transactions (no _inputs handling) — that's reset_db.py's j
 rebuild (fresh DB + _inputs + taxonomy + overrides from defaults/live/a backup) use reset_db.py;
 this script just layers a given set of taxonomy CSVs onto whatever transactions already exist.
 """
+
 import argparse
 import csv
 import sys
@@ -40,7 +41,9 @@ ALIAS_SEP = "|"
 
 def _read_csv(path: Path) -> list[dict]:
     with open(path, encoding="utf-8-sig", newline="") as handle:
-        return [{k: (v or "").strip() for k, v in row.items()} for row in csv.DictReader(handle, delimiter=";")]
+        return [
+            {k: (v or "").strip() for k, v in row.items()} for row in csv.DictReader(handle, delimiter=";")
+        ]
 
 
 def import_accounts(conn, rows: list[dict]) -> int:
@@ -57,15 +60,19 @@ def import_accounts(conn, rows: list[dict]) -> int:
         if not code:
             continue
         if row["type"] not in ACCOUNT_TYPES:
-            raise ValueError(f"accounts.csv line {line_no}: type must be one of {ACCOUNT_TYPES}, got {row['type']!r}")
-        accounts.append((
-            code,
-            row["label"] or code,
-            row["type"],
-            0 if row.get("include_in_full_view") == "0" else 1,
-            int(row["sort_order"]) if row.get("sort_order") else 0,
-            row.get("deposit_pattern") or None,
-        ))
+            raise ValueError(
+                f"accounts.csv line {line_no}: type must be one of {ACCOUNT_TYPES}, got {row['type']!r}"
+            )
+        accounts.append(
+            (
+                code,
+                row["label"] or code,
+                row["type"],
+                0 if row.get("include_in_full_view") == "0" else 1,
+                int(row["sort_order"]) if row.get("sort_order") else 0,
+                row.get("deposit_pattern") or None,
+            )
+        )
         names = [code] + [a.strip() for a in (row.get("aliases") or "").split(ALIAS_SEP)]
         aliases.extend((name, code) for name in names if name)
     upsert_accounts(conn, accounts, aliases)
@@ -110,9 +117,13 @@ def import_categories(conn, rows: list[dict]) -> dict[str, int]:
                 existing = conn.execute(
                     "SELECT id FROM categories WHERE name = ? AND parent_id IS ?", (name, parent_id)
                 ).fetchone()
-                path_to_id[key] = existing[0] if existing else conn.execute(
-                    "INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id)
-                ).lastrowid
+                path_to_id[key] = (
+                    existing[0]
+                    if existing
+                    else conn.execute(
+                        "INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id)
+                    ).lastrowid
+                )
             parent_id = path_to_id[key]
     return path_to_id
 
@@ -193,15 +204,19 @@ def restore_manual_pairs(conn, rows: list[dict]) -> tuple[int, int]:
         if row.get("transfer_pair") and row["transfer_pair"] != row["import_hash"]
     }
     restored = unmatched = 0
-    next_group = conn.execute("SELECT COALESCE(MAX(transfer_group_id), 0) FROM transactions").fetchone()[0] + 1
+    next_group = (
+        conn.execute("SELECT COALESCE(MAX(transfer_group_id), 0) FROM transactions").fetchone()[0] + 1
+    )
     for pair in pairs:
         ids = [
             found[0]
             for hash_ in pair
-            if (found := conn.execute(
-                "SELECT id FROM transactions WHERE import_hash = ? AND kind_manual = 1 AND kind = 'transfer'",
-                (hash_,),
-            ).fetchone())
+            if (
+                found := conn.execute(
+                    "SELECT id FROM transactions WHERE import_hash = ? AND kind_manual = 1 AND kind = 'transfer'",
+                    (hash_,),
+                ).fetchone()
+            )
         ]
         if len(ids) != 2:
             unmatched += 1
@@ -244,7 +259,9 @@ def import_csv(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--categories", type=Path, default=REPO_ROOT / "categories.csv")
     parser.add_argument("--rules", type=Path, default=REPO_ROOT / "rules.csv")
     parser.add_argument("--overrides", type=Path, default=None)

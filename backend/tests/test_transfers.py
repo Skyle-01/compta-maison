@@ -29,9 +29,11 @@ def _kinds(db) -> dict[str, str]:
 
 class TestRecomputeTransfers:
     def test_pairs_matching_cross_account_legs(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-11", "2026-06-11", "VIR de COMPTE", 0, 500, "LIVRET"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-11", "2026-06-11", "VIR de COMPTE", 0, 500, "LIVRET"),
+        )
         assert recompute_transfers(db) == 2
         kinds = _kinds(db)
         assert kinds["VIR vers LIVRET"] == "transfer"
@@ -41,42 +43,52 @@ class TestRecomputeTransfers:
         assert groups[0] is not None and groups[0] == groups[1]
 
     def test_same_account_not_paired(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "ACHAT", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "REMBOURSEMENT", 0, 500, "PERSO"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "ACHAT", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "REMBOURSEMENT", 0, 500, "PERSO"),
+        )
         assert recompute_transfers(db) == 0
         assert _kinds(db) == {"ACHAT": "expense", "REMBOURSEMENT": "income"}
 
     def test_amount_mismatch_not_paired(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 400, "LIVRET"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 400, "LIVRET"),
+        )
         assert recompute_transfers(db) == 0
 
     def test_outside_date_window_not_paired(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-20", "2026-06-20", "VIR de COMPTE", 0, 500, "LIVRET"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-20", "2026-06-20", "VIR de COMPTE", 0, 500, "LIVRET"),
+        )
         assert recompute_transfers(db) == 0
 
     def test_transfers_excluded_from_totals_and_balance(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 500, "LIVRET"),
-                ("2026-06-12", "2026-06-12", "COURSES", 60, 0, "JOINT"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 500, "LIVRET"),
+            ("2026-06-12", "2026-06-12", "COURSES", 60, 0, "JOINT"),
+        )
         recompute_transfers(db)
         income, expenses = income_and_expenses(db, "2026-06")
-        assert income == 0          # the 500 credit is a transfer, not income
-        assert expenses == 60       # only the real expense remains
+        assert income == 0  # the 500 credit is a transfer, not income
+        assert expenses == 60  # only the real expense remains
         summary = transfers_summary(db, "2026-06")
         assert summary == {"count": 1, "total": 500.0}
         stats = uncategorized_balance(db, "2026-06")
         assert stats["count"] == 1  # transfers no longer counted as uncategorised residual
 
     def test_idempotent(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 500, "LIVRET"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 500, "LIVRET"),
+        )
         assert recompute_transfers(db) == 2
         assert recompute_transfers(db) == 2  # stable on re-run
 
@@ -87,36 +99,44 @@ class TestTransferMarkers:
     def test_round_amount_false_positive_not_paired(self, db):
         # 50 € of groceries on the joint account and 50 € refunded by a friend the next day are
         # not an internal transfer, even though amount and dates line up.
-        _import(db,
-                ("2026-06-12", "2026-06-12", "CARTE 12/06 SUPERMARCHE", 50, 0, "JOINT"),
-                ("2026-06-13", "2026-06-13", "VIR SEPA RECU /DE AMI", 0, 50, "PERSO"))
+        _import(
+            db,
+            ("2026-06-12", "2026-06-12", "CARTE 12/06 SUPERMARCHE", 50, 0, "JOINT"),
+            ("2026-06-13", "2026-06-13", "VIR SEPA RECU /DE AMI", 0, 50, "PERSO"),
+        )
         assert recompute_transfers(db) == 0
         assert _kinds(db) == {"CARTE 12/06 SUPERMARCHE": "expense", "VIR SEPA RECU /DE AMI": "income"}
 
     def test_default_marker_is_case_insensitive_prefix(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIREMENT vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "  Vir de COMPTE", 0, 500, "LIVRET"),
-                ("2026-06-11", "2026-06-11", "CARTE 11/06 VIRTUO", 30, 0, "PERSO"),
-                ("2026-06-11", "2026-06-11", "VIR DE AMI", 0, 30, "JOINT"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIREMENT vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "  Vir de COMPTE", 0, 500, "LIVRET"),
+            ("2026-06-11", "2026-06-11", "CARTE 11/06 VIRTUO", 30, 0, "PERSO"),
+            ("2026-06-11", "2026-06-11", "VIR DE AMI", 0, 30, "JOINT"),
+        )
         assert recompute_transfers(db) == 2
         kinds = _kinds(db)
         assert kinds["VIREMENT vers LIVRET"] == kinds["  Vir de COMPTE"] == "transfer"
         assert (kinds["CARTE 11/06 VIRTUO"], kinds["VIR DE AMI"]) == ("expense", "income")
 
     def test_both_legs_must_match_marker(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "VERSEMENT", 0, 500, "LIVRET"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VERSEMENT", 0, 500, "LIVRET"),
+        )
         assert recompute_transfers(db) == 0
         with connect(db) as conn:
             replace_transfer_markers(conn, ["VIR", "VERSEMENT"])
         assert recompute_transfers(db) == 2
 
     def test_star_marker_restores_legacy_pairing(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "ACHAT", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "REMBOURSEMENT", 0, 500, "JOINT"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "ACHAT", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "REMBOURSEMENT", 0, 500, "JOINT"),
+        )
         assert recompute_transfers(db) == 0
         with connect(db) as conn:
             replace_transfer_markers(conn, ["*"])
@@ -204,9 +224,11 @@ class TestManualTransfers:
         assert self._state(db)["VIR vers LIVRET"] == ("transfer", 0, True)
 
     def test_manual_pair_outside_window_survives_recompute(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "CHEQUE 123", 500, 0, "PERSO"),
-                ("2026-06-15", "2026-06-15", "REMISE CHEQUE", 0, 500, "JOINT"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "CHEQUE 123", 500, 0, "PERSO"),
+            ("2026-06-15", "2026-06-15", "REMISE CHEQUE", 0, 500, "JOINT"),
+        )
         ids = self._ids(db)
         pair_manually(db, ids["CHEQUE 123"], ids["REMISE CHEQUE"])
         recompute_transfers(db)
@@ -222,9 +244,12 @@ class TestManualTransfers:
         ids = self._ids(db)
         pair_manually(db, ids["VIR vers LIVRET"], ids["VIR de PERSO"])
         with connect(db) as conn:
-            sizes = [n for (n,) in conn.execute(
-                "SELECT COUNT(*) FROM transactions WHERE transfer_group_id IS NOT NULL GROUP BY transfer_group_id"
-            )]
+            sizes = [
+                n
+                for (n,) in conn.execute(
+                    "SELECT COUNT(*) FROM transactions WHERE transfer_group_id IS NOT NULL GROUP BY transfer_group_id"
+                )
+            ]
         assert sizes == [2]  # the old LIVRET leg went back to auto and found no partner
         assert self._state(db)["VIR de COMPTE"] == ("income", 0, False)
 
@@ -238,11 +263,13 @@ class TestManualTransfers:
         assert self._state(db)["VIR vers COMPTE TIERS"] == ("expense", 0, False)
 
     def test_manual_pair_validation(self, db):
-        _import(db,
-                ("2026-06-10", "2026-06-10", "A", 500, 0, "PERSO"),
-                ("2026-06-10", "2026-06-10", "B", 500, 0, "JOINT"),
-                ("2026-06-10", "2026-06-10", "C", 0, 400, "JOINT"),
-                ("2026-06-10", "2026-06-10", "D", 0, 500, "PERSO"))
+        _import(
+            db,
+            ("2026-06-10", "2026-06-10", "A", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "B", 500, 0, "JOINT"),
+            ("2026-06-10", "2026-06-10", "C", 0, 400, "JOINT"),
+            ("2026-06-10", "2026-06-10", "D", 0, 500, "PERSO"),
+        )
         ids = self._ids(db)
         for a, b in (("A", "B"), ("A", "C"), ("A", "D"), ("A", "A")):
             with pytest.raises(ValueError):

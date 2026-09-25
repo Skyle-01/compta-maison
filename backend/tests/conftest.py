@@ -64,6 +64,7 @@ def seeded_db(db):
     income anchor for paycheck periods.
     """
     with connect(db) as conn:
+
         def add(name: str, parent_id: int | None) -> int:
             return conn.execute(
                 "INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id)

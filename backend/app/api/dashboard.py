@@ -27,9 +27,12 @@ def _savings_leaves(node: dict[str, Any]) -> list[dict[str, Any]]:
 @router.get("", response_model=Dashboard)
 def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)) -> Dashboard:
     with connect(db_path) as conn:
-        months = [m for (m,) in conn.execute(
-            "SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month DESC"
-        )]
+        months = [
+            m
+            for (m,) in conn.execute(
+                "SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month DESC"
+            )
+        ]
     if month is None and months:
         month = months[0]
 

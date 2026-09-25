@@ -29,7 +29,8 @@ def recompute_budget_months(db_path: Path = DEFAULT_DB_PATH) -> int:
     """
     with connect(db_path) as conn:
         anchor_dates = [
-            d for (d,) in conn.execute(
+            d
+            for (d,) in conn.execute(
                 "SELECT DISTINCT t.date_valeur FROM transactions t "
                 "WHERE t.credit_cents > 0 AND EXISTS ("
                 "  SELECT 1 FROM label_rules r WHERE r.is_income_anchor = 1 AND instr(t.libelle, r.pattern) > 0"
@@ -67,8 +68,7 @@ def recompute_budget_months(db_path: Path = DEFAULT_DB_PATH) -> int:
                 )
             else:
                 cur = conn.execute(
-                    "UPDATE transactions SET budget_month = ? "
-                    "WHERE date_valeur >= ? AND budget_month != ?",
+                    "UPDATE transactions SET budget_month = ? WHERE date_valeur >= ? AND budget_month != ?",
                     (month, start, month),
                 )
             changed += cur.rowcount

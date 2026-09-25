@@ -28,11 +28,13 @@ class TestParseCsv:
         assert rows[0]["Date valeur"] == "2026-06-06"
 
     def test_thousands_separators(self):
-        rows = parse_csv(_csv(
-            '"06/06/2026";"06/06/2026";"A";"1 234,56";""',
-            '"06/06/2026";"06/06/2026";"B";"";"2\u00a0500,00"',
-            '"06/06/2026";"06/06/2026";"C";"10\u202f000,00";""',
-        ))
+        rows = parse_csv(
+            _csv(
+                '"06/06/2026";"06/06/2026";"A";"1 234,56";""',
+                '"06/06/2026";"06/06/2026";"B";"";"2\u00a0500,00"',
+                '"06/06/2026";"06/06/2026";"C";"10\u202f000,00";""',
+            )
+        )
         assert [(r["Debit"], r["Credit"]) for r in rows] == [(1234.56, 0.0), (0.0, 2500.0), (10000.0, 0.0)]
 
     def test_signed_debit_is_made_positive(self):
@@ -45,10 +47,12 @@ class TestParseCsv:
         assert parse_csv(content)[0]["Libelle"] == "CAFÉ DU PORT"
 
     def test_sorted_by_date_valeur(self):
-        rows = parse_csv(_csv(
-            '"06/06/2026";"06/06/2026";"B";"1,00";""',
-            '"01/06/2026";"01/06/2026";"A";"1,00";""',
-        ))
+        rows = parse_csv(
+            _csv(
+                '"06/06/2026";"06/06/2026";"B";"1,00";""',
+                '"01/06/2026";"01/06/2026";"A";"1,00";""',
+            )
+        )
         assert [r["Libelle"] for r in rows] == ["A", "B"]
 
     def test_budget_month_is_calendar_month(self):
@@ -76,7 +80,10 @@ class TestParseCsv:
 
 class TestInferAccount:
     def test_compte_pattern(self):
-        assert infer_account("RELEVE_COMPTE_APPARTEMENT_LOCATIF_2026_06_08_12_50_51.csv") == "APPARTEMENT LOCATIF"
+        assert (
+            infer_account("RELEVE_COMPTE_APPARTEMENT_LOCATIF_2026_06_08_12_50_51.csv")
+            == "APPARTEMENT LOCATIF"
+        )
         assert infer_account("RELEVE_COMPTE_JOINT_2026_06_08_12_50_48.csv") == "JOINT"
 
     def test_livret_pattern(self):
@@ -103,14 +110,38 @@ GOLDEN_ROWS = (
     '"06/06/2026";"06/06/2026";"CARTE U EXPRESS";"-8,05";""',
 )
 GOLDEN_PARSED = [
-    {"Date operation": "2026-06-05", "Date valeur": "2026-06-05", "Libelle": "VIR EMPLOYEUR SALAIRE",
-     "Debit": 0.0, "Credit": 2500.0, "budget_month": "2026-06"},
-    {"Date operation": "2026-06-06", "Date valeur": "2026-06-06", "Libelle": "CARTE U EXPRESS",
-     "Debit": 8.05, "Credit": 0.0, "budget_month": "2026-06"},
-    {"Date operation": "2026-06-06", "Date valeur": "2026-06-06", "Libelle": "CARTE U EXPRESS",
-     "Debit": 8.05, "Credit": 0.0, "budget_month": "2026-06"},
-    {"Date operation": "2026-06-06", "Date valeur": "2026-06-07", "Libelle": "CARTE SUPERMARCHE ",
-     "Debit": 1234.56, "Credit": 0.0, "budget_month": "2026-06"},
+    {
+        "Date operation": "2026-06-05",
+        "Date valeur": "2026-06-05",
+        "Libelle": "VIR EMPLOYEUR SALAIRE",
+        "Debit": 0.0,
+        "Credit": 2500.0,
+        "budget_month": "2026-06",
+    },
+    {
+        "Date operation": "2026-06-06",
+        "Date valeur": "2026-06-06",
+        "Libelle": "CARTE U EXPRESS",
+        "Debit": 8.05,
+        "Credit": 0.0,
+        "budget_month": "2026-06",
+    },
+    {
+        "Date operation": "2026-06-06",
+        "Date valeur": "2026-06-06",
+        "Libelle": "CARTE U EXPRESS",
+        "Debit": 8.05,
+        "Credit": 0.0,
+        "budget_month": "2026-06",
+    },
+    {
+        "Date operation": "2026-06-06",
+        "Date valeur": "2026-06-07",
+        "Libelle": "CARTE SUPERMARCHE ",
+        "Debit": 1234.56,
+        "Credit": 0.0,
+        "budget_month": "2026-06",
+    },
 ]
 GOLDEN_HASHES = [
     "50ac16dc2e892efc513aeef6acb71b694f0fdb8a10ef1fd124101fa2799cf7a7",
@@ -154,8 +185,15 @@ def _toml(**keys: str) -> str:
 
 
 # A signed-amount profile, like the example in data/bank_profiles.toml.
-SIGNED = {"name": "signe", "date_operation": "Date", "libelle": "Libellé", "amount": "Montant",
-          "delimiter": ",", "date_format": "%Y-%m-%d", "decimal": "."}
+SIGNED = {
+    "name": "signe",
+    "date_operation": "Date",
+    "libelle": "Libellé",
+    "amount": "Montant",
+    "delimiter": ",",
+    "date_format": "%Y-%m-%d",
+    "decimal": ".",
+}
 
 
 class TestBankProfiles:
@@ -208,7 +246,7 @@ class TestProfileParsing:
 
     def test_signed_amount_column(self):
         profile, rows = parse_statement(
-            _signed_csv('2026-06-01,A,-12.50', '2026-06-02,B,"1,200.00"', '2026-06-03,C,-0.00'), self.profiles
+            _signed_csv("2026-06-01,A,-12.50", '2026-06-02,B,"1,200.00"', "2026-06-03,C,-0.00"), self.profiles
         )
         assert profile.name == "signe"
         pairs = [(r["Debit"], r["Credit"]) for r in rows]
@@ -258,10 +296,16 @@ class TestProfileParsing:
         assert set(rows[0]) == {*REQUIRED_COLUMNS, "budget_month"}
 
     def test_debit_credit_profile_with_own_names(self):
-        profile = parse_bank_profiles(_toml(
-            name="deux", date_operation="Date opération", date_valeur="Date valeur", libelle="Libellé",
-            debit="Débit", credit="Crédit",
-        ))[0]
+        profile = parse_bank_profiles(
+            _toml(
+                name="deux",
+                date_operation="Date opération",
+                date_valeur="Date valeur",
+                libelle="Libellé",
+                debit="Débit",
+                credit="Crédit",
+            )
+        )[0]
         content = (
             '"Date opération";"Date valeur";"Libellé";"Débit";"Crédit"\n'
             '"01/06/2026";"02/06/2026";"A";"-5,00";""\n'

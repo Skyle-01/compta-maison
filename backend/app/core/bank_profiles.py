@@ -5,6 +5,7 @@ The built-in DEFAULT_PROFILE is the historical format (semicolons, comma decimal
 `bank_profiles.toml` in the config dir (see data/bank_profiles.toml for a commented example).
 Statements are matched against the user's profiles in file order, then the default.
 """
+
 import codecs
 import re
 import tomllib
@@ -51,8 +52,19 @@ DEFAULT_PROFILE = BankProfile(
     filename_pattern=re.compile(r"^RELEVE_(?:COMPTE_)?(?P<account>.+?)_\d{4}"),
 )
 
-_STR_KEYS = ("name", "date_operation", "libelle", "date_valeur", "debit", "credit", "amount",
-             "delimiter", "date_format", "decimal", "filename_pattern")
+_STR_KEYS = (
+    "name",
+    "date_operation",
+    "libelle",
+    "date_valeur",
+    "debit",
+    "credit",
+    "amount",
+    "delimiter",
+    "date_format",
+    "decimal",
+    "filename_pattern",
+)
 _KEYS = {*_STR_KEYS, "encoding"}
 
 

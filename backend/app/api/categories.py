@@ -49,14 +49,16 @@ def _load_all(conn) -> list[CategoryOut]:
     out = []
     for category_id, name, parent_id, rule_count in rows:
         chain = lineage(category_id)
-        out.append(CategoryOut(
-            id=category_id,
-            name=name,
-            parent_id=parent_id,
-            path=" / ".join(row[1] for row in chain),
-            is_root=parent_id is None,
-            rule_count=rule_count,
-        ))
+        out.append(
+            CategoryOut(
+                id=category_id,
+                name=name,
+                parent_id=parent_id,
+                path=" / ".join(row[1] for row in chain),
+                is_root=parent_id is None,
+                rule_count=rule_count,
+            )
+        )
     return sorted(out, key=lambda c: c.path)
 
 
@@ -87,7 +89,9 @@ def reject_populated_parent(conn, parent_id: int | None) -> None:
     if has_tx or has_rule:
         raise HTTPException(
             422,
-            detail=["That parent already has transactions or rules; move them to a leaf before nesting under it"],
+            detail=[
+                "That parent already has transactions or rules; move them to a leaf before nesting under it"
+            ],
         )
 
 
@@ -146,7 +150,9 @@ def create_category(category: CategoryIn, db_path: Path = Depends(get_db_path)) 
 
 
 @router.put("/{category_id}", response_model=CategoryOut)
-def update_category(category_id: int, category: CategoryIn, db_path: Path = Depends(get_db_path)) -> CategoryOut:
+def update_category(
+    category_id: int, category: CategoryIn, db_path: Path = Depends(get_db_path)
+) -> CategoryOut:
     with connect(db_path) as conn:
         # Reject cycles: the new parent must not be the category itself or one of its descendants.
         current: int | None = category.parent_id
@@ -189,7 +195,9 @@ def delete_category(category_id: int, db_path: Path = Depends(get_db_path)) -> N
             # Last child: roll its rules + manual transactions up to the parent, which becomes a leaf
             # again. Non-manual rows are released by the FK below and re-derived by apply_rules through
             # the rules now on the parent. (Inverse of the subdivide migration.)
-            conn.execute("UPDATE label_rules SET category_id = ? WHERE category_id = ?", (parent_id, category_id))
+            conn.execute(
+                "UPDATE label_rules SET category_id = ? WHERE category_id = ?", (parent_id, category_id)
+            )
             conn.execute(
                 "UPDATE transactions SET category_id = ? WHERE category_id = ? AND category_manual = 1",
                 (parent_id, category_id),
@@ -197,5 +205,7 @@ def delete_category(category_id: int, db_path: Path = Depends(get_db_path)) -> N
         else:
             # Drop: transactions fall back to auto + uncategorised; rules cascade-delete with the row.
             conn.execute("UPDATE transactions SET category_manual = 0 WHERE category_id = ?", (category_id,))
-        conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))  # FK: tx -> NULL, remaining rules cascade
+        conn.execute(
+            "DELETE FROM categories WHERE id = ?", (category_id,)
+        )  # FK: tx -> NULL, remaining rules cascade
     apply_rules(db_path)
