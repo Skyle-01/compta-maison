@@ -655,10 +655,12 @@ export default function SettingsPage() {
         <p className="text-sm text-zinc-500">
           Les opérations que vous avez classées à la main (catégorie choisie directement plutôt que
           par une règle), avec leur description. ✎ pour modifier la description, ✕ pour supprimer le
-          classement — l’opération repassera alors sous les règles automatiques. Exportez-les avant
-          de réinitialiser la base — ils sont indexés par une empreinte d’opération stable, donc les
-          restaurer avec <span className="font-mono text-xs">import_csv.py --overrides</span> les
-          réapplique après un nouveau seed.
+          classement — l’opération repassera alors sous les règles automatiques. Ils sont indexés par
+          une empreinte d’opération stable :{" "}
+          <span className="font-mono text-xs">reset_db.py</span> les sauvegarde avant chaque
+          reconstruction et, par défaut, les réapplique ensuite. Avec{" "}
+          <span className="font-mono text-xs">--source defaults</span>, placez cet export à côté
+          de la taxonomie pour les retrouver.
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
