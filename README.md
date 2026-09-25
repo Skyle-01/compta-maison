@@ -19,11 +19,16 @@ Every folder starting with `_` is gitignored.
 
 ## Setup
 
+Requires Python 3.11+ and Node.js 20.9+.
+
 ```bash
 python -m venv .venv
-.venv/Scripts/pip install -r backend/requirements.txt      # .venv/bin/pip on Linux/macOS
-npm install --prefix frontend
+.venv\Scripts\activate            # Windows; on Linux/macOS: source .venv/bin/activate
+pip install -r backend/requirements.txt
+npm ci --prefix frontend
 ```
+
+The commands below assume the virtualenv is active.
 
 1. Put your bank exports in `_inputs/`. Files are named like
    `RELEVE_COMPTE_JOINT_2026_06_08.csv`: the part between `RELEVE_[COMPTE_]` and the date is the
@@ -42,9 +47,10 @@ npm install --prefix frontend
      amount on two of your accounts, at most 3 days apart, are paired as an internal transfer
      (left out of income and expenses) only if **both** labels start with one of these prefixes
      (case-insensitive). The default is `VIR`; `*` accepts any label.
-3. Build the database: `.venv/Scripts/python backend/scripts/reset_db.py --source defaults`.
-4. Run it: `./dev.ps1` (Windows), or `uvicorn app.main:app --port 8000` from `backend/` plus
-   `npm run dev --prefix frontend`. Open http://localhost:3000.
+3. Build the database: `python backend/scripts/reset_db.py --source defaults`.
+4. Run it: `./dev.ps1` (Windows), or in two terminals
+   `cd backend && python -m uvicorn app.main:app --port 8000` and `npm run dev --prefix frontend`.
+   Open http://localhost:3000.
 
 After that, edit categories, rules and transfer markers from the app's Settings page. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
@@ -75,12 +81,18 @@ debit) or separate debit and credit columns. The example file documents every ke
   amounts). Each operation is identified by its parsed values, so a change imports the rows again
   and your manual changes no longer reattach after a rebuild.
 
-## Tests
+## Development
 
 ```bash
-.venv/Scripts/python -m pytest backend/tests
-npm run build --prefix frontend
+pip install -r backend/requirements-dev.txt     # pytest, ruff
+python -m pytest backend/tests
+ruff check backend && ruff format --check backend
+npm run lint --prefix frontend && npm run build --prefix frontend
 ```
+
+CI runs the same checks on every push (Python 3.11 and 3.14). Python dependencies are pinned to
+exact versions in `backend/requirements*.txt`: to update, check `pip list --outdated`, edit the
+pins and re-run the checks. npm versions are pinned by `frontend/package-lock.json`.
 
 ## License
 

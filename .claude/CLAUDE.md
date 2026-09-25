@@ -1,7 +1,7 @@
 # CLAUDE.md — compta
 
 ## Project
-Household accounting web app: upload French bank CSVs, auto-categorise transactions via substring rules, review them, and explore a monthly dashboard. FastAPI (Python 3.14, stdlib `csv`/`datetime`/`sqlite3` — no pandas) backend + Next.js 16 / TypeScript / Tailwind frontend.
+Household accounting web app: upload French bank CSVs, auto-categorise transactions via substring rules, review them, and explore a monthly dashboard. FastAPI (Python 3.11+, developed on 3.14, CI tests 3.11 and 3.14; stdlib `csv`/`datetime`/`sqlite3`/`tomllib` — no pandas) backend + Next.js 16 / TypeScript / Tailwind frontend.
 
 ## Architecture
 ```
@@ -20,7 +20,9 @@ backend/
   scripts/reset_db.py  # THE rebuild CLI: fresh DB + import every _inputs/*.csv + load accounts + a taxonomy from --source {live (default, snapshot current then rebuild), defaults (_config/ if present, else the fictional data/ example), backup (latest _backups/<ts>/ or --from DIR)}. Auto-snapshots the live DB to _backups/<ts>/ before any rebuild.
   scripts/import_csv.py # shared taxonomy loader (import_categories/import_rules/import_overrides used by reset_db) + thin CLI to layer exported cats/rules/overrides onto an existing DB (no _inputs / transaction import)
   tests/               # pytest; run: .venv/Scripts/python -m pytest backend/tests -v
-  requirements.txt
+  requirements.txt     # runtime deps, exact pins (fastapi, uvicorn, python-multipart)
+  requirements-dev.txt # -r requirements.txt + pytest, httpx2 (TestClient transport), ruff
+  pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B)
 frontend/              # Next.js App Router; src/app/{page,import,transactions,settings}
   src/app/page.tsx     # dashboard: hero summary, 4 reconciling cards + deltas & Reste sparkline, "Money flow" Sankey (moneyFlow()/FlowNode), collapsible balance tree (TreeNode)
   src/lib/api.ts       # typed fetch client (+ frenchMonth/suggestPattern helpers); /api/* proxied to :8000 via next.config.ts rewrites
@@ -55,7 +57,7 @@ Business rules:
 ./dev.ps1
 
 # Backend
-.venv/Scripts/pip install -r backend/requirements.txt
+.venv/Scripts/pip install -r backend/requirements-dev.txt          # runtime + pytest/ruff
 .venv/Scripts/python backend/scripts/reset_db.py --source defaults   # FIRST-TIME bootstrap: fresh DB from _config/ (else the data/ example) + import all _inputs/*.csv
 cd backend && ../.venv/Scripts/python -m uvicorn app.main:app --port 8000 --reload
 
@@ -67,9 +69,11 @@ npm run dev --prefix frontend                          # http://localhost:3000, 
 .venv/Scripts/python backend/scripts/reset_db.py --source backup     # disaster recovery: rebuild from the latest _backups/<ts>/ (or --from DIR) + current _inputs/ — no live DB needed
 # (import_csv.py is still available to layer specific exported cats/rules/overrides CSVs onto an existing DB without re-importing transactions.)
 
-# Tests
+# Tests + lint (CI, .github/workflows/ci.yml, runs all of these on push)
 .venv/Scripts/python -m pytest backend/tests -v
-npm run build --prefix frontend                        # type-check + lint
+.venv/Scripts/ruff check backend && .venv/Scripts/ruff format --check backend
+npm run lint --prefix frontend
+npm run build --prefix frontend                        # type-check only (Next 16's build no longer lints)
 ```
 Gotchas:
 - Bank CSVs: the built-in `DEFAULT_PROFILE` is semicolon-delimited, comma-decimal, dd/mm/yyyy, quoted fields; UTF-8 or Windows-1252; amounts may carry space/NBSP thousands separators and a sign (dropped — the Debit/Credit column gives the direction). Other layouts come from `bank_profiles.toml` in the config dir (`db.DEFAULT_CONFIG_DIR` = `$COMPTA_CONFIG_DIR` else `_config/`; example in `data/`), read on every call by **both** the server (`app.state.config_dir`) and `reset_db.py` whatever `--source` — never from a snapshot. `detect_profile` tries user profiles in file order, then the default; the first whose columns all sit on one of the first 30 lines wins, and a row error never falls through to the next profile. A missing value-date column falls back to the operation date; a signed `amount` column splits into Debit (negative) / Credit, never `-0.0`. Tests: an autouse conftest fixture points `app.main.DEFAULT_CONFIG_DIR` at `tmp_path/_config` so the private config never leaks in.
@@ -88,6 +92,7 @@ Gotchas:
 - `db.connect()` is a contextmanager (commit/rollback/close) — check `cur.rowcount` inside the `with` block.
 - Amounts: cents (int) everywhere in the DB and core; convert to euros only at the API boundary (`db.euros`/`db.to_cents`).
 - Type hints on all public functions; Pydantic models in `schemas.py` for everything crossing the API.
+- Backend formatted by `ruff format` (110 cols); `ruff check` and the frontend eslint must pass (CI enforces). Never hand-resolve a formatting conflict: re-run `ruff format`.
 - **Language**: user-facing frontend strings are French (typographic apostrophe `’`, not `'`, to satisfy `react/no-unescaped-entities`); code, comments, and docs (incl. this file) stay English. French category names in `data/` are data, not UI text. Date display uses `frenchMonth` (`Intl`, fr-FR); amounts use `formatEuro` (fr-FR).
 
 ## Current State (2026-06-17)
@@ -101,6 +106,7 @@ Gotchas:
 - **Dashboard (reworked 2026-06-16)**: a plain-language hero summary, then four reconciling cards (Revenus / Dépenses / Épargne / Reste — `Revenus − Dépenses − Épargne = Reste`, matching the Sankey `Reste` and balance-tree total) with month-over-month deltas + a `Reste` sparkline, the **"Money flow" Sankey**, and the balance tree in a collapsed `<details>`. See the dashboard-cards / Money-flow business rules above. (Categorisation now lives only on the Transactions page — no dashboard suggestions panel.)
 - **UI is French** (nav, dashboard, transactions, import, settings, `CategoryPicker`); code/comments/docs stay English (see Conventions → Language).
 - **Bank profiles (2026-09-25)**: other banks' CSV layouts via `_config/bank_profiles.toml` (see the Bank CSVs gotcha); `ImportResult.profile` names the profile used and the Import page shows it. The Import page's account pre-fill still only mirrors the default filename pattern.
-- 164 pytest tests passing; frontend builds clean.
+- **Tooling (2026-09-25)**: pinned `requirements.txt` + `requirements-dev.txt`, ruff (`backend/pyproject.toml`), GitHub Actions CI (backend on 3.11/3.14: ruff + pytest; frontend: `npm ci`, lint, build).
+- 164 pytest tests passing; ruff and eslint clean; frontend builds clean.
 - To rebuild an existing DB, use **`reset_db.py`** (default `--source live`: snapshots cats/rules/overrides to `_backups/<ts>/`, then delete + rebuild + restore) — it preserves manual overrides. `--source defaults` bootstraps from `data/*.csv`; `--source backup` restores from a snapshot (no live DB needed). Income/expense totals are by transaction `kind` (transfers excluded, uncategorised real rows included).
-- **Going public (2026-09-25)**: the working tree is anonymised — accounts moved out of code into `accounts.csv`, `data/` is a fictional example, personal config lives in the gitignored `_config/`, tests use fictional accounts (`PERSO`/`JOINT`/`LIVRET`/`LOCATIF`/`ENFANT`) and labels (`EMPLOYEUR`). **Git history still holds the old real data** — rewrite it before the first public push (top item in BACKLOG.md). Never commit real names, account numbers or merchant/location details.
+- **Going public (2026-09-25)**: the working tree is anonymised — accounts moved out of code into `accounts.csv`, `data/` is a fictional example, personal config lives in the gitignored `_config/`, tests use fictional accounts (`PERSO`/`JOINT`/`LIVRET`/`LOCATIF`/`ENFANT`) and labels (`EMPLOYEUR`). The repo was then restarted as **Skyle-01/compta-maison** from a single anonymised commit, so its history holds no real data (the old `Skyle-01/compta`, which does, is archived — never push there). Never commit real names, account numbers or merchant/location details.

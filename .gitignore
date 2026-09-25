@@ -10,8 +10,10 @@ _*/
 /*.csv
 /*.json
 /*.db
+/*.db-journal
 
 # Python artefacts
 __pycache__/
 *.pyc
 .pytest_cache/
+.ruff_cache/

@@ -5,9 +5,8 @@
 - [x] 2026-09-25 — **Working tree anonymised.** Accounts moved out of code into `accounts.csv`;
   `data/` is now a fictional example; personal config lives in the gitignored `_config/` (picked up
   by `reset_db.py --source defaults`); tests and docs use fictional accounts and labels.
-- [ ] **Rewrite git history before the first public push.** The history still holds the old real
-  data (`data/*.csv`, the former hard-coded accounts, test fixtures, docs). `git filter-repo` to purge
-  those paths/strings, or re-init a fresh repo from the anonymised tree, then force-push.
+- [x] 2026-09-25 — **Clean history.** Restarted as a fresh repo (compta-maison) from the anonymised
+  tree; the old repo, whose history holds real data, is archived.
 
 ## Pending technical debt (do before new features)
 
