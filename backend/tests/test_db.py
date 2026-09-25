@@ -1,0 +1,81 @@
+from app.db import connect, import_transactions, set_transaction_category
+from tests.conftest import cat_id
+
+
+def _make_df(*rows) -> list[dict]:
+    columns = ["Date operation", "Date valeur", "Libelle", "Debit", "Credit", "account"]
+    records = [dict(zip(columns, row)) for row in rows]
+    for record in records:
+        record["budget_month"] = record["Date valeur"][:7]
+    return records
+
+
+class TestImportTransactions:
+    def test_inserts_new_rows(self, db):
+        df = _make_df(
+            ("2026-06-01", "2026-06-01", "EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-06-02", "2026-06-02", "LECLERC", 60, 0, "JOINT"),
+        )
+        assert import_transactions(df, db) == 2
+
+    def test_dedup_on_reimport(self, db):
+        df = _make_df(("2026-06-01", "2026-06-01", "EMPLOYEUR", 0, 2500, "PERSO"))
+        import_transactions(df, db)
+        assert import_transactions(df, db) == 0
+
+    def test_amounts_stored_as_cents(self, db):
+        df = _make_df(("2026-06-05", "2026-06-05", "SUPERMARCHE", 45.53, 0, "JOINT"))
+        import_transactions(df, db)
+        with connect(db) as conn:
+            row = conn.execute(
+                "SELECT libelle, debit_cents, account, budget_month FROM transactions"
+            ).fetchone()
+        assert row == ("SUPERMARCHE", 4553, "JOINT", "2026-06")
+
+    def test_identical_rows_in_one_file_both_kept(self, db):
+        # Two genuinely identical operations (same shop, same day, same amount)
+        df = _make_df(
+            ("2026-06-06", "2026-06-06", "CARTE U EXPRESS", 8.05, 0, "JOINT"),
+            ("2026-06-06", "2026-06-06", "CARTE U EXPRESS", 8.05, 0, "JOINT"),
+        )
+        assert import_transactions(df, db) == 2
+
+    def test_identical_rows_dedup_against_overlapping_reupload(self, db):
+        df = _make_df(
+            ("2026-06-06", "2026-06-06", "CARTE U EXPRESS", 8.05, 0, "JOINT"),
+            ("2026-06-06", "2026-06-06", "CARTE U EXPRESS", 8.05, 0, "JOINT"),
+        )
+        import_transactions(df, db)
+        assert import_transactions(df, db) == 0  # same pair re-uploaded -> all duplicates
+
+    def test_partial_reimport(self, db):
+        df1 = _make_df(("2026-06-01", "2026-06-01", "EMPLOYEUR", 0, 2500, "PERSO"))
+        df2 = _make_df(
+            ("2026-06-01", "2026-06-01", "EMPLOYEUR", 0, 2500, "PERSO"),  # duplicate
+            ("2026-06-03", "2026-06-03", "BOULANGERIE", 5, 0, "PERSO"),   # new
+        )
+        import_transactions(df1, db)
+        assert import_transactions(df2, db) == 1
+
+
+class TestSetTransactionCategory:
+    def test_manual_assignment(self, seeded_db):
+        df = _make_df(("2026-06-01", "2026-06-01", "MYSTERY SHOP", 10, 0, "PERSO"))
+        import_transactions(df, seeded_db)
+        courses = cat_id(seeded_db, "courses")
+        assert set_transaction_category(1, courses, seeded_db) is True
+        with connect(seeded_db) as conn:
+            row = conn.execute("SELECT category_id, category_manual FROM transactions WHERE id = 1").fetchone()
+        assert row == (courses, 1)
+
+    def test_clear_resets_manual_flag(self, seeded_db):
+        df = _make_df(("2026-06-01", "2026-06-01", "MYSTERY SHOP", 10, 0, "PERSO"))
+        import_transactions(df, seeded_db)
+        set_transaction_category(1, cat_id(seeded_db, "courses"), seeded_db)
+        set_transaction_category(1, None, seeded_db)
+        with connect(seeded_db) as conn:
+            row = conn.execute("SELECT category_id, category_manual FROM transactions WHERE id = 1").fetchone()
+        assert row == (None, 0)
+
+    def test_unknown_id_returns_false(self, seeded_db):
+        assert set_transaction_category(999, cat_id(seeded_db, "courses"), seeded_db) is False

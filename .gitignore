@@ -1,0 +1,17 @@
+# Ignore underscore folders (_inputs, _backups, …)
+_*/
+
+# Dot-folders to ignore (everything else under .claude/ is tracked)
+.venv/
+.next/
+.claude/settings.local.json
+
+# Ignore CSV and JSON files in root directory
+/*.csv
+/*.json
+/*.db
+
+# Python artefacts
+__pycache__/
+*.pyc
+.pytest_cache/

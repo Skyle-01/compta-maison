@@ -1,0 +1,48 @@
+category_path;pattern;priority;is_income_anchor;description
+Fixe / Salaire;VIR EMPLOYEUR SA;1;1;Salaire (ouvre le mois budgétaire)
+Immobilier / Locatif / Loyer perçu;VIR LOCATAIRE;2;0;
+Variable / Remboursement reçu;VIR DGFIP FINANCES PUBLIQUES;3;0;Remboursement impôts
+Variable / Remboursement reçu;VIR CPAM;4;0;Assurance maladie
+Variable / Remboursement reçu;VIR MUTUELLE;5;0;
+Immobilier / Résidence principale / Prêt;ECH PRET HABITAT;10;0;
+Immobilier / Résidence principale / Charges;PRLV SYNDIC;11;0;
+Immobilier / Locatif / Prêt;ECH PRET LOCATIF;12;0;
+Immobilier / Locatif / Charges;PRLV GESTION LOCATIVE;13;0;
+Immobilier / Assurance habitation;PRLV ASSURANCE HABITATION;14;0;
+Fixe / Enfants / Périscolaire;MAIRIE;20;0;Garderie et cantine
+Fixe / Enfants / Garde;PRLV CENTRE PAJEMPLOI;21;0;Assistante maternelle
+Fixe / Internet & téléphone;PRLV SFR;22;0;
+Fixe / Internet & téléphone;PRLV Orange SA;23;0;
+Fixe / Internet & téléphone;FREE MOBILE;24;0;
+Fixe / Électricité;PRLV EDF clients particuliers;25;0;
+Fixe / Streaming;NETFLIX;26;0;
+Fixe / Streaming;SPOTIFY;27;0;
+Fixe / Impôt;DIRECTION GENERALE DES FINA;28;0;
+Variable / Frais bancaire;COTISATION;30;0;
+Variable / Frais bancaire;F COMMISSION;31;0;
+Variable / Courses;LECLERC;40;0;
+Variable / Courses;CARREFOUR;41;0;
+Variable / Courses;U EXPRESS;42;0;
+Variable / Courses;LIDL;43;0;
+Variable / Courses;BOULANGERIE;44;0;
+Variable / Courses;BOUCHERIE;45;0;
+Variable / Restauration;MC DONALD;50;0;
+Variable / Restauration;BURGER KING;51;0;
+Variable / Restauration;KFC;52;0;
+Variable / Restauration;PIZZA;53;0;
+Variable / Sortie / Bar;BRASSERIE;60;0;
+Variable / Sortie / Bar;IRISH PUB;61;0;
+Variable / Retrait;RET DAB;70;0;
+Variable / Sport;DECATHLON;71;0;
+Variable / Transport / Transports en commun;SNCF;72;0;
+Variable / Transport / Transports en commun;RATP;73;0;
+Variable / Transport / Carburant;TOTALENERGIES;74;0;
+Variable / Transport / Carburant;STATION SERVICE;75;0;
+Variable / Santé;PHARMACIE;80;0;
+Variable / Santé;DOCTOLIB;81;0;
+Variable / Coiffeur;COIFFURE;82;0;
+Variable / Maison;LEROY MERLIN;83;0;
+Variable / Maison;IKEA;84;0;
+Variable / Maison;CASTORAMA;85;0;
+Variable / Vêtements;KIABI;86;0;
+Variable / Cadeaux & dons;FNAC;87;0;

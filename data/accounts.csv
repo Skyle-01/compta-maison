@@ -1,0 +1,6 @@
+code;label;type;include_in_full_view;sort_order;deposit_pattern;aliases
+PERSO;Compte perso;checking;1;1;;COMPTE PERSO
+JOINT;Compte joint;checking;1;2;;COMPTE JOINT
+LIVRET;Livret A;savings;1;3;;LIVRET A
+LOCATIF;Appartement locatif;checking;1;4;;APPARTEMENT LOCATIF|COMPTE APPARTEMENT LOCATIF
+ENFANT;Livret enfant;savings;0;5;VERS LIVRET ENFANT;

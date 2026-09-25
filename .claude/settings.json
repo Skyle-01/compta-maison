@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python -m pytest backend/tests*)",
+      "PowerShell(.venv/Scripts/python -m pytest backend/tests*)",
+      "PowerShell(npm run build --prefix frontend*)"
+    ]
+  }
+}
