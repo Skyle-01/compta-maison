@@ -37,7 +37,8 @@ export default function TransactionsPage() {
   const [editPattern, setEditPattern] = useState("");
   const [editPriority, setEditPriority] = useState("100");
   const [editAnchor, setEditAnchor] = useState(false);
-  const [matchCount, setMatchCount] = useState<number | null>(null);
+  // Last live-preview result, keyed by the pattern it counted (see the preview effect below).
+  const [matchResult, setMatchResult] = useState<{ pattern: string; count: number } | null>(null);
   // Rows ticked for a manual transfer decision (kept across pages/months; at most two).
   const [selected, setSelected] = useState<Map<number, Transaction>>(new Map());
 
@@ -46,12 +47,14 @@ export default function TransactionsPage() {
     // wins over the dashboard's default current month. Read once, client-side (no Suspense needed).
     const params = new URLSearchParams(window.location.search);
     const urlMonth = params.get("month");
-    if (params.get("uncategorized")) setOnlyUncategorized(true);
+    const urlUncategorized = Boolean(params.get("uncategorized"));
     api.listCategories().then(setCategories).catch((e) => setError(String(e)));
     api
       .dashboard()
       .then((d) => {
         setMonths(d.months_available);
+        // Applied with the month, in one render, so the list is fetched once with both filters.
+        if (urlUncategorized) setOnlyUncategorized(true);
         if (urlMonth) setMonth(urlMonth);
         else if (d.month) setMonth(d.month);
       })
@@ -80,24 +83,22 @@ export default function TransactionsPage() {
   // uncategorised, non-transfer transactions whose label contains the pattern (same case-sensitive
   // instr semantics as the rule engine). Debounced.
   useEffect(() => {
-    if (editingTxId == null || editMode !== "rule") {
-      setMatchCount(null);
-      return;
-    }
     const pattern = editPattern.trim();
-    if (!pattern) {
-      setMatchCount(null);
-      return;
-    }
-    setMatchCount(null);
+    if (editingTxId == null || editMode !== "rule" || !pattern) return;
     const timer = setTimeout(() => {
       api
         .listTransactions({ libelleContains: pattern, uncategorized: true, limit: 1 })
-        .then((page) => setMatchCount(page.total))
-        .catch(() => setMatchCount(null));
+        .then((page) => setMatchResult({ pattern, count: page.total }))
+        .catch(() => setMatchResult(null));
     }, 250);
     return () => clearTimeout(timer);
   }, [editPattern, editMode, editingTxId]);
+  // Only a count for the pattern currently typed is shown ("…" while the debounce runs), so a
+  // late response for an older pattern can't be mistaken for the current one.
+  const matchCount =
+    editingTxId != null && editMode === "rule" && matchResult?.pattern === editPattern.trim()
+      ? matchResult.count
+      : null;
 
   // Auto-dismiss the success flash.
   useEffect(() => {
@@ -114,7 +115,7 @@ export default function TransactionsPage() {
     setEditPattern(suggestPattern(tx.libelle));
     setEditPriority("100");
     setEditAnchor(false);
-    setMatchCount(null);
+    setMatchResult(null);
   }
 
   async function submitEditor(tx: Transaction) {
