@@ -96,8 +96,14 @@ Known bugs and ideas live in [`backlog/`](backlog/), one file per item.
 
 CI runs the same checks on every push (Python 3.11 and 3.14). Python dependencies are pinned to
 exact versions in `backend/requirements*.txt`: to update, check `pip list --outdated`, edit the
-pins and re-run the checks. npm versions are pinned by `frontend/package-lock.json`.
+pins and re-run the checks. npm versions are pinned by `frontend/package-lock.json`. Dependabot
+opens a monthly update PR per ecosystem (pip, npm, GitHub Actions).
 
 ## License
 
-See [LICENSE](LICENSE).
+Copyright (C) 2026 Skyle-01.
+
+This program is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. It is distributed WITHOUT ANY WARRANTY; see
+[LICENSE](LICENSE) for the full text.
