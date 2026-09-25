@@ -16,7 +16,7 @@ class TestFreshSchema:
         path = tmp_path / "fresh.db"
         init_db(path)
         with connect(path) as conn:
-            upsert_accounts(conn, [("PERSO", "Compte perso", "checking", 1, 1, None)], [("PERSO", "PERSO")])
+            upsert_accounts(conn, [("PERSO", "Compte perso", "checking", 1, None)], [("PERSO", "PERSO")])
         init_db(path)  # second call must not touch existing accounts or error
         with connect(path) as conn:
             assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 1
@@ -27,7 +27,7 @@ class TestUpsertAccounts:
         path = tmp_path / "fresh.db"
         init_db(path)
         with connect(path) as conn:
-            upsert_accounts(conn, [("PERSO", "Old", "checking", 1, 1, None)], [("compte perso", "PERSO")])
-            upsert_accounts(conn, [("PERSO", "New", "checking", 1, 1, None)], [("compte perso", "PERSO")])
+            upsert_accounts(conn, [("PERSO", "Old", "checking", 1, None)], [("compte perso", "PERSO")])
+            upsert_accounts(conn, [("PERSO", "New", "checking", 1, None)], [("compte perso", "PERSO")])
             assert conn.execute("SELECT label FROM accounts").fetchall() == [("New",)]
             assert conn.execute("SELECT alias FROM account_aliases").fetchall() == [("COMPTE PERSO",)]

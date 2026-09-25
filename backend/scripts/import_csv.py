@@ -51,7 +51,7 @@ def _read_csv(path: Path) -> list[dict]:
 def import_accounts(conn, rows: list[dict]) -> int:
     """Upsert accounts from accounts.csv rows; returns how many were loaded.
 
-    Columns: code;label;type;include_in_full_view;sort_order;deposit_pattern;aliases.
+    Columns: code;label;type;sort_order;deposit_pattern;aliases (other columns are ignored).
     `type` is checking|savings; `deposit_pattern` (optional) marks an external savings account;
     `aliases` is a `|`-separated list of import strings (e.g. the account part of a statement
     filename) mapped to this code. The code itself is always an alias."""
@@ -70,7 +70,6 @@ def import_accounts(conn, rows: list[dict]) -> int:
                 code,
                 row["label"] or code,
                 row["type"],
-                0 if row.get("include_in_full_view") == "0" else 1,
                 int(row["sort_order"]) if row.get("sort_order") else 0,
                 row.get("deposit_pattern") or None,
             )

@@ -128,8 +128,7 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
 
     with connect(db_path) as conn:
         account_rows = conn.execute(
-            "SELECT code, label, type, include_in_full_view, sort_order, deposit_pattern "
-            "FROM accounts ORDER BY sort_order, code"
+            "SELECT code, label, type, sort_order, deposit_pattern FROM accounts ORDER BY sort_order, code"
         ).fetchall()
         aliases_by_code: dict[str, list[str]] = {}
         for alias, code in conn.execute("SELECT alias, code FROM account_aliases ORDER BY alias"):
@@ -150,10 +149,10 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
 
     _write_csv(
         accounts_csv,
-        ["code", "label", "type", "include_in_full_view", "sort_order", "deposit_pattern", "aliases"],
+        ["code", "label", "type", "sort_order", "deposit_pattern", "aliases"],
         [
-            [code, label, type_, include, order, pattern or "", "|".join(aliases_by_code.get(code, []))]
-            for code, label, type_, include, order, pattern in account_rows
+            [code, label, type_, order, pattern or "", "|".join(aliases_by_code.get(code, []))]
+            for code, label, type_, order, pattern in account_rows
         ],
     )
     _write_csv(cat_csv, ["path"], [[c.path] for c in cats])

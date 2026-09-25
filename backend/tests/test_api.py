@@ -808,6 +808,7 @@ class TestResetDb:
         reset_db, _backups = self._isolate(tmp_path, monkeypatch)
         config = tmp_path / "_config"
         config.mkdir()
+        # An older accounts.csv with the since-removed include_in_full_view column still loads.
         (config / "accounts.csv").write_text(
             "code;label;type;include_in_full_view;sort_order;deposit_pattern;aliases\n"
             "MAIN;Mon compte;checking;1;1;;JOINT\n",

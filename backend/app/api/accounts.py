@@ -13,15 +13,9 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 def list_accounts(db_path: Path = Depends(get_db_path)) -> list[Account]:
     with connect(db_path) as conn:
         rows = conn.execute(
-            "SELECT code, label, type, include_in_full_view, sort_order FROM accounts ORDER BY sort_order, code"
+            "SELECT code, label, type, sort_order FROM accounts ORDER BY sort_order, code"
         ).fetchall()
     return [
-        Account(
-            code=code,
-            label=label,
-            type=type_,
-            include_in_full_view=bool(include_in_full_view),
-            sort_order=sort_order,
-        )
-        for code, label, type_, include_in_full_view, sort_order in rows
+        Account(code=code, label=label, type=type_, sort_order=sort_order)
+        for code, label, type_, sort_order in rows
     ]

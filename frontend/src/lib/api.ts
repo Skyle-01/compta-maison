@@ -46,7 +46,6 @@ export interface Account {
   code: string;
   label: string;
   type: "checking" | "savings";
-  include_in_full_view: boolean;
   sort_order: number;
 }
 

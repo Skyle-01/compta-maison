@@ -25,7 +25,6 @@ CREATE TABLE IF NOT EXISTS accounts (
     code                 TEXT PRIMARY KEY,
     label                TEXT NOT NULL,
     type                 TEXT NOT NULL,                 /* 'checking' | 'savings' */
-    include_in_full_view INTEGER NOT NULL DEFAULT 1,
     sort_order           INTEGER NOT NULL DEFAULT 0,
     deposit_pattern      TEXT                           /* external savings: libellé substring identifying its deposits */
 );
@@ -124,22 +123,21 @@ def savings_accounts(conn: sqlite3.Connection) -> list[tuple[str, str, str | Non
 
 def upsert_accounts(
     conn: sqlite3.Connection,
-    accounts: list[tuple[str, str, str, int, int, str | None]],
+    accounts: list[tuple[str, str, str, int, str | None]],
     aliases: list[tuple[str, str]],
 ) -> None:
     """Insert or update canonical accounts and their import aliases.
 
-    accounts: (code, label, type, include_in_full_view, sort_order, deposit_pattern).
+    accounts: (code, label, type, sort_order, deposit_pattern).
     deposit_pattern is set only for *external* savings accounts that have no imported statement
     (e.g. a child's Livret A): their deposits are detected by this libellé substring on a
     checking account rather than by rows of their own. None for imported accounts.
     aliases: (alias, code) — import strings (from filenames or manual entry) mapped to a code.
     Upserts rather than replaces so transactions already pointing at an account stay valid."""
     conn.executemany(
-        "INSERT INTO accounts (code, label, type, include_in_full_view, sort_order, deposit_pattern) "
-        "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET label = excluded.label, "
-        "type = excluded.type, include_in_full_view = excluded.include_in_full_view, "
-        "sort_order = excluded.sort_order, deposit_pattern = excluded.deposit_pattern",
+        "INSERT INTO accounts (code, label, type, sort_order, deposit_pattern) "
+        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(code) DO UPDATE SET label = excluded.label, "
+        "type = excluded.type, sort_order = excluded.sort_order, deposit_pattern = excluded.deposit_pattern",
         accounts,
     )
     conn.executemany(

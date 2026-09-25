@@ -91,7 +91,6 @@ class Account(BaseModel):
     code: str
     label: str
     type: str = Field(description="'checking' or 'savings'")
-    include_in_full_view: bool
     sort_order: int
 
 

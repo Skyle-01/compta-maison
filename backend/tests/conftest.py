@@ -13,11 +13,11 @@ from app.main import create_app  # noqa: E402
 
 # Fictional accounts every test db starts with (a real db loads them from accounts.csv).
 TEST_ACCOUNTS = [
-    ("PERSO", "Compte perso", "checking", 1, 1, None),
-    ("JOINT", "Compte joint", "checking", 1, 2, None),
-    ("LIVRET", "Livret A", "savings", 1, 3, None),
-    ("LOCATIF", "Appartement locatif", "checking", 1, 4, None),
-    ("ENFANT", "Livret enfant", "savings", 0, 5, "VERS LIVRET ENFANT"),
+    ("PERSO", "Compte perso", "checking", 1, None),
+    ("JOINT", "Compte joint", "checking", 2, None),
+    ("LIVRET", "Livret A", "savings", 3, None),
+    ("LOCATIF", "Appartement locatif", "checking", 4, None),
+    ("ENFANT", "Livret enfant", "savings", 5, "VERS LIVRET ENFANT"),
 ]
 TEST_ACCOUNT_ALIASES = [(code, code) for code, *_ in TEST_ACCOUNTS] + [
     ("COMPTE PERSO", "PERSO"),
