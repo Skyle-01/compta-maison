@@ -347,6 +347,39 @@ class TestDashboard:
         assert body["history"][-1]["month"] == "2026-06"
         assert body["history"][-1]["reste"] == body["reste"]
 
+    def test_categorised_epargne_and_deficit_rows_not_double_counted(self, db, client):
+        # Real rows categorised under the Épargne / Déficit groups are ordinary income/expenses;
+        # only the derived savings-account leaves feed the Épargne card. Before the fix a loan
+        # credit under Déficit counted in both income and désépargne (Reste off by its amount).
+        from app.db import connect, import_transactions
+
+        with connect(db) as conn:
+            epargne = conn.execute("INSERT INTO categories (name) VALUES ('Épargne')").lastrowid
+            deficit = conn.execute("INSERT INTO categories (name) VALUES ('Déficit')").lastrowid
+            emprunt = conn.execute(
+                "INSERT INTO categories (name, parent_id) VALUES ('Emprunt', ?)", (deficit,)
+            ).lastrowid
+            conn.execute("INSERT INTO label_rules (category_id, pattern) VALUES (?, 'VERSEMENT PEL')", (epargne,))
+        rows = [
+            ("2026-06-02", "VIR PRET CONSO", 0, 1000, "PERSO"),
+            ("2026-06-03", "VERSEMENT PEL", 200, 0, "PERSO"),
+            ("2026-06-04", "COURSES", 50, 0, "PERSO"),
+            ("2026-06-05", "VIR de COMPTE", 0, 300, "LIVRET"),  # derived Épargne leaf
+        ]
+        import_transactions(
+            [
+                {"Date operation": d, "Date valeur": d, "Libelle": lib, "Debit": deb, "Credit": cre, "account": acc}
+                for d, lib, deb, cre, acc in rows
+            ],
+            db,
+        )
+        client.post("/api/rules", json={"category_id": emprunt, "pattern": "PRET CONSO"})  # re-applies rules
+
+        body = client.get("/api/dashboard", params={"month": "2026-06"}).json()
+        assert (body["income"], body["expenses"]) == (1300.0, 250.0)  # the LIVRET credit is income too
+        assert (body["epargne"], body["desepargne"]) == (300.0, 0.0)
+        assert body["reste"] == body["by_category"]["balance"] == body["history"][-1]["reste"] == 750.0
+
     def test_defaults_to_latest_month(self, seeded_db, client):
         _upload(client)
         body = client.get("/api/dashboard").json()
