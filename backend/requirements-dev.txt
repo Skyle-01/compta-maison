@@ -1,0 +1,5 @@
+# Tests and lint, on top of the runtime dependencies.
+-r requirements.txt
+pytest==9.1.1
+httpx2==2.13.1  # TestClient transport (Starlette 1.x deprecates plain httpx)
+ruff==0.16.9
