@@ -23,15 +23,32 @@ def infer_account(filename: str) -> str | None:
     return match.group("account").replace("_", " ")
 
 
+# Thousands separators seen in French exports: plain space, no-break space, narrow no-break space.
+_THOUSANDS_SEPARATORS = (" ", "\u00a0", "\u202f")
+
+
 def _parse_amount(value: str) -> float | None:
-    """French amount ('1 234,56') to float. Empty/missing -> 0.0; unparseable -> None."""
-    cleaned = value.replace(",", ".").strip()
+    """French amount ('1 234,56') to a non-negative float. The Debit/Credit column already
+    gives the direction, so a sign some banks put on debits ('-12,00') is dropped.
+    Empty/missing -> 0.0; unparseable -> None."""
+    cleaned = value.strip()
+    for sep in _THOUSANDS_SEPARATORS:
+        cleaned = cleaned.replace(sep, "")
+    cleaned = cleaned.replace(",", ".")
     if cleaned in ("", "nan"):
         return 0.0
     try:
-        return float(cleaned)
+        return abs(float(cleaned))
     except ValueError:
         return None
+
+
+def _decode(content: bytes) -> str:
+    """UTF-8 (with or without BOM) first; many French bank exports are Windows-1252 instead."""
+    try:
+        return content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return content.decode("cp1252")
 
 
 def parse_csv(content: bytes) -> list[dict]:
@@ -43,7 +60,7 @@ def parse_csv(content: bytes) -> list[dict]:
     Raises CsvValidationError with row-level messages on malformed input.
     """
     try:
-        text = content.decode("utf-8-sig")
+        text = _decode(content)
         reader = csv.reader(io.StringIO(text), delimiter=";")
         table = list(reader)
     except Exception as exc:

@@ -16,6 +16,23 @@ class TestParseCsv:
         assert rows[0]["Credit"] == 0.0
         assert rows[0]["Date valeur"] == "2026-06-06"
 
+    def test_thousands_separators(self):
+        rows = parse_csv(_csv(
+            '"06/06/2026";"06/06/2026";"A";"1 234,56";""',
+            '"06/06/2026";"06/06/2026";"B";"";"2\u00a0500,00"',
+            '"06/06/2026";"06/06/2026";"C";"10\u202f000,00";""',
+        ))
+        assert [(r["Debit"], r["Credit"]) for r in rows] == [(1234.56, 0.0), (0.0, 2500.0), (10000.0, 0.0)]
+
+    def test_signed_debit_is_made_positive(self):
+        # The column carries the direction; a leading minus must not produce a negative debit.
+        rows = parse_csv(_csv('"06/06/2026";"06/06/2026";"CARTE";"-12,00";""'))
+        assert rows[0]["Debit"] == 12.0
+
+    def test_windows_1252_export(self):
+        content = _csv('"06/06/2026";"06/06/2026";"CAFÉ DU PORT";"3,50";""').decode().encode("cp1252")
+        assert parse_csv(content)[0]["Libelle"] == "CAFÉ DU PORT"
+
     def test_sorted_by_date_valeur(self):
         rows = parse_csv(_csv(
             '"06/06/2026";"06/06/2026";"B";"1,00";""',
