@@ -220,6 +220,11 @@ class TestTransactions:
         )
         assert resp.status_code == 422  # 'variable' is a group; leaf-only assignment
 
+    def test_patch_unknown_transaction_is_404(self, seeded_db, client):
+        resp = client.patch("/api/transactions/9999", json={"category_id": _category_id(client, "courses")})
+        assert resp.status_code == 404
+        assert client.patch("/api/transactions/9999", json={"note": "x"}).status_code == 404
+
     def test_uncategorized_filter_excludes_transfers(self, seeded_db, client):
         perso = (
             b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'

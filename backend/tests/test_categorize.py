@@ -7,7 +7,7 @@ from app.core.categorize import (
     uncategorized_balance,
 )
 from app.core.transfers import recompute_transfers
-from app.db import connect, import_transactions, set_transaction_category
+from app.db import connect, import_transactions
 from tests.conftest import cat_id
 
 
@@ -82,7 +82,11 @@ class TestApplyRules:
     def test_manual_assignment_survives_rerun(self, seeded_db):
         _import(seeded_db, ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "JOINT"))
         apply_rules(seeded_db)
-        set_transaction_category(1, cat_id(seeded_db, "bar"), seeded_db)
+        with connect(seeded_db) as conn:  # a manual assignment, as PATCH /api/transactions/{id} does
+            conn.execute(
+                "UPDATE transactions SET category_id = ?, category_manual = 1 WHERE id = 1",
+                (cat_id(seeded_db, "bar"),),
+            )
         apply_rules(seeded_db)
         with connect(seeded_db) as conn:
             row = conn.execute(

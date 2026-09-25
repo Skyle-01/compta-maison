@@ -1,5 +1,4 @@
-from app.db import connect, import_transactions, set_transaction_category
-from tests.conftest import cat_id
+from app.db import connect, import_transactions
 
 
 def _make_df(*rows) -> list[dict]:
@@ -70,30 +69,3 @@ class TestImportTransactions:
         )
         import_transactions(df1, db)
         assert import_transactions(df2, db) == 1
-
-
-class TestSetTransactionCategory:
-    def test_manual_assignment(self, seeded_db):
-        df = _make_df(("2026-06-01", "2026-06-01", "MYSTERY SHOP", 10, 0, "PERSO"))
-        import_transactions(df, seeded_db)
-        courses = cat_id(seeded_db, "courses")
-        assert set_transaction_category(1, courses, seeded_db) is True
-        with connect(seeded_db) as conn:
-            row = conn.execute(
-                "SELECT category_id, category_manual FROM transactions WHERE id = 1"
-            ).fetchone()
-        assert row == (courses, 1)
-
-    def test_clear_resets_manual_flag(self, seeded_db):
-        df = _make_df(("2026-06-01", "2026-06-01", "MYSTERY SHOP", 10, 0, "PERSO"))
-        import_transactions(df, seeded_db)
-        set_transaction_category(1, cat_id(seeded_db, "courses"), seeded_db)
-        set_transaction_category(1, None, seeded_db)
-        with connect(seeded_db) as conn:
-            row = conn.execute(
-                "SELECT category_id, category_manual FROM transactions WHERE id = 1"
-            ).fetchone()
-        assert row == (None, 0)
-
-    def test_unknown_id_returns_false(self, seeded_db):
-        assert set_transaction_category(999, cat_id(seeded_db, "courses"), seeded_db) is False

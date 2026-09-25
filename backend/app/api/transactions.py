@@ -7,13 +7,7 @@ from app.api.categories import category_paths, csv_response, reject_group_target
 from app.api.deps import get_db_path
 from app.core.categorize import apply_rules
 from app.core.transfers import pair_manually, set_transfer_mode
-from app.db import (
-    connect,
-    euros,
-    real_flow_clause,
-    set_transaction_category,
-    set_transaction_note,
-)
+from app.db import connect, euros, real_flow_clause
 from app.schemas import (
     Transaction,
     TransactionPage,
@@ -208,26 +202,24 @@ def patch_transaction(
     # Only the fields the caller actually sent are applied (model_fields_set distinguishes an omitted
     # field from one explicitly set to null) — so a caller can set the category, the note, or both.
     fields = patch.model_fields_set
-
-    if "category_id" in fields:
-        if patch.category_id is not None:
-            with connect(db_path) as conn:
+    with connect(db_path) as conn:
+        if conn.execute("SELECT 1 FROM transactions WHERE id = ?", (transaction_id,)).fetchone() is None:
+            raise HTTPException(404, detail=[f"No transaction with id {transaction_id}"])
+        if "category_id" in fields:
+            if patch.category_id is not None:
                 known = conn.execute("SELECT 1 FROM categories WHERE id = ?", (patch.category_id,)).fetchone()
                 if not known:
                     raise HTTPException(422, detail=[f"Unknown category id: {patch.category_id}"])
                 reject_group_target(conn, patch.category_id)
-        if not set_transaction_category(transaction_id, patch.category_id, db_path):
-            raise HTTPException(404, detail=[f"No transaction with id {transaction_id}"])
-        if patch.category_id is None:
-            # Cleared override: let the rules engine reclaim the row.
-            apply_rules(db_path)
+            conn.execute(
+                "UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL WHERE id = ?",
+                (patch.category_id, int(patch.category_id is not None), transaction_id),
+            )
+        if "note" in fields:
+            conn.execute("UPDATE transactions SET note = ? WHERE id = ?", (patch.note, transaction_id))
 
-    if "note" in fields:
-        if not set_transaction_note(transaction_id, patch.note, db_path):
-            raise HTTPException(404, detail=[f"No transaction with id {transaction_id}"])
-
+    if "category_id" in fields and patch.category_id is None:
+        apply_rules(db_path)  # cleared override: let the rules engine reclaim the row
     with connect(db_path) as conn:
         row = conn.execute(f"{_SELECT} WHERE t.id = ?", (transaction_id,)).fetchone()
-    if row is None:
-        raise HTTPException(404, detail=[f"No transaction with id {transaction_id}"])
     return _to_model(row)

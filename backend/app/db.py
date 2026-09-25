@@ -293,26 +293,3 @@ def import_transactions(
             except sqlite3.IntegrityError:
                 pass  # duplicate — skip
     return inserted
-
-
-def set_transaction_category(
-    transaction_id: int, category_id: int | None, db_path: Path = DEFAULT_DB_PATH
-) -> bool:
-    """Manually assign (or clear) a transaction's category. Returns False if the id is unknown."""
-    manual = 1 if category_id else 0
-    with connect(db_path) as conn:
-        cur = conn.execute(
-            "UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL WHERE id = ?",
-            (category_id, manual, transaction_id),
-        )
-        return cur.rowcount > 0
-
-
-def set_transaction_note(transaction_id: int, note: str | None, db_path: Path = DEFAULT_DB_PATH) -> bool:
-    """Set (or clear) a transaction's free-text note. Returns False if the id is unknown."""
-    with connect(db_path) as conn:
-        cur = conn.execute(
-            "UPDATE transactions SET note = ? WHERE id = ?",
-            (note, transaction_id),
-        )
-        return cur.rowcount > 0
