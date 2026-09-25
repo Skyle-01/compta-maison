@@ -28,7 +28,6 @@ config dir.
 """
 
 import argparse
-import csv
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -36,7 +35,8 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.api.categories import _load_all  # noqa: E402
+from app.api.categories import category_paths, csv_text  # noqa: E402
+from app.api.rules import RULES_HEADER, rule_rows  # noqa: E402
 from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
 from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_profiles  # noqa: E402
 from app.core.parsing import CsvValidationError, infer_account, parse_statement  # noqa: E402
@@ -103,11 +103,8 @@ def _import_inputs(db_path: Path, profiles: list[BankProfile]) -> int:
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list]) -> None:
-    """Semicolon-delimited, UTF-8-BOM — matches api.categories.csv_response / _read_csv."""
-    with open(path, "w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.writer(handle, delimiter=";", lineterminator="\n")
-        writer.writerow(header)
-        writer.writerows(rows)
+    """The same bytes as the Settings "Export CSV" downloads (api.categories.csv_response)."""
+    path.write_text(csv_text(header, rows), encoding="utf-8-sig", newline="")
 
 
 def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
@@ -127,12 +124,8 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
         for alias, code in conn.execute("SELECT alias, code FROM account_aliases ORDER BY alias"):
             if alias != code:  # the code is always an alias; keep the CSV tidy
                 aliases_by_code.setdefault(code, []).append(alias)
-        cats = _load_all(conn)  # sorted by path -> parents precede children
-        path_by_id = {c.id: c.path for c in cats}
-        rule_rows = conn.execute(
-            "SELECT category_id, pattern, priority, is_income_anchor, description "
-            "FROM label_rules ORDER BY priority, id"
-        ).fetchall()
+        path_by_id = category_paths(conn)
+        rules = rule_rows(conn, path_by_id)
         overrides = override_rows(conn, path_by_id)
         # A live DB from before transfer markers existed has no such table: skip, default applies.
         has_markers = conn.execute(
@@ -148,20 +141,14 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
             for code, label, type_, order, pattern in account_rows
         ],
     )
-    _write_csv(cat_csv, ["path"], [[c.path] for c in cats])
-    _write_csv(
-        rules_csv,
-        ["category_path", "pattern", "priority", "is_income_anchor", "description"],
-        [
-            [path_by_id.get(category_id, ""), pattern, priority, is_income_anchor, description or ""]
-            for category_id, pattern, priority, is_income_anchor, description in rule_rows
-        ],
-    )
+    # Sorted paths: parents precede children, as in the Settings export.
+    _write_csv(cat_csv, ["path"], [[path] for path in sorted(path_by_id.values())])
+    _write_csv(rules_csv, RULES_HEADER, rules)
     _write_csv(overrides_csv, OVERRIDES_HEADER, overrides)
     if has_markers:  # written even when empty, so a live rebuild keeps "default" as-is
         _write_csv(out_dir / "transfer_markers.csv", ["marker"], [[m] for m in markers])
     print(
-        f"Exported {len(account_rows)} accounts, {len(cats)} categories, {len(rule_rows)} rules, {len(overrides)} overrides, "
+        f"Exported {len(account_rows)} accounts, {len(path_by_id)} categories, {len(rules)} rules, {len(overrides)} overrides, "
         f"{len(markers)} transfer markers "
         f"to {out_dir}"
     )

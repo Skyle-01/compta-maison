@@ -16,14 +16,20 @@ router = APIRouter(prefix="/api/categories", tags=["categories"])
 PATH_SEP = " / "
 
 
-def csv_response(rows: list[list], header: list[str], filename: str) -> Response:
-    """Render rows as a semicolon-delimited, UTF-8-BOM CSV download (the format scripts/import_csv.py reads)."""
+def csv_text(header: list[str], rows: list[list]) -> str:
+    """Semicolon-delimited CSV, the format scripts/import_csv.py reads (written as UTF-8 with a BOM,
+    by csv_response for the Settings exports and by reset_db.py for the _backups/ snapshots)."""
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";", lineterminator="\n")
     writer.writerow(header)
     writer.writerows(rows)
+    return buf.getvalue()
+
+
+def csv_response(rows: list[list], header: list[str], filename: str) -> Response:
+    """A CSV download (see csv_text)."""
     return Response(
-        content=buf.getvalue().encode("utf-8-sig"),
+        content=csv_text(header, rows).encode("utf-8-sig"),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

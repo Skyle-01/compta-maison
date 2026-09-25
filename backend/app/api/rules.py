@@ -13,6 +13,7 @@ from app.schemas import RuleIn, RuleOut
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
 _COLUMNS = "id, category_id, pattern, priority, is_income_anchor, description"
+RULES_HEADER = ["category_path", "pattern", "priority", "is_income_anchor", "description"]
 
 
 def _to_model(row: tuple) -> RuleOut:
@@ -25,6 +26,16 @@ def _to_model(row: tuple) -> RuleOut:
         is_income_anchor=bool(is_income_anchor),
         description=description,
     )
+
+
+def rule_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
+    """Every rule as rules.csv rows, keyed by category path (shared by the Settings export and
+    reset_db.py's snapshot)."""
+    rows = conn.execute(f"SELECT {_COLUMNS} FROM label_rules ORDER BY priority, id").fetchall()
+    return [
+        [path_by_id.get(category_id, ""), pattern, priority, is_income_anchor, description or ""]
+        for _id, category_id, pattern, priority, is_income_anchor, description in rows
+    ]
 
 
 def _refresh(db_path: Path) -> None:
@@ -50,14 +61,8 @@ def export_rules(db_path: Path = Depends(get_db_path)) -> Response:
     """Download every rule as CSV, keyed by category path (drop it in a config dir and rebuild
     with reset_db.py --source defaults --from DIR)."""
     with connect(db_path) as conn:
-        paths = category_paths(conn)
-        rows = conn.execute(f"SELECT {_COLUMNS} FROM label_rules ORDER BY priority, id").fetchall()
-    out = [
-        [paths.get(category_id, ""), pattern, priority, is_income_anchor, description or ""]
-        for _id, category_id, pattern, priority, is_income_anchor, description in rows
-    ]
-    header = ["category_path", "pattern", "priority", "is_income_anchor", "description"]
-    return csv_response(out, header, "rules.csv")
+        rows = rule_rows(conn, category_paths(conn))
+    return csv_response(rows, RULES_HEADER, "rules.csv")
 
 
 @router.post("", response_model=RuleOut, status_code=201)
