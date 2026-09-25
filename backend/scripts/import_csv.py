@@ -1,41 +1,18 @@
-"""Restore categories and rules from CSVs exported via the Settings page.
-
-Usage:
-    python backend/scripts/import_csv.py --categories categories.csv --rules rules.csv [--accounts accounts.csv] [--db path]
-
-Wipes and rebuilds the category tree and rules from the two self-contained CSVs (the same
-format the /api/categories/export and /api/rules/export endpoints produce), then re-applies
-rules and recomputes budget months + transfers over whatever transactions already exist.
-
-With --transfer-markers, also replaces the transfer markers from a transfer_markers.csv.
-
-With --accounts, also upserts the accounts (and their import aliases) from an accounts.csv.
-
-With --overrides, also restores manual category/kind overrides (from
-/api/transactions/export-overrides), matched to transactions by their stable import_hash (or, for
-a hash no longer in the DB, by account + date + libellé + amounts).
-
-It does NOT import transactions (no _inputs handling) — that's reset_db.py's job. For a full
-rebuild (fresh DB + _inputs + taxonomy + overrides from defaults/live/a backup) use reset_db.py;
-this script just layers a given set of taxonomy CSVs onto whatever transactions already exist.
+"""Loaders for the self-contained config/taxonomy CSVs (accounts, transfer markers, categories,
+rules, manual overrides): the format of data/, _config/, the Settings exports and the
+_backups/<ts>/ snapshots. Used by reset_db.py, the one rebuild CLI, on a database it has already
+initialised.
 """
 
-import argparse
 import csv
 import sqlite3
-import sys
 from pathlib import Path
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(BACKEND_DIR))
-
-from app.api.categories import PATH_SEP  # noqa: E402
-from app.core.categorize import apply_rules  # noqa: E402
-from app.core.periods import recompute_budget_months  # noqa: E402
-from app.core.transfers import recompute_transfers  # noqa: E402
-from app.db import DEFAULT_DB_PATH, connect, init_db, replace_transfer_markers, upsert_accounts  # noqa: E402
-
-REPO_ROOT = BACKEND_DIR.parent
+from app.api.categories import PATH_SEP
+from app.core.categorize import apply_rules
+from app.core.periods import recompute_budget_months
+from app.core.transfers import recompute_transfers
+from app.db import connect, replace_transfer_markers, upsert_accounts
 
 ACCOUNT_TYPES = ("checking", "savings")
 ALIAS_SEP = "|"
@@ -81,8 +58,7 @@ def import_accounts(conn, rows: list[dict]) -> int:
 
 
 def load_accounts_csv(accounts_csv: Path, db_path: Path) -> int:
-    """Create the schema if needed and upsert the accounts from one accounts.csv."""
-    init_db(db_path)
+    """Upsert the accounts from one accounts.csv."""
     with connect(db_path) as conn:
         n = import_accounts(conn, _read_csv(accounts_csv))
     print(f"Loaded {n} accounts from {accounts_csv}")
@@ -92,7 +68,6 @@ def load_accounts_csv(accounts_csv: Path, db_path: Path) -> int:
 def load_transfer_markers_csv(markers_csv: Path | None, db_path: Path) -> int:
     """Replace the transfer markers from a transfer_markers.csv (one `marker` column). None
     leaves the table empty, i.e. the built-in default applies. Returns how many were loaded."""
-    init_db(db_path)
     markers = [row["marker"] for row in _read_csv(markers_csv)] if markers_csv else []
     with connect(db_path) as conn:
         stored = replace_transfer_markers(conn, markers)
@@ -269,7 +244,8 @@ def restore_manual_pairs(
 def import_csv(
     categories_csv: Path, rules_csv: Path, db_path: Path, overrides_csv: Path | None = None
 ) -> None:
-    init_db(db_path)
+    """Replace the categories and rules, restore the manual overrides, then recompute periods,
+    transfers and rule assignments over the transactions already in the DB."""
     categories = _read_csv(categories_csv)
     rules = _read_csv(rules_csv)
     overrides = _read_csv(overrides_csv) if overrides_csv else []
@@ -296,21 +272,3 @@ def import_csv(
         if n_pairs or n_unpaired:
             summary += f", {n_pairs} manual transfer pairs ({n_unpaired} with a missing leg)"
     print(summary + f"; {n_transfer_legs} transfer legs flagged")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("--categories", type=Path, default=REPO_ROOT / "categories.csv")
-    parser.add_argument("--rules", type=Path, default=REPO_ROOT / "rules.csv")
-    parser.add_argument("--overrides", type=Path, default=None)
-    parser.add_argument("--accounts", type=Path, default=None)
-    parser.add_argument("--transfer-markers", type=Path, default=None)
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
-    args = parser.parse_args()
-    if args.accounts:
-        load_accounts_csv(args.accounts, args.db)
-    if args.transfer_markers:
-        load_transfer_markers_csv(args.transfer_markers, args.db)
-    import_csv(args.categories, args.rules, args.db, args.overrides)

@@ -154,7 +154,7 @@ def list_transactions(
 @router.get("/export-overrides")
 def export_overrides(db_path: Path = Depends(get_db_path)) -> Response:
     """Download every manual override, keyed by the stable import_hash so it survives a
-    delete-and-rebuild (re-importable via scripts/import_csv.py --overrides)."""
+    delete-and-rebuild (restored by reset_db.py from an overrides.csv next to the taxonomy)."""
     with connect(db_path) as conn:
         rows = override_rows(conn, category_paths(conn))
     return csv_response(rows, OVERRIDES_HEADER, "overrides.csv")

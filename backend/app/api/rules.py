@@ -47,7 +47,8 @@ def list_rules(category_id: int | None = None, db_path: Path = Depends(get_db_pa
 
 @router.get("/export")
 def export_rules(db_path: Path = Depends(get_db_path)) -> Response:
-    """Download every rule as CSV, keyed by category path (re-importable via scripts/import_csv.py)."""
+    """Download every rule as CSV, keyed by category path (drop it in a config dir and rebuild
+    with reset_db.py --source defaults --from DIR)."""
     with connect(db_path) as conn:
         paths = category_paths(conn)
         rows = conn.execute(f"SELECT {_COLUMNS} FROM label_rules ORDER BY priority, id").fetchall()

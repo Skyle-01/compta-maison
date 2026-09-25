@@ -17,7 +17,7 @@ PATH_SEP = " / "
 
 
 def csv_response(rows: list[list], header: list[str], filename: str) -> Response:
-    """Render rows as a semicolon-delimited, UTF-8-BOM CSV download (matches import_csv.py's format)."""
+    """Render rows as a semicolon-delimited, UTF-8-BOM CSV download (the format scripts/import_csv.py reads)."""
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";", lineterminator="\n")
     writer.writerow(header)
@@ -110,7 +110,8 @@ def list_categories(db_path: Path = Depends(get_db_path)) -> list[CategoryOut]:
 
 @router.get("/export")
 def export_categories(db_path: Path = Depends(get_db_path)) -> Response:
-    """Download every category as a CSV of full paths (re-importable via scripts/import_csv.py)."""
+    """Download every category as a CSV of full paths (drop it in a config dir and rebuild with
+    reset_db.py --source defaults --from DIR)."""
     with connect(db_path) as conn:
         cats = _load_all(conn)  # already sorted by path -> parents precede children
     rows = [[c.path] for c in cats]
