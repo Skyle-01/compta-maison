@@ -56,32 +56,22 @@ async def upload_csv(
         row["account"] = account
     archived_as = archive_statement(inputs_dir, file.filename or "", content, account, profiles)
 
-    with connect(db_path) as conn:
-        cur = conn.execute(
-            "INSERT INTO imports (filename, account, rows_total, rows_new) VALUES (?, ?, ?, 0)",
-            (file.filename, account, len(rows)),
-        )
-        import_id = cur.lastrowid
-
-    rows_new = import_transactions(rows, db_path, import_id=import_id)
-    with connect(db_path) as conn:
-        conn.execute("UPDATE imports SET rows_new = ? WHERE id = ?", (rows_new, import_id))
-
+    rows_new = import_transactions(rows, db_path)
     recompute_budget_months(db_path)
     recompute_transfers(db_path)
     apply_rules(db_path)
 
-    # Months affected by this file, read back after the paycheck-period recompute.
+    # Budget months the file spans (its account over its value dates), read back after the
+    # paycheck-period recompute; also right when every row was a duplicate.
     with connect(db_path) as conn:
         months = [
             m
             for (m,) in conn.execute(
-                "SELECT DISTINCT budget_month FROM transactions WHERE import_id = ? ORDER BY budget_month",
-                (import_id,),
+                "SELECT DISTINCT budget_month FROM transactions "
+                "WHERE account_id = ? AND date_valeur BETWEEN ? AND ? ORDER BY budget_month",
+                (resolve_account_code(account, aliases), rows[0]["Date valeur"], rows[-1]["Date valeur"]),
             )
         ]
-    if not months:  # everything was a duplicate — fall back to the file's own months
-        months = sorted({row["budget_month"] for row in rows})
     warnings: dict[str, float] = {}
     uncategorized_count = 0
     for month in months:
@@ -91,7 +81,6 @@ async def upload_csv(
             warnings[month] = stats["difference"]
 
     return ImportResult(
-        import_id=import_id,
         account=account,
         rows_total=len(rows),
         rows_new=rows_new,

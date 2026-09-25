@@ -96,14 +96,7 @@ def _import_inputs(db_path: Path, profiles: list[BankProfile]) -> int:
             continue
         for row in rows:
             row["account"] = account
-        with connect(db_path) as conn:
-            import_id = conn.execute(
-                "INSERT INTO imports (filename, account, rows_total, rows_new) VALUES (?, ?, ?, 0)",
-                (path.name, account, len(rows)),
-            ).lastrowid
-        new = import_transactions(rows, db_path, import_id=import_id)
-        with connect(db_path) as conn:
-            conn.execute("UPDATE imports SET rows_new = ? WHERE id = ?", (new, import_id))
+        new = import_transactions(rows, db_path)
         total_new += new
         print(f"Imported {new}/{len(rows)} new rows from {path.name} -> {account} [{profile.name}]")
     return total_new

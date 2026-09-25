@@ -4,8 +4,6 @@ from app.db import connect, import_transactions
 def _make_df(*rows) -> list[dict]:
     columns = ["Date operation", "Date valeur", "Libelle", "Debit", "Credit", "account"]
     records = [dict(zip(columns, row, strict=True)) for row in rows]
-    for record in records:
-        record["budget_month"] = record["Date valeur"][:7]
     return records
 
 

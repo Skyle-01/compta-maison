@@ -111,8 +111,7 @@ def parse_statement(content: bytes, profiles: Sequence[BankProfile]) -> tuple[Ba
     """Parse one bank statement with the first matching profile (see detect_profile).
 
     Returns the profile and a list of row dicts keyed by REQUIRED_COLUMNS (dates as ISO
-    'YYYY-MM-DD' strings, Debit/Credit as non-negative floats) plus 'budget_month' (calendar
-    month; core.periods reassigns it to paycheck periods after import), sorted by 'Date valeur'.
+    'YYYY-MM-DD' strings, Debit/Credit as non-negative floats), sorted by 'Date valeur'.
     A profile without a value-date column uses the operation date. Raises CsvValidationError with
     row-level messages (real file line numbers) on malformed input.
     """
@@ -167,8 +166,6 @@ def parse_statement(content: bytes, profiles: Sequence[BankProfile]) -> tuple[Ba
     if not rows:
         raise CsvValidationError(["CSV contains no transactions"])
 
-    for record in rows:
-        record["budget_month"] = record["Date valeur"][:7]
     rows.sort(key=lambda r: r["Date valeur"])
     return profile, rows
 

@@ -55,11 +55,6 @@ class TestParseCsv:
         )
         assert [r["Libelle"] for r in rows] == ["A", "B"]
 
-    def test_budget_month_is_calendar_month(self):
-        # Paycheck periods are applied later by core.periods, not at parse time.
-        rows = parse_csv(_csv('"28/06/2026";"28/06/2026";"VIR EMPLOYEUR";"";"2500,00"'))
-        assert rows[0]["budget_month"] == "2026-06"
-
     def test_missing_column_rejected(self):
         content = b'"Date operation";"Libelle";"Debit"\n"06/06/2026";"X";"1,00"'
         with pytest.raises(CsvValidationError, match="Missing column"):
@@ -116,7 +111,6 @@ GOLDEN_PARSED = [
         "Libelle": "VIR EMPLOYEUR SALAIRE",
         "Debit": 0.0,
         "Credit": 2500.0,
-        "budget_month": "2026-06",
     },
     {
         "Date operation": "2026-06-06",
@@ -124,7 +118,6 @@ GOLDEN_PARSED = [
         "Libelle": "CARTE U EXPRESS",
         "Debit": 8.05,
         "Credit": 0.0,
-        "budget_month": "2026-06",
     },
     {
         "Date operation": "2026-06-06",
@@ -132,7 +125,6 @@ GOLDEN_PARSED = [
         "Libelle": "CARTE U EXPRESS",
         "Debit": 8.05,
         "Credit": 0.0,
-        "budget_month": "2026-06",
     },
     {
         "Date operation": "2026-06-06",
@@ -140,7 +132,6 @@ GOLDEN_PARSED = [
         "Libelle": "CARTE SUPERMARCHE ",
         "Debit": 1234.56,
         "Credit": 0.0,
-        "budget_month": "2026-06",
     },
 ]
 GOLDEN_HASHES = [
@@ -261,7 +252,6 @@ class TestProfileParsing:
     def test_missing_value_date_uses_operation_date(self):
         rows = parse_csv(_signed_csv("2026-06-28,A,-1.00"), self.profiles)
         assert rows[0]["Date valeur"] == rows[0]["Date operation"] == "2026-06-28"
-        assert rows[0]["budget_month"] == "2026-06"
 
     def test_header_after_preamble(self):
         preamble = ("Compte n° 000,,", "Solde,,100.00", "")
@@ -293,7 +283,7 @@ class TestProfileParsing:
 
     def test_output_keys_canonical(self):
         rows = parse_csv(_signed_csv("2026-06-01,A,-1.00"), self.profiles)
-        assert set(rows[0]) == {*REQUIRED_COLUMNS, "budget_month"}
+        assert set(rows[0]) == set(REQUIRED_COLUMNS)
 
     def test_debit_credit_profile_with_own_names(self):
         profile = parse_bank_profiles(

@@ -1,5 +1,4 @@
 export interface ImportResult {
-  import_id: number;
   account: string;
   rows_total: number;
   rows_new: number;

@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field
 
 
 class ImportResult(BaseModel):
-    import_id: int
     account: str
     rows_total: int
     rows_new: int

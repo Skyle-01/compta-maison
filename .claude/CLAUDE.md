@@ -12,7 +12,7 @@ backend/
     schemas.py         # Pydantic request/response models
     core/
       bank_profiles.py # BankProfile (CSV layout), built-in DEFAULT_PROFILE, load_bank_profiles(config_dir) from bank_profiles.toml (tomllib)
-      parsing.py       # profile-driven parse/validate of one uploaded CSV (header auto-detect, stdlib csv; calendar budget_month) -> (profile, list[dict])
+      parsing.py       # profile-driven parse/validate of one uploaded CSV (header auto-detect, stdlib csv) -> (profile, list[dict]); import_transactions stores the calendar month, core/periods re-derives it
       periods.py       # paycheck-anchored budget months (recompute_budget_months)
       transfers.py     # auto-pair internal transfers across accounts (recompute_transfers)
       inputs.py        # _inputs/ archive of uploads (archive_filename, archive_statement), so a rebuild re-imports them with the same account string

@@ -34,15 +34,6 @@ CREATE TABLE IF NOT EXISTS account_aliases (
     code  TEXT NOT NULL REFERENCES accounts(code) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS imports (
-    id          INTEGER PRIMARY KEY,
-    filename    TEXT NOT NULL,
-    account     TEXT NOT NULL,
-    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
-    rows_total  INTEGER NOT NULL,
-    rows_new    INTEGER NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS categories (
     id        INTEGER PRIMARY KEY,
     name      TEXT NOT NULL,
@@ -85,7 +76,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     category_manual   INTEGER NOT NULL DEFAULT 0,
     note              TEXT,                                   /* free-text user annotation for a manual assignment */
     rule_id           INTEGER,
-    import_id         INTEGER REFERENCES imports(id),
     import_hash       TEXT UNIQUE NOT NULL
 );
 
@@ -228,9 +218,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
 # ---------------------------------------------------------------------------
 
 
-def import_transactions(
-    rows: list[dict], db_path: Path = DEFAULT_DB_PATH, import_id: int | None = None
-) -> int:
+def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH) -> int:
     """Insert rows into the transactions table, skipping duplicates.
 
     Each row must carry the keys produced by core.parsing.parse_csv plus 'account'.
@@ -248,7 +236,6 @@ def import_transactions(
         for row in rows:
             date_op = str(row["Date operation"])[:10]
             date_val = str(row["Date valeur"])[:10]
-            budget_month = str(row["budget_month"]) if "budget_month" in row else date_val[:7]
             libelle = str(row["Libelle"])
             debit, credit = float(row["Debit"]), float(row["Credit"])
             account = str(row["account"])
@@ -273,19 +260,18 @@ def import_transactions(
                 conn.execute(
                     "INSERT INTO transactions "
                     "(date_operation, date_valeur, budget_month, libelle, debit_cents, credit_cents, "
-                    "account, account_id, kind, import_id, import_hash) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "account, account_id, kind, import_hash) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         date_op,
                         date_val,
-                        budget_month,
+                        date_val[:7],  # calendar month; core.periods reassigns paycheck periods
                         libelle,
                         debit_cents,
                         credit_cents,
                         account,
                         account_id,
                         kind,
-                        import_id,
                         h,
                     ),
                 )
