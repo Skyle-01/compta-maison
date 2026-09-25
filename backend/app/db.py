@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_budget_month ON transactions(budget_month);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, date_operation);
 CREATE INDEX IF NOT EXISTS idx_transactions_transfer ON transactions(transfer_group_id);
 """
 
@@ -204,6 +205,11 @@ def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH, impor
 
     Each row must carry the keys produced by core.parsing.parse_csv plus 'account'.
     Returns the number of newly inserted rows.
+
+    A row is a duplicate when its import_hash exists, or when the resolved account already holds
+    as many identical operations (same date, libellé, amounts) as this one's occurrence — so the
+    same statement imported under two raw account strings that map to one account (e.g. inferred
+    'JOINT' from the filename, then typed 'Compte joint') isn't imported twice.
     """
     inserted = 0
     occurrences: dict[tuple, int] = {}
@@ -213,21 +219,33 @@ def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH, impor
             date_op = str(row["Date operation"])[:10]
             date_val = str(row["Date valeur"])[:10]
             budget_month = str(row["budget_month"]) if "budget_month" in row else date_val[:7]
+            libelle = str(row["Libelle"])
             debit, credit = float(row["Debit"]), float(row["Credit"])
             account = str(row["account"])
-            identity = (account, date_op, str(row["Libelle"]), debit, credit)
+            identity = (account, date_op, libelle, debit, credit)
             occurrence = occurrences.get(identity, 0)
             occurrences[identity] = occurrence + 1
             h = _row_hash(*identity, occurrence)
             kind = "income" if credit > 0 else "expense"
             account_id = resolve_account_code(account, aliases)
+            debit_cents, credit_cents = to_cents(debit), to_cents(credit)
+            if account_id is not None:
+                # Counts rows inserted earlier in this same call too, which is what keeps two
+                # genuinely identical operations of one file (occurrence 0 and 1) both importable.
+                existing = conn.execute(
+                    "SELECT COUNT(*) FROM transactions WHERE account_id = ? AND date_operation = ? "
+                    "AND libelle = ? AND debit_cents = ? AND credit_cents = ?",
+                    (account_id, date_op, libelle, debit_cents, credit_cents),
+                ).fetchone()[0]
+                if existing > occurrence:
+                    continue  # already imported (possibly under another alias of the account)
             try:
                 conn.execute(
                     "INSERT INTO transactions "
                     "(date_operation, date_valeur, budget_month, libelle, debit_cents, credit_cents, "
                     "account, account_id, kind, import_id, import_hash) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    (date_op, date_val, budget_month, str(row["Libelle"]), to_cents(debit), to_cents(credit),
+                    (date_op, date_val, budget_month, libelle, debit_cents, credit_cents,
                      account, account_id, kind, import_id, h),
                 )
                 inserted += 1
