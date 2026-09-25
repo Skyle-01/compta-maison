@@ -24,7 +24,6 @@ function dashboard(salary: number): Dashboard {
     months_available: ["2026-06"],
     income,
     expenses,
-    net: income - expenses,
     epargne: 200,
     desepargne: 0,
     reste: income - expenses - 200,

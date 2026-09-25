@@ -293,7 +293,7 @@ class TestMonthlyTotals:
         rows = monthly_totals(seeded_db)
         assert [r["month"] for r in rows] == ["2026-05", "2026-06"]  # oldest first
         may = rows[0]
-        assert (may["income"], may["expenses"], may["net"]) == (2000, 100, 1900)
+        assert (may["income"], may["expenses"]) == (2000, 100)
         assert (may["income"], may["expenses"]) == income_and_expenses(seeded_db, "2026-05")
 
     def test_reste_includes_savings_and_matches_tree_total(self, seeded_db):

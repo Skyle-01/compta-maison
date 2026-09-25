@@ -205,9 +205,8 @@ def monthly_totals(db_path: Path = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
     """Per-budget-month totals (euros), oldest first, for trend/comparison.
 
     income/expenses use the same definition as income_and_expenses (income = Σ credits of
-    kind='income', expenses = Σ debits of kind='expense'; transfers excluded); net = income −
-    expenses (operating). epargne/desepargne are the per-month savings nets (see _savings_by_month),
-    and reste = income − expenses − epargne + desepargne — the savings-inclusive leftover that
+    kind='income', expenses = Σ debits of kind='expense'; transfers excluded). epargne/desepargne are the per-month savings nets
+    (see _savings_by_month), and reste = income − expenses − epargne + desepargne — the savings-inclusive leftover that
     matches the Dashboard 'reste' and the balance-tree total for that month."""
     query = (
         "SELECT budget_month, "
@@ -226,7 +225,6 @@ def monthly_totals(db_path: Path = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
                 "month": month,
                 "income": euros(income_cents),
                 "expenses": euros(expense_cents),
-                "net": euros(income_cents - expense_cents),
                 "epargne": euros(epargne_cents),
                 "desepargne": euros(desepargne_cents),
                 "reste": euros(income_cents - expense_cents - epargne_cents + desepargne_cents),

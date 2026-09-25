@@ -56,7 +56,6 @@ def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)
         months_available=months,
         income=income,
         expenses=expenses,
-        net=round(income - expenses, 2),
         epargne=epargne,
         desepargne=desepargne,
         reste=reste,

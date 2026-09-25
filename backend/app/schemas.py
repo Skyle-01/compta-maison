@@ -112,7 +112,6 @@ class Dashboard(BaseModel):
     months_available: list[str]
     income: float
     expenses: float
-    net: float = Field(description="income - expenses (operating net, savings not deducted)")
     epargne: float = Field(default=0.0, description="Net money set aside to savings this month")
     desepargne: float = Field(default=0.0, description="Net money pulled from savings this month")
     reste: float = Field(description="income - expenses - epargne + desepargne; == by_category total")
@@ -121,5 +120,5 @@ class Dashboard(BaseModel):
     transfers: dict[str, Any]
     history: list[dict[str, Any]] = Field(
         default_factory=list,
-        description="Per-month {month, income, expenses, net} oldest-first, for trend/comparison",
+        description="Per-month {month, income, expenses, epargne, desepargne, reste} oldest-first, for trend/comparison",
     )

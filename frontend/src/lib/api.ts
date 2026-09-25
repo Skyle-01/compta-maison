@@ -104,8 +104,6 @@ export interface MonthTotals {
   month: string;
   income: number;
   expenses: number;
-  /** Operating net: income - expenses. */
-  net: number;
   epargne: number;
   desepargne: number;
   /** income - expenses - epargne + desepargne; the savings-inclusive leftover. */
@@ -117,8 +115,6 @@ export interface Dashboard {
   months_available: string[];
   income: number;
   expenses: number;
-  /** Operating net: income - expenses (savings not deducted). */
-  net: number;
   /** Net money set aside to savings this month. */
   epargne: number;
   /** Net money pulled from savings this month. */
