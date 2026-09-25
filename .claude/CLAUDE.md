@@ -26,6 +26,7 @@ backend/
 frontend/              # Next.js App Router; src/app/{page,import,transactions,settings}
   src/app/page.tsx     # dashboard: hero summary, 4 reconciling cards + deltas & Reste sparkline, "Money flow" Sankey (moneyFlow()/FlowNode), collapsible balance tree (TreeNode)
   src/lib/api.ts       # typed fetch client (+ frenchMonth/suggestPattern helpers); /api/* proxied to :8000 via next.config.ts rewrites
+backlog/               # one Markdown per item in bug/, feat/, tech/ (no ids, no priority order); see backlog/README.md
 data/                  # FICTIONAL example config (accounts.csv, categories.csv, rules.csv, transfer_markers.csv, bank_profiles.toml) — fallback for reset_db.py --source defaults; never put real data here
 _config/               # the user's PRIVATE config, same files (+ optional transfer_markers.csv, overrides.csv, bank_profiles.toml) — gitignored, preferred by --source defaults (override with $COMPTA_CONFIG_DIR)
 _inputs/               # bank CSV exports (gitignored); _inputs/compta.db.bak = pre-refactor DB
@@ -92,6 +93,7 @@ Gotchas:
 - `db.connect()` is a contextmanager (commit/rollback/close) — check `cur.rowcount` inside the `with` block.
 - Amounts: cents (int) everywhere in the DB and core; convert to euros only at the API boundary (`db.euros`/`db.to_cents`).
 - Type hints on all public functions; Pydantic models in `schemas.py` for everything crossing the API.
+- **Backlog**: `backlog/{bug,feat,tech}/<slug>.md`, one item per file (template in `backlog/README.md`): context, everything needed to fix or investigate, dated progress notes. Update the item while working on it; delete the file in the commit that finishes it. No ids, no priorities.
 - Backend formatted by `ruff format` (110 cols); `ruff check` and the frontend eslint must pass (CI enforces). Never hand-resolve a formatting conflict: re-run `ruff format`.
 - **Language**: user-facing frontend strings are French (typographic apostrophe `’`, not `'`, to satisfy `react/no-unescaped-entities`); code, comments, and docs (incl. this file) stay English. French category names in `data/` are data, not UI text. Date display uses `frenchMonth` (`Intl`, fr-FR); amounts use `formatEuro` (fr-FR).
 

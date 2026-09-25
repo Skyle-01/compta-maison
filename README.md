@@ -90,6 +90,8 @@ ruff check backend && ruff format --check backend
 npm run lint --prefix frontend && npm run build --prefix frontend
 ```
 
+Known bugs and ideas live in [`backlog/`](backlog/), one file per item.
+
 CI runs the same checks on every push (Python 3.11 and 3.14). Python dependencies are pinned to
 exact versions in `backend/requirements*.txt`: to update, check `pip list --outdated`, edit the
 pins and re-run the checks. npm versions are pinned by `frontend/package-lock.json`.
