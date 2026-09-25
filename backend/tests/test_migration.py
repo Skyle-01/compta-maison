@@ -4,11 +4,10 @@ from app.db import connect, init_db, upsert_accounts
 class TestFreshSchema:
     """Early-dev: a single schema version, no migration ladder."""
 
-    def test_fresh_db_created_at_v1(self, tmp_path):
+    def test_fresh_db_is_empty(self, tmp_path):
         path = tmp_path / "fresh.db"
         init_db(path)
         with connect(path) as conn:
-            assert conn.execute("PRAGMA user_version").fetchone()[0] == 1
             assert conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0] == 0  # no roots
             # Accounts are user data (accounts.csv), never seeded from code.
             assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 0

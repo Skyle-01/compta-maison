@@ -8,8 +8,6 @@ from app.core.bank_profiles import DEFAULT_PROFILE, BankProfile
 # Canonical keys of a parsed row, whatever the bank's own column names.
 REQUIRED_COLUMNS = ["Date operation", "Date valeur", "Libelle", "Debit", "Credit"]
 
-ACCOUNT_FILENAME_RE = DEFAULT_PROFILE.filename_pattern
-
 # How far down a file the header row is looked for (some banks start with account/balance lines).
 HEADER_SCAN_LINES = 30
 

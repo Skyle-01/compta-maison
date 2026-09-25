@@ -16,8 +16,6 @@ DEFAULT_INPUTS_DIR = Path(
     os.environ.get("COMPTA_INPUTS_DIR", str(Path(__file__).resolve().parents[2] / "_inputs"))
 )
 
-SCHEMA_VERSION = 1
-
 # Accounts are user data, not code: they are loaded from an `accounts.csv` (see
 # scripts/import_csv.py::import_accounts) by reset_db.py — from the private `_config/` dir, a
 # `_backups/<ts>/` snapshot, or the fictional example in `data/`. init_db seeds none.
@@ -223,7 +221,6 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
     try:
         with conn:
             conn.executescript(SCHEMA)
-            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
     finally:
         conn.close()
 

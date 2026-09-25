@@ -7,7 +7,7 @@ Household accounting web app: upload French bank CSVs, auto-categorise transacti
 ```
 backend/
   app/
-    main.py            # create_app() factory; CORS; init_db in lifespan
+    main.py            # create_app() factory; init_db in lifespan (no CORS: the frontend proxies /api)
     db.py              # single schema (no migration ladder — early dev), connect() contextmanager, hash-dedup import, account normalisation
     schemas.py         # Pydantic request/response models
     core/
@@ -52,7 +52,7 @@ Business rules:
 - **Categorising a transaction** (Transactions page, `frontend/src/app/transactions/page.tsx`): one inline editor per row (button-confirmed, never instant-on-select). Pick a leaf category, then choose **either** "Cette opération" (a one-off manual assignment) **or** "Règle (opérations similaires)" (creates a `label_rules` rule, with a live debounced match-count preview that reuses `?libelle_contains=&uncategorized=true`). A **description** maps to the transaction `note` in manual mode and to the rule's `description` in rule mode. Manual → `PATCH /api/transactions/{id}` `{category_id, note}`; rule → `POST /api/rules`. Available whether or not the "Sans catégorie uniquement" filter is on. (There is no longer a dashboard suggestions panel; `suggestPattern` in `lib/api.ts` still prefills the rule pattern by stripping a dated prefix.)
 - **`PATCH /api/transactions/{id}`** (`TransactionPatch`): updates only the keys the caller actually sent (`model_fields_set` distinguishes omitted from null), so it can set the category, the note, or both. Setting a category → `category_manual=1`, `rule_id=NULL`; clearing it (`category_id: null`) re-runs `apply_rules`. "Delete a manual assignment" (Settings) sends `{category_id: null, note: null}`. `GET /api/transactions?manual=true` lists `category_manual=1` rows (powers the Settings "Modifications manuelles" table).
 - Manual category assignments (`category_manual=1`) are never clobbered by `apply_rules`; clearing one re-runs the rules. `kind_manual=1` is likewise left alone by `recompute_transfers`.
-- **Schema**: single version, **no migration ladder** (early dev). `init_db` just runs `SCHEMA` (CREATE IF NOT EXISTS) and seeds the canonical accounts; `PRAGMA user_version` is pinned at 1. If the schema shape changes, rebuild with `reset_db.py --source live` (it snapshots cats/rules/overrides first, then deletes + recreates the DB) — don't write migrations yet.
+- **Schema**: single version, **no migration ladder** (early dev). `init_db` just runs `SCHEMA` (CREATE IF NOT EXISTS) and seeds nothing. If the schema shape changes, rebuild with `reset_db.py --source live` (it snapshots cats/rules/overrides first, then deletes + recreates the DB) — don't write migrations yet.
 
 ## Dev Workflow
 ```bash
