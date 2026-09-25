@@ -4,7 +4,7 @@ from app.db import connect, import_transactions
 
 def _import(db, *rows):
     columns = ["Date operation", "Date valeur", "Libelle", "Debit", "Credit", "account"]
-    records = [dict(zip(columns, row)) for row in rows]
+    records = [dict(zip(columns, row, strict=True)) for row in rows]
     for record in records:
         record["budget_month"] = record["Date valeur"][:7]
     import_transactions(records, db)

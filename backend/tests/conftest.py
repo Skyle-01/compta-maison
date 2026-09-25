@@ -11,7 +11,6 @@ if str(BACKEND_DIR) not in sys.path:
 from app.db import connect, init_db, upsert_accounts  # noqa: E402
 from app.main import create_app  # noqa: E402
 
-
 # Fictional accounts every test db starts with (a real db loads them from accounts.csv).
 TEST_ACCOUNTS = [
     ("PERSO", "Compte perso", "checking", 1, 1, None),

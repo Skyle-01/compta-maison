@@ -57,7 +57,7 @@ class TestParseCsv:
         assert rows[0]["budget_month"] == "2026-06"
 
     def test_missing_column_rejected(self):
-        content = '"Date operation";"Libelle";"Debit"\n"06/06/2026";"X";"1,00"'.encode()
+        content = b'"Date operation";"Libelle";"Debit"\n"06/06/2026";"X";"1,00"'
         with pytest.raises(CsvValidationError, match="Missing column"):
             parse_csv(content)
 

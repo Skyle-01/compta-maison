@@ -7,12 +7,12 @@ from app.db import connect
 from tests.test_parsing import GOLDEN_HASHES, GOLDEN_ROWS, _csv
 
 SAMPLE_CSV = (
-    '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
-    '"05/06/2026";"05/06/2026";"VIR EMPLOYEUR SALAIRE";"";"2500,00"\n'
-    '"06/06/2026";"06/06/2026";"CARTE SUPERMARCHE";"63,82";""\n'
-    '"07/06/2026";"07/06/2026";"BAR ANGELUS";"12,00";""\n'
-    '"08/06/2026";"08/06/2026";"MYSTERY SHOP";"10,00";""\n'
-).encode("utf-8")
+    b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+    b'"05/06/2026";"05/06/2026";"VIR EMPLOYEUR SALAIRE";"";"2500,00"\n'
+    b'"06/06/2026";"06/06/2026";"CARTE SUPERMARCHE";"63,82";""\n'
+    b'"07/06/2026";"07/06/2026";"BAR ANGELUS";"12,00";""\n'
+    b'"08/06/2026";"08/06/2026";"MYSTERY SHOP";"10,00";""\n'
+)
 
 
 # A statement in the format of the example profile (data/bank_profiles.toml).
@@ -22,7 +22,7 @@ PROFILE_CSV = (
     "Date,Libellé,Montant\n"
     "2026-06-01,CARTE BOULANGERIE,-4.20\n"
     '2026-06-02,VIR EMPLOYEUR SALAIRE,"2,500.00"\n'
-).encode("utf-8")
+).encode()
 
 
 def _upload(client, filename="RELEVE_COMPTE_JOINT_2026_06_08.csv", account="", content=SAMPLE_CSV):
@@ -224,14 +224,14 @@ class TestTransactions:
 
     def test_uncategorized_filter_excludes_transfers(self, seeded_db, client):
         perso = (
-            '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
-            '"10/06/2026";"10/06/2026";"VIR vers COMPTE JOINT";"100,00";""\n'
-        ).encode()
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            b'"10/06/2026";"10/06/2026";"VIR vers COMPTE JOINT";"100,00";""\n'
+        )
         joint = (
-            '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
-            '"10/06/2026";"10/06/2026";"VIR de COMPTE PERSO";"";"100,00"\n'
-            '"11/06/2026";"11/06/2026";"MYSTERY SHOP";"10,00";""\n'
-        ).encode()
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            b'"10/06/2026";"10/06/2026";"VIR de COMPTE PERSO";"";"100,00"\n'
+            b'"11/06/2026";"11/06/2026";"MYSTERY SHOP";"10,00";""\n'
+        )
         client.post("/api/imports", files={"file": ("RELEVE_COMPTE_PERSO_2026.csv", perso, "text/csv")})
         client.post("/api/imports", files={"file": ("RELEVE_COMPTE_JOINT_2026.csv", joint, "text/csv")})
 
@@ -252,15 +252,15 @@ class TestTransactions:
 
 
 TRANSFER_PERSO = (
-    '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
-    '"10/06/2026";"10/06/2026";"VIR vers COMPTE JOINT";"100,00";""\n'
-    '"12/06/2026";"12/06/2026";"CARTE 12/06 SUPERMARCHE";"50,00";""\n'
-).encode()
+    b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+    b'"10/06/2026";"10/06/2026";"VIR vers COMPTE JOINT";"100,00";""\n'
+    b'"12/06/2026";"12/06/2026";"CARTE 12/06 SUPERMARCHE";"50,00";""\n'
+)
 TRANSFER_JOINT = (
-    '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
-    '"10/06/2026";"10/06/2026";"VIR de COMPTE PERSO";"";"100,00"\n'
-    '"13/06/2026";"13/06/2026";"VIR SEPA RECU /DE AMI";"";"50,00"\n'
-).encode()
+    b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+    b'"10/06/2026";"10/06/2026";"VIR de COMPTE PERSO";"";"100,00"\n'
+    b'"13/06/2026";"13/06/2026";"VIR SEPA RECU /DE AMI";"";"50,00"\n'
+)
 
 
 def _upload_transfers(client) -> dict[str, dict]:
@@ -427,10 +427,10 @@ class TestRules:
     def test_anchor_rule_mutation_moves_periods(self, seeded_db, client):
         # Salary deposit late in June + spending after it
         csv = (
-            '"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
-            '"28/06/2026";"28/06/2026";"VIR EMPLOYEUR SALAIRE";"";"2500,00"\n'
-            '"29/06/2026";"29/06/2026";"CARTE SUPERMARCHE";"50,00";""\n'
-        ).encode()
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            b'"28/06/2026";"28/06/2026";"VIR EMPLOYEUR SALAIRE";"";"2500,00"\n'
+            b'"29/06/2026";"29/06/2026";"CARTE SUPERMARCHE";"50,00";""\n'
+        )
         client.post("/api/imports", files={"file": ("RELEVE_COMPTE_JOINT_2026.csv", csv, "text/csv")})
         months = {t["libelle"]: t["budget_month"] for t in client.get("/api/transactions").json()["items"]}
         assert months["CARTE SUPERMARCHE"] == "2026-07"  # paid from the July paycheck
@@ -571,9 +571,10 @@ class TestExport:
         assert ";variable / courses;;MYSTERY SHOP;" in line  # manual category, no kind override, no note
 
     def test_overrides_round_trip(self, seeded_db, client, tmp_path):
+        from fastapi.testclient import TestClient
+
         from app.db import connect, init_db, upsert_accounts
         from app.main import create_app
-        from fastapi.testclient import TestClient
         from scripts.import_csv import import_csv
         from tests.conftest import TEST_ACCOUNT_ALIASES, TEST_ACCOUNTS
 
@@ -637,9 +638,10 @@ class TestExport:
 
 class TestTransferOverrides:
     def test_manual_pair_and_unpair_round_trip(self, db, client, tmp_path):
+        from fastapi.testclient import TestClient
+
         from app.db import connect, init_db, upsert_accounts
         from app.main import create_app
-        from fastapi.testclient import TestClient
         from scripts.import_csv import import_csv
         from tests.conftest import TEST_ACCOUNT_ALIASES, TEST_ACCOUNTS
 
