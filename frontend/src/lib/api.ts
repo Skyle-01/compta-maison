@@ -60,6 +60,8 @@ export interface Category {
   path: string;
   is_root: boolean;
   rule_count: number;
+  /** Monthly spending cap in euros (leaves only); null = no target. */
+  budget_target: number | null;
 }
 
 export interface Rule {
@@ -108,6 +110,31 @@ export interface MonthTotals {
   reste: number;
 }
 
+/** One targeted leaf: net spending (debits − credits) vs its target × the months shown. */
+export interface BudgetLeaf {
+  id: number;
+  /** Path below the top-level group, e.g. "Sortie / Bar". */
+  name: string;
+  target: number;
+  actual: number;
+}
+
+/** A top-level group: the sums of its targeted leaves (none when the group is itself a leaf). */
+export interface BudgetGroup extends BudgetLeaf {
+  leaves: BudgetLeaf[];
+}
+
+export interface BudgetSummary {
+  /** Budget months covered; targets are multiplied by it ("Tous les mois"). */
+  months: number;
+  target: number;
+  actual: number;
+  /** Expenses outside any targeted category (uncategorised included). */
+  untargeted: number;
+  /** Overruns first. */
+  groups: BudgetGroup[];
+}
+
 /** Dashboard `month` value (and `?month=`) for every budget month at once. */
 export const ALL_MONTHS = "all";
 
@@ -127,6 +154,7 @@ export interface Dashboard {
   uncategorized: UncategorizedStats;
   transfers: TransfersSummary;
   history: MonthTotals[];
+  budget: BudgetSummary;
 }
 
 export class ApiError extends Error {
@@ -204,6 +232,9 @@ export const api = {
     request("/api/categories", json("POST", c)),
   updateCategory: (id: number, c: { name: string; parent_id: number | null }): Promise<Category> =>
     request(`/api/categories/${id}`, json("PUT", c)),
+  /** Set (euros, > 0) or clear (null) a leaf's monthly budget target. */
+  setCategoryTarget: (id: number, budgetTarget: number | null): Promise<Category> =>
+    request(`/api/categories/${id}/target`, json("PUT", { budget_target: budgetTarget })),
   deleteCategory: (id: number): Promise<void> =>
     request(`/api/categories/${id}`, { method: "DELETE" }),
 

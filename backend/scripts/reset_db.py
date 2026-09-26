@@ -35,7 +35,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.api.categories import category_paths, csv_text  # noqa: E402
+from app.api.categories import CATEGORIES_HEADER, category_paths, category_rows, csv_text  # noqa: E402
 from app.api.rules import RULES_HEADER, rule_rows  # noqa: E402
 from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
 from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_profiles  # noqa: E402
@@ -125,6 +125,7 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
             if alias != code:  # the code is always an alias; keep the CSV tidy
                 aliases_by_code.setdefault(code, []).append(alias)
         path_by_id = category_paths(conn)
+        cat_rows = category_rows(conn)
         rules = rule_rows(conn, path_by_id)
         overrides = override_rows(conn, path_by_id)
         # A live DB from before transfer markers existed has no such table: skip, default applies.
@@ -141,8 +142,8 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
             for code, label, type_, order, pattern in account_rows
         ],
     )
-    # Sorted paths: parents precede children, as in the Settings export.
-    _write_csv(cat_csv, ["path"], [[path] for path in sorted(path_by_id.values())])
+    # Sorted paths (parents precede children) + targets, as in the Settings export.
+    _write_csv(cat_csv, CATEGORIES_HEADER, cat_rows)
     _write_csv(rules_csv, RULES_HEADER, rules)
     _write_csv(overrides_csv, OVERRIDES_HEADER, overrides)
     if has_markers:  # written even when empty, so a live rebuild keeps "default" as-is

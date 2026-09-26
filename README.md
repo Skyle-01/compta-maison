@@ -39,7 +39,9 @@ The commands below assume the virtualenv is active.
      name taken from your statement filenames. `type` is `checking` or `savings`. Set
      `deposit_pattern` only for a savings account with no statement of its own: its deposits are
      the checking-account lines containing that text.
-   - `categories.csv`: one full category path per line (`Variable / Courses`).
+   - `categories.csv`: `path;budget_target` — one full category path per line
+     (`Variable / Courses`), with an optional monthly spending target in euros on leaf categories
+     (`450.00`; a file with only the `path` column still loads).
    - `rules.csv`: `category_path;pattern;priority;is_income_anchor;description`. A pattern is a
      plain, case-sensitive substring of the bank label. The rule flagged `is_income_anchor=1`
      (your salary) starts each budget month.

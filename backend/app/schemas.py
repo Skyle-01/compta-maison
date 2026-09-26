@@ -84,6 +84,13 @@ class CategoryOut(BaseModel):
     path: str = Field(description="Full path for display, e.g. 'variable / sortie / bar'")
     is_root: bool = Field(description="True for top-level groups (parent_id is null)")
     rule_count: int = 0
+    budget_target: float | None = Field(
+        default=None, description="Monthly spending cap in euros (leaves only); null = no target"
+    )
+
+
+class CategoryTargetIn(BaseModel):
+    budget_target: float | None = Field(gt=0, description="Monthly spending cap in euros; null clears it")
 
 
 class Account(BaseModel):
@@ -105,6 +112,26 @@ class RuleOut(RuleIn):
     id: int
 
 
+class BudgetLeaf(BaseModel):
+    id: int
+    name: str = Field(description="Path below the top-level group, e.g. 'Sortie / Bar'")
+    target: float = Field(description="Monthly target × the number of budget months shown")
+    actual: float = Field(description="Net spending (debits − credits, transfers excluded)")
+
+
+class BudgetGroup(BudgetLeaf):
+    name: str = Field(description="Top-level category name")
+    leaves: list[BudgetLeaf]
+
+
+class BudgetSummary(BaseModel):
+    months: int = Field(description="Budget months covered (targets are multiplied by it)")
+    target: float
+    actual: float
+    untargeted: float = Field(description="Expenses (kind='expense' debits) outside any targeted category")
+    groups: list[BudgetGroup] = Field(description="Top-level groups with a target, overruns first")
+
+
 class Dashboard(BaseModel):
     month: str | None = Field(description="The budget month shown, 'all' for every month, None if no data")
     months_available: list[str]
@@ -120,3 +147,4 @@ class Dashboard(BaseModel):
         default_factory=list,
         description="Per-month {month, income, expenses, epargne, desepargne, reste} oldest-first, for trend/comparison",
     )
+    budget: BudgetSummary = Field(description="Spending vs the categories' budget targets")

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps import get_db_path
 from app.core.categorize import (
+    budget_status,
     category_tree,
     income_and_expenses,
     monthly_totals,
@@ -68,4 +69,5 @@ def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)
         uncategorized=uncategorized_balance(db_path, period),
         transfers=transfers_summary(db_path, period),
         history=monthly_totals(db_path),
+        budget=budget_status(db_path, period, len(months) if period is None else 1),
     )

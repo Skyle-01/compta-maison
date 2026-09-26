@@ -12,7 +12,7 @@ from app.api.categories import PATH_SEP
 from app.core.categorize import apply_rules
 from app.core.periods import recompute_budget_months
 from app.core.transfers import recompute_transfers
-from app.db import connect, replace_transfer_markers, upsert_accounts
+from app.db import connect, replace_transfer_markers, to_cents, upsert_accounts
 
 ACCOUNT_TYPES = ("checking", "savings")
 ALIAS_SEP = "|"
@@ -76,11 +76,31 @@ def load_transfer_markers_csv(markers_csv: Path | None, db_path: Path) -> int:
     return len(stored)
 
 
+def _parse_target(raw: str | None, line_no: int) -> int | None:
+    """categories.csv `budget_target` (euros, `.` or `,` decimal, spaces allowed) -> cents.
+    Empty or missing -> None (older files have no such column)."""
+    text = (raw or "").replace("\u00a0", "").replace(" ", "").replace(",", ".")
+    if not text:
+        return None
+    try:
+        cents = to_cents(float(text))
+    except ValueError:
+        cents = 0
+    if cents <= 0:
+        raise ValueError(
+            f"categories.csv line {line_no}: budget_target must be a positive amount, got {raw!r}"
+        )
+    return cents
+
+
 def import_categories(conn, rows: list[dict]) -> dict[str, int]:
     """Get-or-create each category along its full path; returns {path: id}. Assumes names
-    don't contain the ` / ` separator (the export format's only constraint)."""
+    don't contain the ` / ` separator (the export format's only constraint).
+
+    The optional `budget_target` column (monthly euros) sets the leaf's target. Targets are
+    leaf-only, so one landing on a node that has children is dropped with a note."""
     path_to_id: dict[str, int] = {}
-    for row in rows:
+    for line_no, row in enumerate(rows, start=2):
         path = row["path"]
         if not path:
             continue
@@ -101,6 +121,17 @@ def import_categories(conn, rows: list[dict]) -> dict[str, int]:
                     ).lastrowid
                 )
             parent_id = path_to_id[key]
+        target = _parse_target(row.get("budget_target"), line_no)
+        if target is not None:
+            conn.execute("UPDATE categories SET budget_target_cents = ? WHERE id = ?", (target, parent_id))
+    groups = conn.execute(
+        "SELECT id FROM categories c WHERE budget_target_cents IS NOT NULL "
+        "AND EXISTS (SELECT 1 FROM categories k WHERE k.parent_id = c.id)"
+    ).fetchall()
+    paths = {cid: path for path, cid in path_to_id.items()}
+    for (cid,) in groups:
+        print(f"Dropping budget target on group {paths.get(cid, cid)!r}: targets are leaf-only")
+        conn.execute("UPDATE categories SET budget_target_cents = NULL WHERE id = ?", (cid,))
     return path_to_id
 
 

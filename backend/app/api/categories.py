@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 
 from app.api.deps import get_db_path
 from app.core.categorize import apply_rules
-from app.db import connect
-from app.schemas import CategoryIn, CategoryOut
+from app.db import connect, euros, to_cents
+from app.schemas import CategoryIn, CategoryOut, CategoryTargetIn
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
@@ -35,42 +35,72 @@ def csv_response(rows: list[list], header: list[str], filename: str) -> Response
     )
 
 
-def _load_all(conn) -> list[CategoryOut]:
-    rows = conn.execute(
-        "SELECT c.id, c.name, c.parent_id, COUNT(r.id) "
-        "FROM categories c LEFT JOIN label_rules r ON r.category_id = c.id "
-        "GROUP BY c.id"
-    ).fetchall()
-    by_id = {row[0]: row for row in rows}
+def _path_map(conn) -> dict[int, str]:
+    """Map each category id to its full ` / `-joined path. Reads only id/name/parent_id, so it also
+    works on a database from before the budget-target column (reset_db.py snapshots one)."""
+    by_id = {
+        cid: (name, parent_id)
+        for cid, name, parent_id in conn.execute("SELECT id, name, parent_id FROM categories")
+    }
 
-    def lineage(category_id: int) -> list[tuple]:
+    def path(category_id: int) -> str:
         chain = []
         current: int | None = category_id
         while current is not None:
-            row = by_id[current]
-            chain.append(row)
-            current = row[2]
-        return list(reversed(chain))  # root first
+            name, current = by_id[current]
+            chain.append(name)
+        return PATH_SEP.join(reversed(chain))  # root first
 
-    out = []
-    for category_id, name, parent_id, rule_count in rows:
-        chain = lineage(category_id)
-        out.append(
-            CategoryOut(
-                id=category_id,
-                name=name,
-                parent_id=parent_id,
-                path=" / ".join(row[1] for row in chain),
-                is_root=parent_id is None,
-                rule_count=rule_count,
-            )
+    return {cid: path(cid) for cid in by_id}
+
+
+def _load_all(conn) -> list[CategoryOut]:
+    paths = _path_map(conn)
+    rows = conn.execute(
+        "SELECT c.id, c.name, c.parent_id, c.budget_target_cents, COUNT(r.id) "
+        "FROM categories c LEFT JOIN label_rules r ON r.category_id = c.id "
+        "GROUP BY c.id"
+    ).fetchall()
+    out = [
+        CategoryOut(
+            id=category_id,
+            name=name,
+            parent_id=parent_id,
+            path=paths[category_id],
+            is_root=parent_id is None,
+            rule_count=rule_count,
+            budget_target=euros(target_cents) if target_cents is not None else None,
         )
+        for category_id, name, parent_id, target_cents, rule_count in rows
+    ]
     return sorted(out, key=lambda c: c.path)
 
 
 def category_paths(conn) -> dict[int, str]:
     """Map each category id to its full ` / `-joined path (shared by the export endpoints)."""
-    return {c.id: c.path for c in _load_all(conn)}
+    return _path_map(conn)
+
+
+# categories.csv columns (Settings export, _backups/ snapshots, data/ and _config/).
+CATEGORIES_HEADER = ["path", "budget_target"]
+
+
+def category_rows(conn) -> list[list[str]]:
+    """categories.csv rows `[path, budget_target]`, sorted by path so parents precede children.
+    The target is in euros (`300.00`), empty when unset — or always empty on a database from before
+    the budget-target column (a pre-change live DB snapshotted by reset_db.py)."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)")}
+    targets: dict[int, int] = {}
+    if "budget_target_cents" in columns:
+        targets = dict(
+            conn.execute(
+                "SELECT id, budget_target_cents FROM categories WHERE budget_target_cents IS NOT NULL"
+            ).fetchall()
+        )
+    paths = _path_map(conn)
+    return sorted(
+        [path, f"{euros(targets[cid]):.2f}" if cid in targets else ""] for cid, path in paths.items()
+    )
 
 
 def reject_group_target(conn, category_id: int) -> None:
@@ -87,16 +117,21 @@ def reject_group_target(conn, category_id: int) -> None:
 
 def reject_populated_parent(conn, parent_id: int | None) -> None:
     """Keep the leaf-only invariant: refuse to nest a child under a category that already
-    has transactions or rules attached directly (it would become an unassignable group)."""
+    has transactions, rules or a budget target attached directly (it would become a group
+    carrying them)."""
     if parent_id is None:
         return
     has_tx = conn.execute("SELECT 1 FROM transactions WHERE category_id = ?", (parent_id,)).fetchone()
     has_rule = conn.execute("SELECT 1 FROM label_rules WHERE category_id = ?", (parent_id,)).fetchone()
-    if has_tx or has_rule:
+    has_target = conn.execute(
+        "SELECT 1 FROM categories WHERE id = ? AND budget_target_cents IS NOT NULL", (parent_id,)
+    ).fetchone()
+    if has_tx or has_rule or has_target:
         raise HTTPException(
             422,
             detail=[
-                "That parent already has transactions or rules; move them to a leaf before nesting under it"
+                "That parent already has transactions, rules or a budget target; "
+                "move them to a leaf before nesting under it"
             ],
         )
 
@@ -119,9 +154,8 @@ def export_categories(db_path: Path = Depends(get_db_path)) -> Response:
     """Download every category as a CSV of full paths (drop it in a config dir and rebuild with
     reset_db.py --source defaults --from DIR)."""
     with connect(db_path) as conn:
-        cats = _load_all(conn)  # already sorted by path -> parents precede children
-    rows = [[c.path] for c in cats]
-    return csv_response(rows, ["path"], "categories.csv")
+        rows = category_rows(conn)
+    return csv_response(rows, CATEGORIES_HEADER, "categories.csv")
 
 
 @router.post("", response_model=CategoryOut, status_code=201)
@@ -150,6 +184,15 @@ def create_category(category: CategoryIn, db_path: Path = Depends(get_db_path)) 
                 "UPDATE transactions SET category_id = ? WHERE category_id = ?",
                 (child_id, category.parent_id),
             ).rowcount
+            # The budget target moves down too (groups carry none, so a no-op there as well).
+            conn.execute(
+                "UPDATE categories SET budget_target_cents = "
+                "(SELECT budget_target_cents FROM categories WHERE id = ?) WHERE id = ?",
+                (category.parent_id, child_id),
+            )
+            conn.execute(
+                "UPDATE categories SET budget_target_cents = NULL WHERE id = ?", (category.parent_id,)
+            )
         result = _get_one(conn, child_id)
     if moved:
         apply_rules(db_path)  # re-derive non-manual rows through the moved rules → child
@@ -183,6 +226,20 @@ def update_category(
         return _get_one(conn, category_id)
 
 
+@router.put("/{category_id}/target", response_model=CategoryOut)
+def set_category_target(
+    category_id: int, target: CategoryTargetIn, db_path: Path = Depends(get_db_path)
+) -> CategoryOut:
+    """Set (euros, > 0) or clear (null) a leaf's monthly budget target. Groups show the sum of
+    their leaves' targets, so they cannot hold one themselves (422)."""
+    with connect(db_path) as conn:
+        _get_one(conn, category_id)  # 404 first
+        reject_group_target(conn, category_id)
+        cents = to_cents(target.budget_target) if target.budget_target is not None else None
+        conn.execute("UPDATE categories SET budget_target_cents = ? WHERE id = ?", (cents, category_id))
+        return _get_one(conn, category_id)
+
+
 @router.delete("/{category_id}", status_code=204)
 def delete_category(category_id: int, db_path: Path = Depends(get_db_path)) -> None:
     with connect(db_path) as conn:
@@ -208,6 +265,11 @@ def delete_category(category_id: int, db_path: Path = Depends(get_db_path)) -> N
             conn.execute(
                 "UPDATE transactions SET category_id = ? WHERE category_id = ? AND category_manual = 1",
                 (parent_id, category_id),
+            )
+            conn.execute(
+                "UPDATE categories SET budget_target_cents = "
+                "(SELECT budget_target_cents FROM categories WHERE id = ?) WHERE id = ?",
+                (category_id, parent_id),
             )
         else:
             # Drop: transactions fall back to auto + uncategorised; rules cascade-delete with the row.

@@ -568,7 +568,7 @@ class TestExport:
         assert resp.headers["content-type"].startswith("text/csv")
         assert "categories.csv" in resp.headers["content-disposition"]
         body = resp.content.decode("utf-8-sig")
-        assert body.splitlines()[0] == "path"
+        assert body.splitlines()[0] == "path;budget_target"
         assert "fixe / salaire" in body
         assert "variable / sortie / bar" in body
 
@@ -1055,3 +1055,126 @@ class TestUploadMatchesRebuild:
         reset_db.reset(seeded_db, "live", None)
 
         assert self._mystery(seeded_db) == ("LIVRET A", 1, "courses", "cadeau")
+
+
+def _targets(db_path) -> dict[str, int | None]:
+    with connect(db_path) as conn:
+        return dict(conn.execute("SELECT name, budget_target_cents FROM categories").fetchall())
+
+
+RULES_HEADER_ONLY = "category_path;pattern;priority;is_income_anchor;description\n"
+
+
+class TestBudgetTargets:
+    def test_set_and_clear(self, seeded_db, client):
+        bar = _category_id(client, "bar")
+        resp = client.put(f"/api/categories/{bar}/target", json={"budget_target": 45.5})
+        assert resp.status_code == 200
+        assert resp.json()["budget_target"] == 45.5
+        assert _targets(seeded_db)["bar"] == 4550
+        cats = {c["name"]: c for c in client.get("/api/categories").json()}
+        assert (cats["bar"]["budget_target"], cats["sortie"]["budget_target"]) == (45.5, None)
+        resp = client.put(f"/api/categories/{bar}/target", json={"budget_target": None})
+        assert resp.json()["budget_target"] is None
+
+    def test_rejections(self, seeded_db, client):
+        sortie = _category_id(client, "sortie")
+        bar = _category_id(client, "bar")
+        assert client.put(f"/api/categories/{sortie}/target", json={"budget_target": 10}).status_code == 422
+        assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 0}).status_code == 422
+        assert client.put("/api/categories/9999/target", json={"budget_target": 10}).status_code == 404
+
+    def test_subdivide_moves_target_down(self, seeded_db, client):
+        courses = _category_id(client, "courses")
+        client.put(f"/api/categories/{courses}/target", json={"budget_target": 300})
+        client.post("/api/categories", json={"name": "bio", "parent_id": courses})
+        targets = _targets(seeded_db)
+        assert (targets["courses"], targets["bio"]) == (None, 30000)
+
+    def test_delete_last_child_rolls_target_up(self, seeded_db, client):
+        bar = _category_id(client, "bar")
+        client.put(f"/api/categories/{bar}/target", json={"budget_target": 60})
+        client.delete(f"/api/categories/{bar}")
+        assert _targets(seeded_db)["sortie"] == 6000
+
+    def test_delete_with_siblings_drops_target(self, seeded_db, client):
+        courses = _category_id(client, "courses")
+        client.put(f"/api/categories/{courses}/target", json={"budget_target": 300})
+        client.delete(f"/api/categories/{courses}")
+        assert _targets(seeded_db)["variable"] is None
+
+    def test_reparent_under_targeted_leaf_rejected(self, seeded_db, client):
+        courses = _category_id(client, "courses")
+        client.put(f"/api/categories/{courses}/target", json={"budget_target": 300})
+        created = client.post("/api/categories", json={"name": "voyage", "parent_id": None}).json()
+        resp = client.put(f"/api/categories/{created['id']}", json={"name": "voyage", "parent_id": courses})
+        assert resp.status_code == 422
+
+    def test_export_and_round_trip(self, seeded_db, client, tmp_path):
+        from app.db import init_db
+        from scripts.import_csv import import_csv
+
+        client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": 12.5})
+        body = client.get("/api/categories/export").content.decode("utf-8-sig")
+        assert body.splitlines()[0] == "path;budget_target"
+        assert "variable / sortie / bar;12.50\n" in body
+        assert "variable / sortie;\n" in body
+
+        cats_csv = tmp_path / "categories.csv"
+        cats_csv.write_text(body, encoding="utf-8")
+        rules_csv = tmp_path / "rules.csv"
+        rules_csv.write_text(RULES_HEADER_ONLY, encoding="utf-8")
+        fresh = tmp_path / "fresh.db"
+        init_db(fresh)
+        import_csv(cats_csv, rules_csv, fresh)
+        assert _targets(fresh) == _targets(seeded_db)
+
+    def test_loader_formats(self, tmp_path, capsys):
+        from app.db import init_db
+        from scripts.import_csv import import_csv
+
+        rules_csv = tmp_path / "rules.csv"
+        rules_csv.write_text(RULES_HEADER_ONLY, encoding="utf-8")
+        fresh = tmp_path / "fresh.db"
+        init_db(fresh)
+        # An older path-only file still loads, with no targets.
+        cats_csv = tmp_path / "categories.csv"
+        cats_csv.write_text("path\nfixe\nfixe / salaire\n", encoding="utf-8")
+        import_csv(cats_csv, rules_csv, fresh)
+        assert _targets(fresh) == {"fixe": None, "salaire": None}
+        # Comma decimals and thousands spaces are accepted; a target on a group is dropped.
+        cats_csv.write_text(
+            "path;budget_target\nvariable;100\nvariable / courses;1 234,50\n", encoding="utf-8"
+        )
+        import_csv(cats_csv, rules_csv, fresh)
+        assert _targets(fresh) == {"variable": None, "courses": 123450}
+        assert "Dropping budget target on group 'variable'" in capsys.readouterr().out
+        cats_csv.write_text("path;budget_target\nvariable;-5\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="line 2"):
+            import_csv(cats_csv, rules_csv, fresh)
+
+    def test_snapshot_of_db_without_the_column(self, seeded_db, tmp_path):
+        """reset_db.py --source live snapshots a DB built before the column existed."""
+        from scripts.reset_db import export_current
+
+        with connect(seeded_db) as conn:
+            conn.execute("ALTER TABLE categories DROP COLUMN budget_target_cents")
+        cat_csv, _rules, _overrides = export_current(seeded_db, tmp_path / "snap")
+        lines = cat_csv.read_text(encoding="utf-8-sig").splitlines()
+        assert lines[0] == "path;budget_target"
+        assert "variable / sortie / bar;" in lines
+
+    def test_dashboard_budget(self, seeded_db, client):
+        _upload(client)
+        client.put(f"/api/categories/{_category_id(client, 'courses')}/target", json={"budget_target": 50})
+        body = client.get("/api/dashboard", params={"month": "2026-06"}).json()
+        budget = body["budget"]
+        assert (budget["months"], budget["target"], budget["actual"]) == (1, 50, 63.82)
+        assert budget["untargeted"] == 22.0  # BAR ANGELUS + MYSTERY SHOP
+        assert budget["groups"][0]["leaves"] == [
+            {"id": _category_id(client, "courses"), "name": "courses", "target": 50, "actual": 63.82}
+        ]
+        # The budget is read-only context: the cards still reconcile with the tree.
+        assert body["reste"] == body["by_category"]["balance"]
+        every = client.get("/api/dashboard", params={"month": "all"}).json()["budget"]
+        assert (every["months"], every["target"]) == (1, 50)

@@ -1,5 +1,6 @@
 from app.core.categorize import (
     apply_rules,
+    budget_status,
     category_tree,
     income_and_expenses,
     monthly_totals,
@@ -312,3 +313,75 @@ class TestMonthlyTotals:
         assert (row["epargne"], row["desepargne"]) == (500, 0)
         assert row["reste"] == round(row["income"] - row["expenses"] - row["epargne"] + row["desepargne"], 2)
         assert row["reste"] == category_tree(seeded_db, "2026-06")["balance"]
+
+
+def _set_target(db, name: str, cents: int | None) -> None:
+    with connect(db) as conn:
+        conn.execute("UPDATE categories SET budget_target_cents = ? WHERE name = ?", (cents, name))
+
+
+class TestBudgetStatus:
+    """Spending vs the leaves' monthly budget targets (the dashboard Budget section)."""
+
+    def test_net_spending_grouping_and_order(self, seeded_db):
+        _set_target(seeded_db, "courses", 10000)
+        _set_target(seeded_db, "bar", 1000)
+        _import(
+            seeded_db,
+            ("2026-06-05", "2026-06-05", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"),
+            ("2026-06-07", "2026-06-07", "SUPERMARCHE REMBOURSEMENT", 0, 10, "JOINT"),
+            ("2026-06-08", "2026-06-08", "BAR ANGELUS", 15, 0, "PERSO"),
+            ("2026-06-09", "2026-06-09", "MYSTERY SHOP", 7, 0, "PERSO"),
+        )
+        apply_rules(seeded_db)
+        status = budget_status(seeded_db, "2026-06")
+        # Salaire has no target, so the fixe group (and its income) never shows up.
+        assert [g["name"] for g in status["groups"]] == ["variable"]
+        variable = status["groups"][0]
+        assert (variable["target"], variable["actual"]) == (110, 85)  # the refund lowers courses
+        # Overruns first; deeper leaves carry their path below the group.
+        assert [(leaf["name"], leaf["target"], leaf["actual"]) for leaf in variable["leaves"]] == [
+            ("sortie / bar", 10, 15),
+            ("courses", 100, 70),
+        ]
+        assert (status["months"], status["target"], status["actual"]) == (1, 110, 85)
+        assert status["untargeted"] == 7  # MYSTERY SHOP; the salary is income, not an expense
+
+    def test_transfers_excluded_and_empty_leaf_shown(self, seeded_db):
+        _set_target(seeded_db, "courses", 10000)
+        _set_target(seeded_db, "bar", 1000)
+        _import(seeded_db, ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"))
+        apply_rules(seeded_db)
+        with connect(seeded_db) as conn:
+            conn.execute("UPDATE transactions SET kind = 'transfer'")
+        leaves = budget_status(seeded_db, "2026-06")["groups"][0]["leaves"]
+        assert {leaf["name"]: leaf["actual"] for leaf in leaves} == {"courses": 0, "sortie / bar": 0}
+
+    def test_all_months_multiplies_the_target(self, seeded_db):
+        _set_target(seeded_db, "courses", 10000)
+        _import(
+            seeded_db,
+            ("2026-05-06", "2026-05-06", "SUPERMARCHE", 80, 0, "JOINT"),
+            ("2026-06-06", "2026-06-06", "SUPERMARCHE", 150, 0, "JOINT"),
+        )
+        apply_rules(seeded_db)
+        status = budget_status(seeded_db, None, 2)
+        assert (status["months"], status["target"], status["actual"]) == (2, 200, 230)
+        assert budget_status(seeded_db, "2026-05")["actual"] == 80
+
+    def test_top_level_leaf_is_its_own_group(self, seeded_db):
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "INSERT INTO categories (name, parent_id, budget_target_cents) VALUES ('voyage', NULL, 5000)"
+            )
+        status = budget_status(seeded_db, "2026-06")
+        assert status["groups"] == [
+            {"id": cat_id(seeded_db, "voyage"), "name": "voyage", "target": 50, "actual": 0, "leaves": []}
+        ]
+
+    def test_no_targets(self, seeded_db):
+        _import(seeded_db, ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"))
+        apply_rules(seeded_db)
+        status = budget_status(seeded_db, "2026-06")
+        assert (status["groups"], status["target"], status["untargeted"]) == ([], 0, 80)

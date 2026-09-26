@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Category, type Rule, type Transaction, formatEuro, shortPath } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
+import { parseTarget } from "@/lib/budget";
 import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
 
 type CategoryNode = Category & { children: CategoryNode[] };
@@ -110,6 +111,9 @@ export default function SettingsPage() {
   const [editingCatId, setEditingCatId] = useState<number | null>(null);
   const [editCatName, setEditCatName] = useState("");
   const [editCatParent, setEditCatParent] = useState<number | null>(null);
+  // Inline budget-target edit (leaves only).
+  const [editingTargetId, setEditingTargetId] = useState<number | null>(null);
+  const [targetInput, setTargetInput] = useState("");
 
   // Rules: search, sort, inline edit, and a brief flash on the just-touched row.
   const [ruleQuery, setRuleQuery] = useState("");
@@ -215,6 +219,87 @@ export default function SettingsPage() {
     );
   }
 
+  function startEditTarget(node: Category) {
+    setEditingTargetId(node.id);
+    setTargetInput(node.budget_target != null ? String(node.budget_target).replace(".", ",") : "");
+  }
+
+  function saveTarget(node: Category) {
+    const target = parseTarget(targetInput);
+    if (Number.isNaN(target)) {
+      setError(`Objectif invalide pour « ${node.name} » : saisissez un montant positif, ou laissez vide.`);
+      return;
+    }
+    run(() => api.setCategoryTarget(node.id, target)).then((ok) => ok && setEditingTargetId(null));
+  }
+
+  // A group's target is the sum of its descendant leaves' targets (read-only).
+  function sumTargets(node: CategoryNode): number {
+    return node.children.length === 0
+      ? (node.budget_target ?? 0)
+      : node.children.reduce((sum, child) => sum + sumTargets(child), 0);
+  }
+
+  function renderTarget(node: CategoryNode) {
+    if (node.children.length > 0) {
+      const sum = sumTargets(node);
+      return sum > 0 ? (
+        <span className="text-xs text-zinc-400" title="Somme des objectifs de ses sous-catégories">
+          Σ {formatEuro(sum)} / mois
+        </span>
+      ) : null;
+    }
+    if (editingTargetId === node.id) {
+      return (
+        <form
+          className="flex items-center gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveTarget(node);
+          }}
+        >
+          <input
+            autoFocus
+            inputMode="decimal"
+            placeholder="aucun"
+            value={targetInput}
+            onChange={(e) => setTargetInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setEditingTargetId(null)}
+            className="w-24 rounded border border-zinc-300 px-2 py-0.5 text-right text-sm text-zinc-800"
+          />
+          <span className="text-xs text-zinc-500">€ / mois</span>
+          <button type="submit" className="rounded bg-zinc-900 px-2 py-0.5 text-xs text-white">
+            Enregistrer
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditingTargetId(null)}
+            className="text-xs text-zinc-400 hover:text-zinc-700"
+          >
+            Annuler
+          </button>
+        </form>
+      );
+    }
+    return node.budget_target != null ? (
+      <button
+        onClick={() => startEditTarget(node)}
+        className="rounded bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800 hover:bg-sky-100"
+        title="Objectif de dépense mensuel — cliquer pour modifier (vide = supprimer)"
+      >
+        {formatEuro(node.budget_target)} / mois
+      </button>
+    ) : (
+      <button
+        onClick={() => startEditTarget(node)}
+        className="text-xs text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-zinc-700 focus:opacity-100"
+        title="Définir un objectif de dépense mensuel"
+      >
+        ＋ objectif
+      </button>
+    );
+  }
+
   function startEditRule(r: Rule) {
     setEditingRuleId(r.id);
     setEditRule({
@@ -316,7 +401,7 @@ export default function SettingsPage() {
     const indent = { paddingLeft: depth * 20 + 12 };
     return (
       <div key={node.id}>
-        <div className="flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 first:border-t-0">
+        <div className="group flex items-center gap-2 border-t border-zinc-100 px-3 py-1.5 first:border-t-0">
           {editingCatId === node.id ? (
             <form
               className="flex flex-wrap items-center gap-2"
@@ -369,6 +454,7 @@ export default function SettingsPage() {
             </span>
           )}
           <span className="ml-auto flex items-center gap-2 text-zinc-400">
+            {renderTarget(node)}
             {node.rule_count > 0 && (
               <span className="text-xs" title={`${node.rule_count} règle(s)`}>
                 {node.rule_count} ⚙
@@ -395,7 +481,7 @@ export default function SettingsPage() {
                   parent != null && categories.filter((c) => c.parent_id === node.parent_id).length === 1;
                 const msg =
                   lastChild && parent
-                    ? `Supprimer « ${node.name} » ? Ses règles et opérations remonteront vers « ${parent.name} ».`
+                    ? `Supprimer « ${node.name} » ? Ses règles, opérations et son objectif remonteront vers « ${parent.name} ».`
                     : `Supprimer la catégorie « ${node.name} » ? Ses règles seront supprimées et ses opérations déclassées.`;
                 if (confirm(msg)) run(() => api.deleteCategory(node.id));
               }}
@@ -413,10 +499,12 @@ export default function SettingsPage() {
               e.preventDefault();
               const name = childName.trim();
               if (!name) return;
-              // Subdividing a populated leaf moves its rules + operations into the new child.
+              // Subdividing a populated leaf moves its rules, operations and target into the new child.
               if (
-                node.rule_count > 0 &&
-                !confirm(`« ${name} » héritera des règles et opérations de « ${node.name} ». Continuer ?`)
+                (node.rule_count > 0 || node.budget_target != null) &&
+                !confirm(
+                  `« ${name} » héritera des règles, opérations et de l’objectif de « ${node.name} ». Continuer ?`,
+                )
               )
                 return;
               run(() => api.createCategory({ name, parent_id: node.id })).then(
@@ -469,7 +557,9 @@ export default function SettingsPage() {
           Un seul arbre, indépendant du sens — revenu ou dépense dépend de chaque opération, pas de
           la catégorie. ＋ pour imbriquer une sous-catégorie sous n’importe quel nœud (sans limite de
           profondeur), ✎ pour renommer ou déplacer sous un autre groupe, ✕ pour supprimer (un groupe
-          doit d’abord être vidé de ses enfants).
+          doit d’abord être vidé de ses enfants). Sur une sous-catégorie finale, « ＋ objectif » fixe un
+          plafond de dépense mensuel (comparé au réalisé sur le tableau de bord) ; un groupe affiche la
+          somme de ses objectifs.
         </p>
         <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white text-sm">
           {tree.length === 0 ? (

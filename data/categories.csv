@@ -1,39 +1,39 @@
-path
-Déficit
-Déficit / Emprunt
-Épargne
-Fixe
-Fixe / Électricité
-Fixe / Enfants
-Fixe / Enfants / Garde
-Fixe / Enfants / Périscolaire
-Fixe / Impôt
-Fixe / Internet & téléphone
-Fixe / Salaire
-Fixe / Streaming
-Immobilier
-Immobilier / Assurance habitation
-Immobilier / Locatif
-Immobilier / Locatif / Charges
-Immobilier / Locatif / Loyer perçu
-Immobilier / Locatif / Prêt
-Immobilier / Résidence principale
-Immobilier / Résidence principale / Charges
-Immobilier / Résidence principale / Prêt
-Variable
-Variable / Cadeaux & dons
-Variable / Coiffeur
-Variable / Courses
-Variable / Frais bancaire
-Variable / Maison
-Variable / Remboursement reçu
-Variable / Restauration
-Variable / Retrait
-Variable / Santé
-Variable / Sortie
-Variable / Sortie / Bar
-Variable / Sport
-Variable / Transport
-Variable / Transport / Carburant
-Variable / Transport / Transports en commun
-Variable / Vêtements
+path;budget_target
+Déficit;
+Déficit / Emprunt;
+Épargne;
+Fixe;
+Fixe / Électricité;
+Fixe / Enfants;
+Fixe / Enfants / Garde;
+Fixe / Enfants / Périscolaire;
+Fixe / Impôt;
+Fixe / Internet & téléphone;
+Fixe / Salaire;
+Fixe / Streaming;25.00
+Immobilier;
+Immobilier / Assurance habitation;
+Immobilier / Locatif;
+Immobilier / Locatif / Charges;
+Immobilier / Locatif / Loyer perçu;
+Immobilier / Locatif / Prêt;
+Immobilier / Résidence principale;
+Immobilier / Résidence principale / Charges;
+Immobilier / Résidence principale / Prêt;
+Variable;
+Variable / Cadeaux & dons;
+Variable / Coiffeur;
+Variable / Courses;450.00
+Variable / Frais bancaire;
+Variable / Maison;
+Variable / Remboursement reçu;
+Variable / Restauration;120.00
+Variable / Retrait;
+Variable / Santé;
+Variable / Sortie;
+Variable / Sortie / Bar;60.00
+Variable / Sport;
+Variable / Transport;
+Variable / Transport / Carburant;150.00
+Variable / Transport / Transports en commun;
+Variable / Vêtements;80.00

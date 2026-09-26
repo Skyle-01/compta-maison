@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS categories (
     id        INTEGER PRIMARY KEY,
     name      TEXT NOT NULL,
     parent_id INTEGER REFERENCES categories(id),
+    budget_target_cents INTEGER,               /* monthly spending cap, leaves only; NULL = none */
     UNIQUE (parent_id, name)
 );
 

@@ -233,6 +233,89 @@ def monthly_totals(db_path: Path = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
     return result
 
 
+def budget_status(
+    db_path: Path = DEFAULT_DB_PATH, month: str | None = None, n_months: int = 1
+) -> dict[str, Any]:
+    """Spending vs budget targets (euros) for one budget month, or all months when `month` is None
+    (targets are then multiplied by `n_months`, the number of budget months covered).
+
+    A target is a monthly cap on a leaf's *net* spending: Σdebit − Σcredit of its real flows
+    (a refund lowers it; transfers are excluded). Only targeted leaves count, so an untargeted
+    income leaf (Salaire under Fixe) never offsets a group. Leaves are grouped under their
+    top-level category (deeper sub-groups flattened: the leaf's name is its path below the group);
+    a group's target/actual is the sum of its targeted leaves, and a top-level leaf is a group of
+    its own with no leaves. Groups and leaves are ordered by actual/target, overruns first.
+    `untargeted` sums the kind='expense' debits outside any targeted category (uncategorised
+    included) — the spending no target covers."""
+    with connect(db_path) as conn:
+        categories = {
+            cid: (name, parent_id, target)
+            for cid, name, parent_id, target in conn.execute(
+                "SELECT id, name, parent_id, budget_target_cents FROM categories"
+            )
+        }
+        # Both queries alias transactions as t (the untargeted one joins categories).
+        month_clause = " AND t.budget_month = ?" if month else ""
+        params: tuple = (month,) if month else ()
+        actuals = dict(
+            conn.execute(
+                "SELECT category_id, COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0) "
+                "FROM transactions t WHERE category_id IN "
+                "(SELECT id FROM categories WHERE budget_target_cents IS NOT NULL) "
+                f"AND {real_flow_clause()}{month_clause} GROUP BY category_id",
+                params,
+            ).fetchall()
+        )
+        untargeted_cents = conn.execute(
+            "SELECT COALESCE(SUM(t.debit_cents), 0) FROM transactions t "
+            "LEFT JOIN categories c ON c.id = t.category_id "
+            f"WHERE t.kind = 'expense' AND c.budget_target_cents IS NULL{month_clause}",
+            params,
+        ).fetchone()[0]
+
+    def lineage(cid: int) -> list[int]:
+        chain = [cid]
+        while categories[chain[-1]][1] is not None:
+            chain.append(categories[chain[-1]][1])
+        return list(reversed(chain))  # top-level first
+
+    groups: dict[int, dict[str, Any]] = {}
+    for cid, (_name, _parent, target) in categories.items():
+        if target is None:
+            continue
+        chain = lineage(cid)
+        top = chain[0]
+        group = groups.setdefault(
+            top, {"id": top, "name": categories[top][0], "target": 0, "actual": 0, "leaves": []}
+        )
+        leaf_target, leaf_actual = target * n_months, actuals.get(cid, 0)
+        group["target"] += leaf_target
+        group["actual"] += leaf_actual
+        if cid != top:
+            name = " / ".join(categories[c][0] for c in chain[1:])
+            group["leaves"].append({"id": cid, "name": name, "target": leaf_target, "actual": leaf_actual})
+
+    def order(item: dict[str, Any]) -> tuple:
+        return (-item["actual"] / item["target"], item["name"])
+
+    ordered = sorted(groups.values(), key=order)
+    for group in ordered:
+        group["leaves"].sort(key=order)
+        for leaf in group["leaves"]:
+            leaf["target"], leaf["actual"] = euros(leaf["target"]), euros(leaf["actual"])
+    total_target = sum(g["target"] for g in ordered)
+    total_actual = sum(g["actual"] for g in ordered)
+    for group in ordered:
+        group["target"], group["actual"] = euros(group["target"]), euros(group["actual"])
+    return {
+        "months": n_months,
+        "target": euros(total_target),
+        "actual": euros(total_actual),
+        "untargeted": euros(untargeted_cents),
+        "groups": ordered,
+    }
+
+
 def transfers_summary(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> dict[str, Any]:
     """Count and total (euros) of auto-paired internal transfers for the month. Single-legged
     external-savings deposits (transfer_group_id IS NULL) are excluded — they aren't internal

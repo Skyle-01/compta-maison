@@ -15,6 +15,7 @@ import {
 import {
   ALL_MONTHS,
   api,
+  type BudgetSummary,
   type CategoryNode,
   type Dashboard,
   type MonthTotals,
@@ -23,6 +24,7 @@ import {
   frenchMonth,
   frenchMonthShort,
 } from "@/lib/api";
+import { barWidth, budgetLeft, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
 import { type FlowNodeDatum, type FlowRole, moneyFlow } from "@/lib/moneyFlow";
 
 // The tree's structural node names come from the backend in English ("total", "uncategorised");
@@ -167,6 +169,96 @@ function ResteTrend({ history, current }: { history: MonthTotals[]; current: str
         </LineChart>
       </ResponsiveContainer>
     </div>
+  );
+}
+
+const TONE_BAR: Record<BudgetTone, string> = {
+  ok: "bg-green-500",
+  warn: "bg-amber-500",
+  over: "bg-red-500",
+};
+const TONE_TEXT: Record<BudgetTone, string> = {
+  ok: "text-zinc-400",
+  warn: "text-amber-700",
+  over: "text-red-700",
+};
+
+/** One "spent / target" line with its progress bar (a group header when `strong`). */
+function BudgetLine({
+  label,
+  actual,
+  target,
+  strong,
+}: {
+  label: string;
+  actual: number;
+  target: number;
+  strong?: boolean;
+}) {
+  const ratio = budgetRatio(actual, target);
+  const tone = budgetTone(ratio);
+  const left = budgetLeft(actual, target);
+  return (
+    <div className="py-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className={`min-w-0 truncate ${strong ? "font-medium" : "text-zinc-700"}`}>{label}</span>
+        <span className="shrink-0 tabular-nums">
+          {formatEuro(actual)} <span className="text-zinc-400">/ {formatEuro(target)}</span>
+        </span>
+      </div>
+      <div className={`mt-1 rounded-full bg-zinc-100 ${strong ? "h-2" : "h-1.5"}`}>
+        <div
+          className={`rounded-full ${TONE_BAR[tone]} ${strong ? "h-2" : "h-1.5"}`}
+          style={{ width: `${barWidth(ratio)}%` }}
+        />
+      </div>
+      <div className={`mt-0.5 text-xs ${TONE_TEXT[tone]}`}>
+        {left < 0 ? `${formatEuro(-left)} de dépassement` : `reste ${formatEuro(left)}`}
+      </div>
+    </div>
+  );
+}
+
+/** Spending vs the categories' monthly targets, one card per top-level group, overruns first
+ *  (the backend already orders groups and leaves). Hidden when no category has a target. */
+function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean }) {
+  if (budget.groups.length === 0) return null;
+  return (
+    <section>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="font-medium">
+          Budget
+          {all && (
+            <span className="ml-2 text-sm font-normal text-zinc-500">
+              sur {budget.months} mois (objectifs mensuels × {budget.months})
+            </span>
+          )}
+        </h2>
+        <Link href="/settings" className="text-xs text-zinc-500 underline hover:no-underline">
+          Modifier les objectifs
+        </Link>
+      </div>
+      <div className="rounded-lg border border-zinc-200 bg-white p-4">
+        <BudgetLine label="Total des objectifs" actual={budget.actual} target={budget.target} strong />
+        <div className="mt-3 grid gap-4 md:grid-cols-2">
+          {budget.groups.map((g) => (
+            <div key={g.id} className="rounded-md border border-zinc-100 px-3 py-1">
+              <BudgetLine label={g.name} actual={g.actual} target={g.target} strong />
+              {g.leaves.length > 0 && (
+                <div className="border-t border-zinc-100 pl-3">
+                  {g.leaves.map((l) => (
+                    <BudgetLine key={l.id} label={l.name} actual={l.actual} target={l.target} />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          Dépenses sans objectif : <span className="tabular-nums">{formatEuro(budget.untargeted)}</span>
+        </p>
+      </div>
+    </section>
   );
 }
 
@@ -380,6 +472,8 @@ export default function DashboardPage() {
       </div>
 
       <ResteTrend history={hist} current={data.month} />
+
+      <BudgetSection budget={data.budget} all={all} />
 
       {data.transfers.count > 0 && (
         <p className="text-sm text-zinc-500">
