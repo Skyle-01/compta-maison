@@ -3,7 +3,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.db import connect, init_db, upsert_accounts
+import scripts.reset_db as reset_db_module
+from app.db import connect, import_transactions, init_db, upsert_accounts
 from app.main import create_app
 
 # Fictional accounts every test db starts with (a real db loads them from accounts.csv).
@@ -36,13 +37,35 @@ def cat_id(db_path: Path, name: str) -> int:
         return conn.execute("SELECT id FROM categories WHERE name = ?", (name,)).fetchone()[0]
 
 
-@pytest.fixture
-def db(tmp_path):
-    path = tmp_path / "test.db"
+# The row dict keys parse_csv hands to import_transactions.
+ROW_COLUMNS = ["Date operation", "Date valeur", "Libelle", "Debit", "Credit", "account"]
+
+
+def import_rows(db_path: Path, *rows: tuple) -> int:
+    """Import `(date_operation, date_valeur, libelle, debit, credit, account)` tuples as parsed rows."""
+    return import_transactions([dict(zip(ROW_COLUMNS, row, strict=True)) for row in rows], db_path)
+
+
+def make_db(path: Path) -> Path:
+    """A fresh schema holding the test accounts."""
     init_db(path)
     with connect(path) as conn:
         upsert_accounts(conn, TEST_ACCOUNTS, TEST_ACCOUNT_ALIASES)
     return path
+
+
+def isolate_reset_db(tmp_path: Path, monkeypatch):
+    """Point reset_db.py's _inputs/, _backups/ and config dir at tmp_path (the same _inputs/ the app
+    archives uploads to, see _no_private_config); returns the module."""
+    monkeypatch.setattr(reset_db_module, "INPUTS_DIR", tmp_path / "_inputs")
+    monkeypatch.setattr(reset_db_module, "BACKUPS_DIR", tmp_path / "_backups")
+    monkeypatch.setattr(reset_db_module, "CONFIG_DIR", tmp_path / "_config")  # absent unless a test writes it
+    return reset_db_module
+
+
+@pytest.fixture
+def db(tmp_path):
+    return make_db(tmp_path / "test.db")
 
 
 @pytest.fixture

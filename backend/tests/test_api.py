@@ -2,8 +2,15 @@ import shutil
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
-from app.db import connect
+from app.api.categories import _load_all, category_paths
+from app.core.parsing import parse_csv
+from app.db import connect, get_transfer_markers, import_transactions, init_db
+from app.main import create_app
+from scripts.import_csv import import_csv
+from scripts.reset_db import export_current
+from tests.conftest import import_rows, isolate_reset_db, make_db
 from tests.test_parsing import GOLDEN_HASHES, GOLDEN_ROWS, _csv
 
 SAMPLE_CSV = (
@@ -503,8 +510,6 @@ class TestDashboard:
         # Real rows categorised under the Épargne / Déficit groups are ordinary income/expenses;
         # only the derived savings-account leaves feed the Épargne card. Before the fix a loan
         # credit under Déficit counted in both income and désépargne (Reste off by its amount).
-        from app.db import connect, import_transactions
-
         with connect(db) as conn:
             epargne = conn.execute("INSERT INTO categories (name) VALUES ('Épargne')").lastrowid
             deficit = conn.execute("INSERT INTO categories (name) VALUES ('Déficit')").lastrowid
@@ -514,25 +519,12 @@ class TestDashboard:
             conn.execute(
                 "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'VERSEMENT PEL')", (epargne,)
             )
-        rows = [
-            ("2026-06-02", "VIR PRET CONSO", 0, 1000, "PERSO"),
-            ("2026-06-03", "VERSEMENT PEL", 200, 0, "PERSO"),
-            ("2026-06-04", "COURSES", 50, 0, "PERSO"),
-            ("2026-06-05", "VIR de COMPTE", 0, 300, "LIVRET"),  # derived Épargne leaf
-        ]
-        import_transactions(
-            [
-                {
-                    "Date operation": d,
-                    "Date valeur": d,
-                    "Libelle": lib,
-                    "Debit": deb,
-                    "Credit": cre,
-                    "account": acc,
-                }
-                for d, lib, deb, cre, acc in rows
-            ],
+        import_rows(
             db,
+            ("2026-06-02", "2026-06-02", "VIR PRET CONSO", 0, 1000, "PERSO"),
+            ("2026-06-03", "2026-06-03", "VERSEMENT PEL", 200, 0, "PERSO"),
+            ("2026-06-04", "2026-06-04", "COURSES", 50, 0, "PERSO"),
+            ("2026-06-05", "2026-06-05", "VIR de COMPTE", 0, 300, "LIVRET"),  # derived Épargne leaf
         )
         client.post("/api/rules", json={"category_id": emprunt, "pattern": "PRET CONSO"})  # re-applies rules
 
@@ -579,10 +571,6 @@ class TestExport:
         assert "variable / sortie / bar;ANGELUS;4;0;" in body
 
     def test_round_trip(self, seeded_db, client, tmp_path):
-        from app.api.categories import _load_all, category_paths
-        from app.db import connect, init_db
-        from scripts.import_csv import import_csv
-
         def snapshot(db_path):
             with connect(db_path) as conn:
                 paths = sorted(c.path for c in _load_all(conn))
@@ -637,13 +625,6 @@ class TestExport:
         )  # manual, no kind, no note
 
     def test_overrides_round_trip(self, seeded_db, client, tmp_path):
-        from fastapi.testclient import TestClient
-
-        from app.db import connect, init_db, upsert_accounts
-        from app.main import create_app
-        from scripts.import_csv import import_csv
-        from tests.conftest import TEST_ACCOUNT_ALIASES, TEST_ACCOUNTS
-
         # Source DB: import, set a manual category + note, and (directly) a manual kind.
         _upload(client)
         mystery = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
@@ -664,10 +645,7 @@ class TestExport:
         overrides.write_bytes(client.get("/api/transactions/export-overrides").content)
 
         # Fresh DB with the same transactions (same hashes), then restore everything.
-        fresh = tmp_path / "fresh.db"
-        init_db(fresh)
-        with connect(fresh) as conn:
-            upsert_accounts(conn, TEST_ACCOUNTS, TEST_ACCOUNT_ALIASES)
+        fresh = make_db(tmp_path / "fresh.db")
         with TestClient(create_app(fresh)) as fresh_client:
             _upload(fresh_client)
         import_csv(cats, rules, fresh, overrides)
@@ -686,9 +664,6 @@ class TestExport:
     def test_refresh_export_matches_api(self, seeded_db, client, tmp_path):
         # reset_db.py snapshots the DB to CSV directly; the bytes must match the API export
         # endpoints exactly so the snapshot round-trips through import_csv.
-        from app.db import connect
-        from scripts.reset_db import export_current
-
         _upload(client)
         mystery = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
         client.patch(
@@ -708,13 +683,6 @@ class TestExport:
 
 class TestTransferOverrides:
     def test_manual_pair_and_unpair_round_trip(self, db, client, tmp_path):
-        from fastapi.testclient import TestClient
-
-        from app.db import connect, init_db, upsert_accounts
-        from app.main import create_app
-        from scripts.import_csv import import_csv
-        from tests.conftest import TEST_ACCOUNT_ALIASES, TEST_ACCOUNTS
-
         rows = _upload_transfers(client)
         client.post(
             "/api/transactions/transfer-pair",
@@ -733,10 +701,7 @@ class TestTransferOverrides:
         rules.write_bytes(client.get("/api/rules/export").content)
         overrides.write_bytes(body)
 
-        fresh = tmp_path / "fresh.db"
-        init_db(fresh)
-        with connect(fresh) as conn:
-            upsert_accounts(conn, TEST_ACCOUNTS, TEST_ACCOUNT_ALIASES)
+        fresh = make_db(tmp_path / "fresh.db")
         with TestClient(create_app(fresh)) as fresh_client:
             _upload_transfers(fresh_client)
         import_csv(cats, rules, fresh, overrides)
@@ -754,9 +719,6 @@ class TestTransferOverrides:
         assert state["VIR de COMPTE PERSO"] == ("income", 1, None)
 
     def test_old_overrides_csv_without_transfer_pair_loads(self, seeded_db, client, tmp_path):
-        from app.db import connect
-        from scripts.import_csv import import_csv
-
         _upload(client)
         with connect(seeded_db) as conn:
             hash_ = conn.execute(
@@ -781,22 +743,14 @@ class TestResetDb:
 
     def _isolate(self, tmp_path, monkeypatch):
         """Point reset_db at a temp _inputs/ (holding the sample statement) and _backups/."""
-        import scripts.reset_db as reset_db
-
-        inputs = tmp_path / "_inputs"
-        inputs.mkdir()
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
+        reset_db.INPUTS_DIR.mkdir()
         # Same filename _upload uses, so the inferred account (and thus import_hash) matches.
-        (inputs / "RELEVE_COMPTE_JOINT_2026_06_08.csv").write_bytes(SAMPLE_CSV)
-        backups = tmp_path / "_backups"
-        monkeypatch.setattr(reset_db, "INPUTS_DIR", inputs)
-        monkeypatch.setattr(reset_db, "BACKUPS_DIR", backups)
-        monkeypatch.setattr(reset_db, "CONFIG_DIR", tmp_path / "_config")  # absent unless a test writes it
-        return reset_db, backups
+        (reset_db.INPUTS_DIR / "RELEVE_COMPTE_JOINT_2026_06_08.csv").write_bytes(SAMPLE_CSV)
+        return reset_db, reset_db.BACKUPS_DIR
 
     @staticmethod
     def _mystery_row(db_path):
-        from app.db import connect
-
         with connect(db_path) as conn:
             return conn.execute(
                 "SELECT t.category_manual, c.name, t.note FROM transactions t "
@@ -805,8 +759,6 @@ class TestResetDb:
 
     @staticmethod
     def _accounts(db_path):
-        from app.db import connect
-
         with connect(db_path) as conn:
             return conn.execute(
                 "SELECT code, label, deposit_pattern FROM accounts ORDER BY sort_order, code"
@@ -814,8 +766,6 @@ class TestResetDb:
 
     @staticmethod
     def _count(db_path, table):
-        from app.db import connect
-
         with connect(db_path) as conn:
             return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
@@ -857,8 +807,6 @@ class TestResetDb:
 
         assert self._accounts(db_path) == [("MAIN", "Mon compte", None)]
         # The statement filename (RELEVE_COMPTE_JOINT_…) resolved through the private alias.
-        from app.db import connect
-
         with connect(db_path) as conn:
             assert conn.execute("SELECT DISTINCT account_id FROM transactions").fetchall() == [("MAIN",)]
             assert (
@@ -894,8 +842,6 @@ class TestResetDb:
 
         snap = next(backups.glob("*"))
         assert (snap / "transfer_markers.csv").read_text(encoding="utf-8-sig").splitlines() == ["marker", "*"]
-        from app.db import connect, get_transfer_markers
-
         with connect(seeded_db) as conn:
             assert get_transfer_markers(conn) == ["*"]
 
@@ -969,15 +915,6 @@ class TestUploadMatchesRebuild:
 
     LIVRET_FILE = "RELEVE_LIVRET_A_2026_06_08.csv"
 
-    def _reset_db(self, tmp_path, monkeypatch):
-        import scripts.reset_db as reset_db
-
-        # Same _inputs/ as the app (conftest), so the rebuild reads what the upload archived.
-        monkeypatch.setattr(reset_db, "INPUTS_DIR", tmp_path / "_inputs")
-        monkeypatch.setattr(reset_db, "BACKUPS_DIR", tmp_path / "_backups")
-        monkeypatch.setattr(reset_db, "CONFIG_DIR", tmp_path / "_config")
-        return reset_db
-
     @staticmethod
     def _mystery(db_path):
         with connect(db_path) as conn:
@@ -1002,7 +939,7 @@ class TestUploadMatchesRebuild:
         assert (tmp_path / "_inputs" / self.LIVRET_FILE).read_bytes() == SAMPLE_CSV
 
     def test_override_survives_rebuild(self, seeded_db, client, tmp_path, monkeypatch):
-        reset_db = self._reset_db(tmp_path, monkeypatch)
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
         _upload(client, filename=self.LIVRET_FILE, account="LIVRET")
         self._set_override(client)
 
@@ -1013,7 +950,7 @@ class TestUploadMatchesRebuild:
     def test_hand_picked_account_is_archived_under_an_inferable_name(
         self, seeded_db, client, tmp_path, monkeypatch
     ):
-        reset_db = self._reset_db(tmp_path, monkeypatch)
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
         body = _upload(client, filename="export.csv", account="PERSO").json()
         assert body["account"] == "PERSO"
         assert body["archived_as"].startswith("RELEVE_PERSO_") and body["archived_as"].endswith("_export.csv")
@@ -1040,10 +977,7 @@ class TestUploadMatchesRebuild:
     ):
         # A DB from before the fix holds rows uploaded under the code: their hash isn't the one the
         # rebuild computes, so the override is found again by account, date, libellé and amounts.
-        from app.core.parsing import parse_csv
-        from app.db import import_transactions
-
-        reset_db = self._reset_db(tmp_path, monkeypatch)
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
         rows = parse_csv(SAMPLE_CSV)
         for row in rows:
             row["account"] = "LIVRET"
@@ -1121,9 +1055,6 @@ class TestBudgetTargets:
         assert resp.status_code == 422
 
     def test_export_and_round_trip(self, seeded_db, client, tmp_path):
-        from app.db import init_db
-        from scripts.import_csv import import_csv
-
         client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": 12.5})
         body = client.get("/api/categories/export").content.decode("utf-8-sig")
         assert body.splitlines()[0] == "path;budget_target"
@@ -1140,9 +1071,6 @@ class TestBudgetTargets:
         assert _targets(fresh) == _targets(seeded_db)
 
     def test_loader_formats(self, tmp_path, capsys):
-        from app.db import init_db
-        from scripts.import_csv import import_csv
-
         rules_csv = tmp_path / "rules.csv"
         rules_csv.write_text(RULES_HEADER_ONLY, encoding="utf-8")
         fresh = tmp_path / "fresh.db"
@@ -1165,8 +1093,6 @@ class TestBudgetTargets:
 
     def test_snapshot_of_db_without_the_column(self, seeded_db, tmp_path):
         """reset_db.py --source live snapshots a DB built before the column existed."""
-        from scripts.reset_db import export_current
-
         with connect(seeded_db) as conn:
             conn.execute("ALTER TABLE categories DROP COLUMN budget_target_cents")
         cat_csv, _rules, _overrides = export_current(seeded_db, tmp_path / "snap")
