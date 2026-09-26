@@ -3,16 +3,6 @@
 import { useEffect, useState } from "react";
 import { api, type Account, type ImportResult, formatEuro, frenchMonth } from "@/lib/api";
 
-/** Mirrors the backend's default filename inference (not the custom bank profiles), then maps it
- * to a known account code. Only a pre-fill: the account can always be picked by hand. */
-function inferAccountCode(filename: string, accounts: Account[]): string {
-  const match = filename.match(/^RELEVE_(?:COMPTE_)?(.+?)_\d{4}/);
-  if (!match) return "";
-  const raw = match[1].replaceAll("_", " ").toUpperCase();
-  const hit = accounts.find((a) => raw.includes(a.code) || a.label.toUpperCase().includes(raw));
-  return hit?.code ?? "";
-}
-
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [account, setAccount] = useState("");
@@ -54,11 +44,7 @@ export default function ImportPage() {
             type="file"
             accept=".csv"
             className="block w-full text-sm"
-            onChange={(e) => {
-              const selected = e.target.files?.[0] ?? null;
-              setFile(selected);
-              if (selected) setAccount(inferAccountCode(selected.name, accounts));
-            }}
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
         </div>
         <div>
@@ -71,7 +57,8 @@ export default function ImportPage() {
             onChange={(e) => setAccount(e.target.value)}
             className="w-full rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
           >
-            <option value="">Choisir un compte…</option>
+            {/* Empty: the backend infers the account from the file name (bank profiles included). */}
+            <option value="">Déduire du nom du fichier</option>
             {accounts.map((a) => (
               <option key={a.code} value={a.code}>
                 {a.label} ({a.code})
@@ -81,7 +68,7 @@ export default function ImportPage() {
         </div>
         <button
           type="submit"
-          disabled={!file || !account || busy}
+          disabled={!file || busy}
           className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white disabled:opacity-40"
         >
           {busy ? "Import en cours…" : "Importer"}
