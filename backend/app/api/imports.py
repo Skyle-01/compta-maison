@@ -1,8 +1,8 @@
-from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Form, HTTPException, UploadFile
 
-from app.api.deps import get_config_dir, get_db_path, get_inputs_dir
+from app.api.deps import ConfigDir, DbPath, InputsDir
 from app.core.bank_profiles import PROFILES_FILENAME, BankProfileError, load_bank_profiles
 from app.core.categorize import apply_rules, uncategorized_balance
 from app.core.inputs import archive_statement
@@ -15,13 +15,13 @@ from app.schemas import ImportResult
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
 
-@router.post("", response_model=ImportResult, status_code=201)
+@router.post("", status_code=201)
 def upload_csv(
     file: UploadFile,
-    account: str = Form(""),
-    db_path: Path = Depends(get_db_path),
-    config_dir: Path = Depends(get_config_dir),
-    inputs_dir: Path = Depends(get_inputs_dir),
+    db_path: DbPath,
+    config_dir: ConfigDir,
+    inputs_dir: InputsDir,
+    account: Annotated[str, Form()] = "",
 ) -> ImportResult:
     try:
         profiles = load_bank_profiles(config_dir)

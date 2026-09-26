@@ -23,7 +23,7 @@ backend/
   tests/               # pytest; run: .venv/Scripts/python -m pytest backend/tests -v
   requirements.txt     # runtime deps, exact pins (fastapi, uvicorn, python-multipart)
   requirements-dev.txt # -r requirements.txt + pytest, httpx2 (TestClient transport), ruff
-  pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B)
+  pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B/FAST)
 frontend/              # Next.js App Router; src/app/{page,import,transactions,settings}
   src/app/page.tsx     # dashboard: hero summary, 4 reconciling cards + deltas & Reste sparkline, Budget section (BudgetSection), "Money flow" Sankey (FlowNode, graph from lib/moneyFlow.ts), collapsible balance tree (TreeNode)
   src/lib/api.ts       # typed fetch client (+ frenchMonth/suggestPattern helpers); /api/* proxied to :8000 via next.config.ts rewrites
@@ -100,6 +100,7 @@ Gotchas:
 - `db.connect()` is a contextmanager (commit/rollback/close) — check `cur.rowcount` inside the `with` block.
 - Amounts: cents (int) everywhere in the DB and core; convert to euros only at the API boundary (`db.euros`/`db.to_cents`).
 - Type hints on all public functions; Pydantic models in `schemas.py` for everything crossing the API.
+- Routes: dependencies and `Query`/`Form` params as `Annotated` (`db_path: DbPath`, aliases in `api/deps.py`); the response model comes from the return annotation, no `response_model=` (ruff `FAST` enforces both).
 - **Git**: no pull requests in this project — commit directly to `main` and push (a session working on another branch fast-forwards `main` to it once checks pass).
 - **Backlog**: `backlog/{bug,feat,tech}/<slug>.md`, one item per file (template in `backlog/README.md`): context, everything needed to fix or investigate, dated progress notes. Update the item while working on it; delete the file in the commit that finishes it. No ids, no priorities.
 - Backend formatted by `ruff format` (110 cols); `ruff check` and the frontend eslint must pass (CI enforces). Never hand-resolve a formatting conflict: re-run `ruff format`.

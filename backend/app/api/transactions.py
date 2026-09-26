@@ -1,10 +1,11 @@
 import sqlite3
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.api.categories import category_paths, csv_response, reject_group_target
-from app.api.deps import get_db_path
+from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.transfers import pair_manually, set_transfer_mode
 from app.db import connect, euros, real_flow_clause
@@ -108,8 +109,9 @@ def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[
     ]
 
 
-@router.get("", response_model=TransactionPage)
+@router.get("")
 def list_transactions(
+    db_path: DbPath,
     month: str | None = None,
     account: str | None = None,
     category_id: int | None = None,
@@ -117,9 +119,8 @@ def list_transactions(
     uncategorized: bool = False,
     manual: bool = False,
     manual_transfer: bool = False,
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    db_path: Path = Depends(get_db_path),
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TransactionPage:
     where = ["1=1"]
     params: list = []
@@ -157,7 +158,7 @@ def list_transactions(
 
 
 @router.get("/export-overrides")
-def export_overrides(db_path: Path = Depends(get_db_path)) -> Response:
+def export_overrides(db_path: DbPath) -> Response:
     """Download every manual override, keyed by the stable import_hash so it survives a
     delete-and-rebuild (restored by reset_db.py from an overrides.csv next to the taxonomy)."""
     with connect(db_path) as conn:
@@ -173,8 +174,8 @@ def _load(db_path: Path, ids: list[int]) -> list[Transaction]:
     return [_to_model(r) for r in rows]
 
 
-@router.post("/transfer-pair", response_model=list[Transaction])
-def pair_transfer(pair: TransferPairIn, db_path: Path = Depends(get_db_path)) -> list[Transaction]:
+@router.post("/transfer-pair")
+def pair_transfer(pair: TransferPairIn, db_path: DbPath) -> list[Transaction]:
     """Force two operations (one debit, one credit, same amount, two accounts) into a transfer."""
     a_id, b_id = pair.transaction_ids
     try:
@@ -186,10 +187,8 @@ def pair_transfer(pair: TransferPairIn, db_path: Path = Depends(get_db_path)) ->
     return _load(db_path, [a_id, b_id])
 
 
-@router.put("/{transaction_id}/transfer", response_model=list[Transaction])
-def set_transfer(
-    transaction_id: int, body: TransferModeIn, db_path: Path = Depends(get_db_path)
-) -> list[Transaction]:
+@router.put("/{transaction_id}/transfer")
+def set_transfer(transaction_id: int, body: TransferModeIn, db_path: DbPath) -> list[Transaction]:
     """Manual transfer decision on one row (and its partner): transfer / none (unpair) / auto."""
     try:
         touched = set_transfer_mode(db_path, transaction_id, body.mode)
@@ -198,11 +197,11 @@ def set_transfer(
     return _load(db_path, touched)
 
 
-@router.patch("/{transaction_id}", response_model=Transaction)
+@router.patch("/{transaction_id}")
 def patch_transaction(
     transaction_id: int,
     patch: TransactionPatch,
-    db_path: Path = Depends(get_db_path),
+    db_path: DbPath,
 ) -> Transaction:
     # Only the fields the caller actually sent are applied (model_fields_set distinguishes an omitted
     # field from one explicitly set to null) — so a caller can set the category, the note, or both.

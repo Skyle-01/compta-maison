@@ -1,10 +1,10 @@
 import sqlite3
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response
 
 from app.api.categories import category_paths, csv_response, reject_group_target
-from app.api.deps import get_db_path
+from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.periods import recompute_budget_months
 from app.db import connect
@@ -44,8 +44,8 @@ def _refresh(db_path: Path) -> None:
     recompute_budget_months(db_path)
 
 
-@router.get("", response_model=list[RuleOut])
-def list_rules(category_id: int | None = None, db_path: Path = Depends(get_db_path)) -> list[RuleOut]:
+@router.get("")
+def list_rules(db_path: DbPath, category_id: int | None = None) -> list[RuleOut]:
     query = f"SELECT {_COLUMNS} FROM label_rules"
     params: tuple = ()
     if category_id is not None:
@@ -57,7 +57,7 @@ def list_rules(category_id: int | None = None, db_path: Path = Depends(get_db_pa
 
 
 @router.get("/export")
-def export_rules(db_path: Path = Depends(get_db_path)) -> Response:
+def export_rules(db_path: DbPath) -> Response:
     """Download every rule as CSV, keyed by category path (drop it in a config dir and rebuild
     with reset_db.py --source defaults --from DIR)."""
     with connect(db_path) as conn:
@@ -65,8 +65,8 @@ def export_rules(db_path: Path = Depends(get_db_path)) -> Response:
     return csv_response(rows, RULES_HEADER, "rules.csv")
 
 
-@router.post("", response_model=RuleOut, status_code=201)
-def create_rule(rule: RuleIn, db_path: Path = Depends(get_db_path)) -> RuleOut:
+@router.post("", status_code=201)
+def create_rule(rule: RuleIn, db_path: DbPath) -> RuleOut:
     try:
         with connect(db_path) as conn:
             reject_group_target(conn, rule.category_id)
@@ -82,8 +82,8 @@ def create_rule(rule: RuleIn, db_path: Path = Depends(get_db_path)) -> RuleOut:
     return RuleOut(id=rule_id, **rule.model_dump())
 
 
-@router.put("/{rule_id}", response_model=RuleOut)
-def update_rule(rule_id: int, rule: RuleIn, db_path: Path = Depends(get_db_path)) -> RuleOut:
+@router.put("/{rule_id}")
+def update_rule(rule_id: int, rule: RuleIn, db_path: DbPath) -> RuleOut:
     try:
         with connect(db_path) as conn:
             reject_group_target(conn, rule.category_id)
@@ -108,7 +108,7 @@ def update_rule(rule_id: int, rule: RuleIn, db_path: Path = Depends(get_db_path)
 
 
 @router.delete("/{rule_id}", status_code=204)
-def delete_rule(rule_id: int, db_path: Path = Depends(get_db_path)) -> None:
+def delete_rule(rule_id: int, db_path: DbPath) -> None:
     with connect(db_path) as conn:
         cur = conn.execute("DELETE FROM label_rules WHERE id = ?", (rule_id,))
         if cur.rowcount == 0:

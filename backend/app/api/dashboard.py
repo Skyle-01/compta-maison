@@ -1,9 +1,8 @@
-from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from app.api.deps import get_db_path
+from app.api.deps import DbPath
 from app.core.categorize import (
     budget_status,
     category_tree,
@@ -29,8 +28,8 @@ def _savings_leaves(node: dict[str, Any]) -> list[dict[str, Any]]:
     return [leaf for child in node["children"] for leaf in _savings_leaves(child)]
 
 
-@router.get("", response_model=Dashboard)
-def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)) -> Dashboard:
+@router.get("")
+def get_dashboard(db_path: DbPath, month: str | None = None) -> Dashboard:
     with connect(db_path) as conn:
         months = [
             m

@@ -1,11 +1,10 @@
 import csv
 import io
 import sqlite3
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Response
 
-from app.api.deps import get_db_path
+from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.db import connect, euros, to_cents
 from app.schemas import CategoryIn, CategoryOut, CategoryTargetIn
@@ -143,14 +142,14 @@ def _get_one(conn, category_id: int) -> CategoryOut:
     raise HTTPException(404, detail=[f"No category with id {category_id}"])
 
 
-@router.get("", response_model=list[CategoryOut])
-def list_categories(db_path: Path = Depends(get_db_path)) -> list[CategoryOut]:
+@router.get("")
+def list_categories(db_path: DbPath) -> list[CategoryOut]:
     with connect(db_path) as conn:
         return _load_all(conn)
 
 
 @router.get("/export")
-def export_categories(db_path: Path = Depends(get_db_path)) -> Response:
+def export_categories(db_path: DbPath) -> Response:
     """Download every category as a CSV of full paths (drop it in a config dir and rebuild with
     reset_db.py --source defaults --from DIR)."""
     with connect(db_path) as conn:
@@ -158,8 +157,8 @@ def export_categories(db_path: Path = Depends(get_db_path)) -> Response:
     return csv_response(rows, CATEGORIES_HEADER, "categories.csv")
 
 
-@router.post("", response_model=CategoryOut, status_code=201)
-def create_category(category: CategoryIn, db_path: Path = Depends(get_db_path)) -> CategoryOut:
+@router.post("", status_code=201)
+def create_category(category: CategoryIn, db_path: DbPath) -> CategoryOut:
     with connect(db_path) as conn:
         try:
             cur = conn.execute(
@@ -199,10 +198,8 @@ def create_category(category: CategoryIn, db_path: Path = Depends(get_db_path)) 
     return result
 
 
-@router.put("/{category_id}", response_model=CategoryOut)
-def update_category(
-    category_id: int, category: CategoryIn, db_path: Path = Depends(get_db_path)
-) -> CategoryOut:
+@router.put("/{category_id}")
+def update_category(category_id: int, category: CategoryIn, db_path: DbPath) -> CategoryOut:
     with connect(db_path) as conn:
         # Reject cycles: the new parent must not be the category itself or one of its descendants.
         current: int | None = category.parent_id
@@ -226,10 +223,8 @@ def update_category(
         return _get_one(conn, category_id)
 
 
-@router.put("/{category_id}/target", response_model=CategoryOut)
-def set_category_target(
-    category_id: int, target: CategoryTargetIn, db_path: Path = Depends(get_db_path)
-) -> CategoryOut:
+@router.put("/{category_id}/target")
+def set_category_target(category_id: int, target: CategoryTargetIn, db_path: DbPath) -> CategoryOut:
     """Set (euros, > 0) or clear (null) a leaf's monthly budget target. Groups show the sum of
     their leaves' targets, so they cannot hold one themselves (422)."""
     with connect(db_path) as conn:
@@ -243,7 +238,7 @@ def set_category_target(
 
 
 @router.delete("/{category_id}", status_code=204)
-def delete_category(category_id: int, db_path: Path = Depends(get_db_path)) -> None:
+def delete_category(category_id: int, db_path: DbPath) -> None:
     with connect(db_path) as conn:
         child = conn.execute("SELECT id FROM categories WHERE parent_id = ?", (category_id,)).fetchone()
         if child:
