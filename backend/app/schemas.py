@@ -1,6 +1,8 @@
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field
+
+from app.core.transfers import TransferMode
 
 
 class ImportResult(BaseModel):
@@ -58,7 +60,7 @@ class TransferPairIn(BaseModel):
 
 
 class TransferModeIn(BaseModel):
-    mode: Literal["transfer", "none", "auto"] = Field(
+    mode: TransferMode = Field(
         description="'transfer' = this row alone is a transfer, 'none' = not a transfer (unpair), "
         "'auto' = back to automatic detection"
     )

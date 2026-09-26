@@ -98,7 +98,7 @@ Gotchas:
 - Rule patterns are plain substrings — never regex metacharacters.
 - `core/` does logic only — no FastAPI imports; routers do I/O orchestration and HTTP errors.
 - `db.connect()` is a contextmanager (commit/rollback/close) — check `cur.rowcount` inside the `with` block.
-- Amounts: cents (int) everywhere in the DB and core; convert to euros only at the API boundary (`db.euros`/`db.to_cents`).
+- Amounts: cents (int) in the DB and core logic; convert with `db.euros`/`db.to_cents`. The one exception: `core/categorize.py`'s dashboard aggregates (`category_tree`, `income_and_expenses`, `uncategorized_balance`, `transfers_summary`, `monthly_totals`, `budget_status`) already return euros, and `api/dashboard.py` combines them with `round(..., 2)`.
 - Type hints on all public functions; Pydantic models in `schemas.py` for everything crossing the API.
 - Routes: dependencies and `Query`/`Form` params as `Annotated` (`db_path: DbPath`, aliases in `api/deps.py`); the response model comes from the return annotation, no `response_model=` (ruff `FAST` enforces both).
 - **Git**: no pull requests in this project — commit directly to `main` and push (a session working on another branch fast-forwards `main` to it once checks pass).
