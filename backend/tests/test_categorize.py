@@ -380,6 +380,13 @@ class TestBudgetStatus:
             {"id": cat_id(seeded_db, "voyage"), "name": "voyage", "target": 50, "actual": 0, "leaves": []}
         ]
 
+    def test_zero_target_does_not_divide_by_zero(self, seeded_db):
+        _set_target(seeded_db, "courses", 10000)
+        _set_target(seeded_db, "bar", 1000)
+        status = budget_status(seeded_db, None, 0)
+        assert status["target"] == 0
+        assert [leaf["name"] for leaf in status["groups"][0]["leaves"]] == ["courses", "sortie / bar"]
+
     def test_no_targets(self, seeded_db):
         _import(seeded_db, ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"))
         apply_rules(seeded_db)

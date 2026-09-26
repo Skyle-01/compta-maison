@@ -69,5 +69,6 @@ def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)
         uncategorized=uncategorized_balance(db_path, period),
         transfers=transfers_summary(db_path, period),
         history=monthly_totals(db_path),
-        budget=budget_status(db_path, period, len(months) if period is None else 1),
+        # With no data yet there is no month: count one so targets still show at face value.
+        budget=budget_status(db_path, period, max(1, len(months)) if period is None else 1),
     )

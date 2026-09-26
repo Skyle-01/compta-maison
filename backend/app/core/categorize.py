@@ -296,7 +296,9 @@ def budget_status(
             group["leaves"].append({"id": cid, "name": name, "target": leaf_target, "actual": leaf_actual})
 
     def order(item: dict[str, Any]) -> tuple:
-        return (-item["actual"] / item["target"], item["name"])
+        # A zero target (no budget month yet) cannot rank by ratio: keep it last.
+        ratio = item["actual"] / item["target"] if item["target"] else 0
+        return (-ratio, item["name"])
 
     ordered = sorted(groups.values(), key=order)
     for group in ordered:

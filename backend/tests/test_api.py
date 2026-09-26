@@ -1083,6 +1083,16 @@ class TestBudgetTargets:
         assert client.put(f"/api/categories/{sortie}/target", json={"budget_target": 10}).status_code == 422
         assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 0}).status_code == 422
         assert client.put("/api/categories/9999/target", json={"budget_target": 10}).status_code == 404
+        # Rounds to 0 cents: rejected rather than stored as a zero target.
+        assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 0.001}).status_code == 422
+
+    def test_dashboard_without_transactions(self, seeded_db, client):
+        """A fresh DB with targets (data/ ships some) but nothing imported yet."""
+        client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": 60})
+        resp = client.get("/api/dashboard")
+        assert resp.status_code == 200
+        budget = resp.json()["budget"]
+        assert (budget["months"], budget["target"], budget["actual"]) == (1, 60, 0)
 
     def test_subdivide_moves_target_down(self, seeded_db, client):
         courses = _category_id(client, "courses")

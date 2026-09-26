@@ -236,6 +236,8 @@ def set_category_target(
         _get_one(conn, category_id)  # 404 first
         reject_group_target(conn, category_id)
         cents = to_cents(target.budget_target) if target.budget_target is not None else None
+        if cents is not None and cents <= 0:
+            raise HTTPException(422, detail=["A budget target must be at least 0.01 €"])
         conn.execute("UPDATE categories SET budget_target_cents = ? WHERE id = ?", (cents, category_id))
         return _get_one(conn, category_id)
 
