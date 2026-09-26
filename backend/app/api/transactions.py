@@ -109,19 +109,16 @@ def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[
     ]
 
 
-@router.get("")
-def list_transactions(
-    db_path: DbPath,
-    month: str | None = None,
-    account: str | None = None,
-    category_id: int | None = None,
-    libelle_contains: str | None = None,
-    uncategorized: bool = False,
-    manual: bool = False,
-    manual_transfer: bool = False,
-    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
-    offset: Annotated[int, Query(ge=0)] = 0,
-) -> TransactionPage:
+def _filter_clause(
+    month: str | None,
+    account: str | None,
+    category_id: int | None,
+    libelle_contains: str | None,
+    uncategorized: bool,
+    manual: bool,
+    manual_transfer: bool,
+) -> tuple[str, list]:
+    """The WHERE clause (over `transactions t`) and params shared by the list and the export."""
     where = ["1=1"]
     params: list = []
     if month:
@@ -146,8 +143,25 @@ def list_transactions(
         # Manual transfer decisions; both legs of a manual pair are flagged, so the caller can
         # rebuild the pair from transfer_group_id.
         where.append("t.kind_manual = 1")
-    clause = " AND ".join(where)
+    return " AND ".join(where), params
 
+
+@router.get("")
+def list_transactions(
+    db_path: DbPath,
+    month: str | None = None,
+    account: str | None = None,
+    category_id: int | None = None,
+    libelle_contains: str | None = None,
+    uncategorized: bool = False,
+    manual: bool = False,
+    manual_transfer: bool = False,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> TransactionPage:
+    clause, params = _filter_clause(
+        month, account, category_id, libelle_contains, uncategorized, manual, manual_transfer
+    )
     with connect(db_path) as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM transactions t WHERE {clause}", params).fetchone()[0]
         rows = conn.execute(
@@ -155,6 +169,82 @@ def list_transactions(
             [*params, limit, offset],
         ).fetchall()
     return TransactionPage(items=[_to_model(r) for r in rows], total=total)
+
+
+# The spreadsheet export is for a person opening it in Excel (French locale), unlike the
+# import_csv.py-shaped Settings exports: French headers, dd/mm/yyyy dates, comma decimals.
+EXPORT_HEADER = [
+    "Date opération",
+    "Date valeur",
+    "Mois budgétaire",
+    "Compte",
+    "Libellé",
+    "Débit",
+    "Crédit",
+    "Type",
+    "Catégorie",
+    "Note",
+]
+_KIND_LABELS = {"income": "revenu", "expense": "dépense", "transfer": "virement"}
+
+
+def _french_date(iso: str) -> str:
+    year, month, day = iso.split("-")
+    return f"{day}/{month}/{year}"
+
+
+def _french_amount(cents: int) -> str:
+    return f"{cents / 100:.2f}".replace(".", ",") if cents else ""
+
+
+@router.get("/export")
+def export_transactions(
+    db_path: DbPath,
+    month: str | None = None,
+    account: str | None = None,
+    category_id: int | None = None,
+    libelle_contains: str | None = None,
+    uncategorized: bool = False,
+) -> Response:
+    """Download the transactions matching the list filters (no pagination), oldest first."""
+    clause, params = _filter_clause(
+        month, account, category_id, libelle_contains, uncategorized, manual=False, manual_transfer=False
+    )
+    with connect(db_path) as conn:
+        paths = category_paths(conn)
+        rows = conn.execute(
+            "SELECT t.date_operation, t.date_valeur, t.budget_month, t.account_id, t.libelle, "
+            "t.debit_cents, t.credit_cents, t.kind, t.category_id, t.note "
+            f"FROM transactions t WHERE {clause} ORDER BY t.date_valeur, t.id",
+            params,
+        ).fetchall()
+    out = [
+        [
+            _french_date(date_operation),
+            _french_date(date_valeur),
+            budget_month,
+            account_id or "",
+            libelle,
+            _french_amount(debit_cents),
+            _french_amount(credit_cents),
+            _KIND_LABELS.get(kind, kind),
+            paths.get(category_id, "") if category_id else "",
+            note or "",
+        ]
+        for (
+            date_operation,
+            date_valeur,
+            budget_month,
+            account_id,
+            libelle,
+            debit_cents,
+            credit_cents,
+            kind,
+            category_id,
+            note,
+        ) in rows
+    ]
+    return csv_response(out, EXPORT_HEADER, f"transactions_{month or 'tout'}.csv")
 
 
 @router.get("/export-overrides")
