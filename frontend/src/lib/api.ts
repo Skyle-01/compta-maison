@@ -171,6 +171,7 @@ export const api = {
     libelleContains?: string;
     uncategorized?: boolean;
     manual?: boolean;
+    manualTransfer?: boolean;
     limit?: number;
     offset?: number;
   }): Promise<TransactionPage> {
@@ -181,6 +182,7 @@ export const api = {
     if (params.libelleContains) search.set("libelle_contains", params.libelleContains);
     if (params.uncategorized) search.set("uncategorized", "true");
     if (params.manual) search.set("manual", "true");
+    if (params.manualTransfer) search.set("manual_transfer", "true");
     if (params.limit) search.set("limit", String(params.limit));
     if (params.offset) search.set("offset", String(params.offset));
     return request(`/api/transactions?${search}`);

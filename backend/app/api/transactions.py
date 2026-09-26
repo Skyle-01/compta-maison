@@ -116,6 +116,7 @@ def list_transactions(
     libelle_contains: str | None = None,
     uncategorized: bool = False,
     manual: bool = False,
+    manual_transfer: bool = False,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     db_path: Path = Depends(get_db_path),
@@ -140,6 +141,10 @@ def list_transactions(
         where.append(f"t.category_id IS NULL AND {real_flow_clause('t.kind')}")
     if manual:
         where.append("t.category_manual = 1")
+    if manual_transfer:
+        # Manual transfer decisions; both legs of a manual pair are flagged, so the caller can
+        # rebuild the pair from transfer_group_id.
+        where.append("t.kind_manual = 1")
     clause = " AND ".join(where)
 
     with connect(db_path) as conn:

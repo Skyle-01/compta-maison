@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, type Category, type Rule, type Transaction, formatEuro, shortPath } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
+import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
 
 type CategoryNode = Category & { children: CategoryNode[] };
 
@@ -775,7 +776,120 @@ export default function SettingsPage() {
           </table>
         </div>
       </section>
+
+      <ManualTransfersSection />
     </div>
+  );
+}
+
+const TRANSFER_TYPE_LABEL: Record<ManualTransfer["type"], string> = {
+  pair: "Virement associé",
+  single: "Virement seul",
+  none: "Pas un virement",
+};
+
+function amountCell(tx: Transaction) {
+  return (
+    <span className={tx.credit > 0 ? "text-green-700" : "text-red-700"}>
+      {formatEuro(tx.credit > 0 ? tx.credit : -tx.debit)}
+    </span>
+  );
+}
+
+/** Transfer decisions made on the Transactions page (kind_manual), with a way back to detection. */
+function ManualTransfersSection() {
+  const [rows, setRows] = useState<Transaction[]>([]);
+  const [status, setStatus] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .listTransactions({ manualTransfer: true, limit: 1000 })
+      .then((page) => setRows(page.items))
+      .catch((e) => setStatus(String(e)));
+  }, []);
+
+  useEffect(load, [load]);
+
+  async function backToAuto(id: number) {
+    setStatus(null);
+    try {
+      await api.setTransferMode(id, "auto");
+      load();
+    } catch (e) {
+      setStatus(String(e));
+    }
+  }
+
+  const decisions = groupManualTransfers(rows);
+
+  return (
+    <section className="space-y-3">
+      <h1 className="text-xl font-semibold">Virements manuels</h1>
+      <p className="text-sm text-zinc-500">
+        Les décisions prises sur la page Transactions : deux opérations associées en virement, une
+        opération marquée comme virement seule, ou un virement détecté que vous avez dissocié. « Auto »
+        rend l’opération (et son éventuel partenaire) à la détection automatique. Elles font partie
+        de l’export des modifications manuelles ci-dessus.
+      </p>
+      {status && <p className="text-sm text-red-700">{status}</p>}
+
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 text-left text-zinc-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Type</th>
+              <th className="px-3 py-2 font-medium">Date</th>
+              <th className="px-3 py-2 font-medium">Opération(s)</th>
+              <th className="px-3 py-2 text-right font-medium">Montant</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {decisions.map((d) => {
+              const legs = d.type === "pair" ? [d.debit, d.credit] : [d.tx];
+              return (
+                <tr key={legs[0].id} className="border-t border-zinc-100 align-top">
+                  <td className="whitespace-nowrap px-3 py-1.5">{TRANSFER_TYPE_LABEL[d.type]}</td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">
+                    {legs.map((t) => (
+                      <div key={t.id}>{t.date_valeur}</div>
+                    ))}
+                  </td>
+                  <td className="max-w-md px-3 py-1.5">
+                    {legs.map((t) => (
+                      <div key={t.id} className="truncate" title={t.libelle}>
+                        <span className="text-zinc-500">{t.account_id ?? t.account}</span> · {t.libelle}
+                      </div>
+                    ))}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                    {legs.map((t) => (
+                      <div key={t.id}>{amountCell(t)}</div>
+                    ))}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                    <button
+                      onClick={() => backToAuto(legs[0].id)}
+                      className="text-zinc-400 hover:text-zinc-900"
+                      title="Revenir à la détection automatique"
+                    >
+                      Auto
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {decisions.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-3 py-6 text-center text-zinc-500">
+                  Aucune décision manuelle sur les virements.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

@@ -322,6 +322,18 @@ class TestTransferApi:
         assert client.put(f"/api/transactions/{leg}/transfer", json={"mode": "bogus"}).status_code == 422
         assert client.put("/api/transactions/9999/transfer", json={"mode": "auto"}).status_code == 404
 
+    def test_manual_transfer_filter(self, db, client):
+        rows = _upload_transfers(client)
+        assert client.get("/api/transactions", params={"manual_transfer": True}).json()["total"] == 0
+        card, friend = rows["CARTE 12/06 SUPERMARCHE"]["id"], rows["VIR SEPA RECU /DE AMI"]["id"]
+        client.post("/api/transactions/transfer-pair", json={"transaction_ids": [card, friend]})
+        items = client.get("/api/transactions", params={"manual_transfer": True}).json()["items"]
+        assert {t["id"] for t in items} == {card, friend}
+        assert items[0]["transfer_group_id"] == items[1]["transfer_group_id"] is not None
+
+        client.put(f"/api/transactions/{card}/transfer", json={"mode": "auto"})
+        assert client.get("/api/transactions", params={"manual_transfer": True}).json()["total"] == 0
+
     def test_transfer_markers_endpoints(self, db, client):
         assert client.get("/api/transfer-markers").json() == {"markers": ["VIR"], "is_default": True}
         rows = _upload_transfers(client)
