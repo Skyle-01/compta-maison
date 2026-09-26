@@ -56,8 +56,8 @@ After that, import new statements from the Import page: each upload is also copi
 (under its own name, or `RELEVE_<account>_<date>_<name>.csv` when you picked the account by hand),
 so a rebuild keeps it. Edit categories, rules and transfer markers from the app's Settings page. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
-pair; these manual decisions are kept across rebuilds. To rebuild while keeping them
-(for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current
+pair; these manual decisions are listed in Settings and kept across rebuilds. To rebuild while
+keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current
 setup to `_backups/<timestamp>/` first. `--source backup` restores the latest snapshot. Copy a
 snapshot's files into `_config/` to make it your new reference setup.
 
