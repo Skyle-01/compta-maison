@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, type Account, type ImportResult, formatEuro, frenchMonth } from "@/lib/api";
+import {
+  api,
+  errorMessage,
+  type Account,
+  type ImportResult,
+  formatEuro,
+  frenchMonth,
+} from "@/lib/api";
 
 export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -24,7 +31,7 @@ export default function ImportPage() {
     try {
       setResult(await api.uploadCsv(file, account));
     } catch (err) {
-      setErrors(err instanceof Error ? err.message.split("\n") : [String(err)]);
+      setErrors(errorMessage(err).split("\n"));
     } finally {
       setBusy(false);
     }

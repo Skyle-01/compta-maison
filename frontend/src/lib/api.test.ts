@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { formatEuro, frenchMonth, frenchMonthShort, suggestPattern } from "./api";
+import {
+  ApiError,
+  errorDetails,
+  errorMessage,
+  formatEuro,
+  frenchMonth,
+  frenchMonthShort,
+  suggestPattern,
+} from "./api";
 
 // Intl's fr-FR output uses (narrow) no-break spaces; compare with plain ones.
 const plain = (s: string) => s.replace(/[  ]/g, " ");
@@ -29,5 +37,37 @@ describe("suggestPattern", () => {
   });
   it("leaves other labels alone", () => {
     expect(suggestPattern("VIR EMPLOYEUR SALAIRE")).toBe("VIR EMPLOYEUR SALAIRE");
+  });
+});
+
+describe("errorDetails", () => {
+  it("keeps the routers' string details", () => {
+    expect(errorDetails("Unknown account")).toEqual(["Unknown account"]);
+    expect(errorDetails(["line 3: bad date", "line 7: bad amount"])).toEqual([
+      "line 3: bad date",
+      "line 7: bad amount",
+    ]);
+  });
+  it("shows a validation error by its msg, not [object Object]", () => {
+    const detail = [
+      { type: "string_too_short", loc: ["body", "pattern"], msg: "String should have at least 1 character" },
+      "plain",
+    ];
+    expect(errorDetails(detail)).toEqual(["String should have at least 1 character", "plain"]);
+  });
+  it("is empty when there is no detail", () => {
+    expect(errorDetails(undefined)).toEqual([]);
+    expect(errorDetails("")).toEqual([]);
+    expect(errorDetails([])).toEqual([]);
+  });
+});
+
+describe("errorMessage", () => {
+  it("drops the English Error: prefix", () => {
+    expect(errorMessage(new ApiError(422, ["a", "b"]))).toBe("a\nb");
+    expect(errorMessage(new TypeError("Failed to fetch"))).toBe("Failed to fetch");
+  });
+  it("stringifies anything else", () => {
+    expect(errorMessage("boom")).toBe("boom");
   });
 });

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  errorMessage,
   type Category,
   type Transaction,
   type TransferMode,
@@ -50,7 +51,7 @@ export default function TransactionsPage() {
     const params = new URLSearchParams(window.location.search);
     const urlMonth = params.get("month");
     const urlUncategorized = Boolean(params.get("uncategorized"));
-    api.listCategories().then(setCategories).catch((e) => setError(String(e)));
+    api.listCategories().then(setCategories).catch((e) => setError(errorMessage(e)));
     api
       .dashboard()
       .then((d) => {
@@ -60,7 +61,7 @@ export default function TransactionsPage() {
         if (urlMonth !== null) setMonth(urlMonth);
         else if (d.month) setMonth(d.month);
       })
-      .catch((e) => setError(String(e)))
+      .catch((e) => setError(errorMessage(e)))
       .finally(() => setReady(true));
   }, []);
 
@@ -77,7 +78,7 @@ export default function TransactionsPage() {
         setItems(page.items);
         setTotal(page.total);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errorMessage(e)));
   }, [ready, month, onlyUncategorized, offset]);
 
   useEffect(load, [load]);
@@ -149,7 +150,7 @@ export default function TransactionsPage() {
       setEditingTxId(null);
       load();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   }
 
@@ -170,7 +171,7 @@ export default function TransactionsPage() {
       setFlash(message);
       load();
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   }
 

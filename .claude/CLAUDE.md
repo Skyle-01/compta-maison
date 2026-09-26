@@ -26,7 +26,7 @@ backend/
   pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B/FAST)
 frontend/              # Next.js App Router; src/app/{page,import,transactions,settings}
   src/app/page.tsx     # dashboard: hero summary, 4 reconciling cards + deltas & Reste sparkline, Budget section (BudgetSection), "Money flow" Sankey (FlowNode, graph from lib/moneyFlow.ts), collapsible balance tree (TreeNode)
-  src/lib/api.ts       # typed fetch client (+ frenchMonth/suggestPattern helpers); /api/* proxied to :8000 via next.config.ts rewrites
+  src/lib/api.ts       # typed fetch client (+ frenchMonth/suggestPattern/errorMessage helpers); /api/* proxied to :8000 via next.config.ts rewrites; ApiError carries the `detail` strings (validation objects by their `msg`), pages show `errorMessage(e)` (never `String(e)`, which prefixes an English "Error: ")
   src/lib/moneyFlow.ts # the Sankey transform (moneyFlow), pure; vitest tests sit next to it (src/lib/*.test.ts)
   src/lib/budget.ts    # Budget section helpers (ratio, ok/warn/over tone, target parsing), vitest-tested
   src/lib/manualTransfers.ts # groups kind_manual rows into transfer decisions for Settings (pure, vitest-tested)

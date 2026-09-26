@@ -15,6 +15,7 @@ import {
 import {
   ALL_MONTHS,
   api,
+  errorMessage,
   type BudgetSummary,
   type CategoryNode,
   type Dashboard,
@@ -400,7 +401,7 @@ export default function DashboardPage() {
     api
       .dashboard(month)
       .then(setData)
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errorMessage(e)));
   }, []);
 
   useEffect(() => load(), [load]);

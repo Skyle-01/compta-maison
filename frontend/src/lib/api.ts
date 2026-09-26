@@ -163,14 +163,28 @@ export class ApiError extends Error {
   }
 }
 
+/** Messages from an error body's `detail`: the routers send strings, FastAPI's own request
+ *  validation sends `{loc, msg, ...}` objects (shown by their `msg`). Empty when absent. */
+export function errorDetails(detail: unknown): string[] {
+  const items = Array.isArray(detail) ? detail : detail ? [detail] : [];
+  return items.map((d) =>
+    d && typeof d === "object" && "msg" in d ? String(d.msg) : String(d),
+  );
+}
+
+/** What to show for a caught error: an Error's message (no "Error: " prefix), else the value. */
+export function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   if (!res.ok) {
     let details = [res.statusText];
     try {
       const body = await res.json();
-      if (Array.isArray(body.detail)) details = body.detail.map(String);
-      else if (body.detail) details = [String(body.detail)];
+      const fromBody = errorDetails(body.detail);
+      if (fromBody.length) details = fromBody;
     } catch {
       // non-JSON error body — keep the status text
     }

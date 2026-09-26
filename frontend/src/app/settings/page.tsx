@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type Category, type Rule, type Transaction, formatEuro, shortPath } from "@/lib/api";
+import {
+  api,
+  errorMessage,
+  type Category,
+  type Rule,
+  type Transaction,
+  formatEuro,
+  shortPath,
+} from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
 import { parseTarget } from "@/lib/budget";
 import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
@@ -142,7 +150,7 @@ export default function SettingsPage() {
         setRules(ruleList);
         setManualTx(manual.items);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(errorMessage(e)));
   }, []);
 
   useEffect(load, [load]);
@@ -167,7 +175,7 @@ export default function SettingsPage() {
       load();
       return true;
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
       return false;
     }
   }
@@ -329,7 +337,7 @@ export default function SettingsPage() {
       load();
       setFlashRuleId(created.id); // surface where the new rule landed in the sorted list
     } catch (e) {
-      setError(String(e));
+      setError(errorMessage(e));
     }
   }
 
@@ -895,7 +903,7 @@ function ManualTransfersSection() {
     api
       .listTransactions({ manualTransfer: true, limit: 1000 })
       .then((page) => setRows(page.items))
-      .catch((e) => setStatus(String(e)));
+      .catch((e) => setStatus(errorMessage(e)));
   }, []);
 
   useEffect(load, [load]);
@@ -906,7 +914,7 @@ function ManualTransfersSection() {
       await api.setTransferMode(id, "auto");
       load();
     } catch (e) {
-      setStatus(String(e));
+      setStatus(errorMessage(e));
     }
   }
 
@@ -996,7 +1004,7 @@ function TransferMarkersSection() {
         setText(m.markers.join("\n"));
         setIsDefault(m.is_default);
       })
-      .catch((e) => setStatus(String(e)));
+      .catch((e) => setStatus(errorMessage(e)));
   }, []);
 
   async function save() {
@@ -1006,7 +1014,7 @@ function TransferMarkersSection() {
       setIsDefault(m.is_default);
       setStatus("Enregistré — virements recalculés.");
     } catch (e) {
-      setStatus(String(e));
+      setStatus(errorMessage(e));
     }
   }
 
