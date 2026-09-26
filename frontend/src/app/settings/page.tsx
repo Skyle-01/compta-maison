@@ -13,34 +13,10 @@ import {
 import CategoryPicker from "@/components/CategoryPicker";
 import SignedAmount from "@/components/SignedAmount";
 import { parseTarget } from "@/lib/budget";
+import { emptyRuleForm, type RuleForm, ruleFormToPayload, ruleToForm } from "@/lib/ruleForm";
 import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
 
 type CategoryNode = Category & { children: CategoryNode[] };
-
-/** Editable mirror of a Rule (numbers kept as strings while typing). */
-type RuleForm = {
-  category_id: number | null;
-  pattern: string;
-  priority: string;
-  is_income_anchor: boolean;
-  description: string;
-};
-
-const emptyRuleForm = (): RuleForm => ({
-  category_id: null,
-  pattern: "",
-  priority: "100",
-  is_income_anchor: false,
-  description: "",
-});
-
-const ruleFormToPayload = (f: RuleForm): Omit<Rule, "id"> => ({
-  category_id: f.category_id as number,
-  pattern: f.pattern.trim(),
-  priority: Number(f.priority) || 100,
-  is_income_anchor: f.is_income_anchor,
-  description: f.description.trim() || null,
-});
 
 function buildTree(cats: Category[]): CategoryNode[] {
   const map = new Map<number, CategoryNode>(cats.map((c) => [c.id, { ...c, children: [] }]));
@@ -311,13 +287,7 @@ export default function SettingsPage() {
 
   function startEditRule(r: Rule) {
     setEditingRuleId(r.id);
-    setEditRule({
-      category_id: r.category_id,
-      pattern: r.pattern,
-      priority: String(r.priority),
-      is_income_anchor: r.is_income_anchor,
-      description: r.description ?? "",
-    });
+    setEditRule(ruleToForm(r));
   }
 
   async function saveRule(id: number) {

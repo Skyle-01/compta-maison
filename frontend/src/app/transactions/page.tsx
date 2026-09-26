@@ -14,6 +14,7 @@ import {
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
 import SignedAmount from "@/components/SignedAmount";
+import { emptyRuleForm, type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
 
 const PAGE_SIZE = 50;
 
@@ -35,12 +36,9 @@ export default function TransactionsPage() {
   // manual assignment and creating a reusable rule; the description maps to the transaction note
   // (manual) or the rule's description (rule).
   const [editingTxId, setEditingTxId] = useState<number | null>(null);
-  const [editCategory, setEditCategory] = useState<number | null>(null);
   const [editMode, setEditMode] = useState<EditMode>("manual");
-  const [editNote, setEditNote] = useState("");
-  const [editPattern, setEditPattern] = useState("");
-  const [editPriority, setEditPriority] = useState("100");
-  const [editAnchor, setEditAnchor] = useState(false);
+  const [form, setForm] = useState<RuleForm>(emptyRuleForm());
+  const edit = (patch: Partial<RuleForm>) => setForm((f) => ({ ...f, ...patch }));
   // Last live-preview result, keyed by the pattern it counted (see the preview effect below).
   const [matchResult, setMatchResult] = useState<{ pattern: string; count: number } | null>(null);
   // Rows ticked for a manual transfer decision (kept across pages/months; at most two).
@@ -89,7 +87,7 @@ export default function TransactionsPage() {
   // uncategorised, non-transfer transactions whose label contains the pattern (same case-sensitive
   // instr semantics as the rule engine). Debounced.
   useEffect(() => {
-    const pattern = editPattern.trim();
+    const pattern = form.pattern.trim();
     if (editingTxId == null || editMode !== "rule" || !pattern) return;
     const timer = setTimeout(() => {
       api
@@ -98,11 +96,11 @@ export default function TransactionsPage() {
         .catch(() => setMatchResult(null));
     }, 250);
     return () => clearTimeout(timer);
-  }, [editPattern, editMode, editingTxId]);
+  }, [form.pattern, editMode, editingTxId]);
   // Only a count for the pattern currently typed is shown ("…" while the debounce runs), so a
   // late response for an older pattern can't be mistaken for the current one.
   const matchCount =
-    editingTxId != null && editMode === "rule" && matchResult?.pattern === editPattern.trim()
+    editingTxId != null && editMode === "rule" && matchResult?.pattern === form.pattern.trim()
       ? matchResult.count
       : null;
 
@@ -115,35 +113,31 @@ export default function TransactionsPage() {
 
   function openEditor(tx: Transaction) {
     setEditingTxId(tx.id);
-    setEditCategory(tx.category_id);
     setEditMode("manual");
-    setEditNote(tx.note ?? "");
-    setEditPattern(suggestPattern(tx.libelle));
-    setEditPriority("100");
-    setEditAnchor(false);
+    setForm({
+      ...emptyRuleForm(),
+      category_id: tx.category_id,
+      pattern: suggestPattern(tx.libelle),
+      description: tx.note ?? "",
+    });
     setMatchResult(null);
   }
 
   async function submitEditor(tx: Transaction) {
-    if (editCategory == null) return;
+    if (form.category_id == null) return;
     setError(null);
     try {
       if (editMode === "manual") {
         await api.updateTransaction(tx.id, {
-          category_id: editCategory,
-          note: editNote.trim() || null,
+          category_id: form.category_id,
+          note: form.description.trim() || null,
         });
         setFlash("Opération classée.");
       } else {
-        const pattern = editPattern.trim();
+        const rule = ruleFormToPayload(form);
+        const pattern = rule.pattern;
         if (!pattern) return;
-        await api.createRule({
-          category_id: editCategory,
-          pattern,
-          priority: Number(editPriority) || 100,
-          is_income_anchor: editAnchor,
-          description: editNote.trim() || null,
-        });
+        await api.createRule(rule);
         const n = matchCount;
         setFlash(
           `Règle « ${pattern} » créée${n != null ? ` — ${n} opération(s) classée(s)` : ""}.`,
@@ -181,7 +175,7 @@ export default function TransactionsPage() {
     transferAction(() => api.setTransferMode(tx.id, mode), message);
   const selectedRows = [...selected.values()];
 
-  const submitDisabled = editCategory == null || (editMode === "rule" && !editPattern.trim());
+  const submitDisabled = form.category_id == null || (editMode === "rule" && !form.pattern.trim());
 
   return (
     <div className="space-y-4">
@@ -324,9 +318,9 @@ export default function TransactionsPage() {
                     <div className="space-y-2">
                       <CategoryPicker
                         categories={categories}
-                        value={editCategory}
-                        onChange={setEditCategory}
-                        highlight={editCategory == null}
+                        value={form.category_id}
+                        onChange={(category_id) => edit({ category_id })}
+                        highlight={form.category_id == null}
                         placeholder="— catégorie —"
                       />
                       <div className="flex items-center gap-3 text-xs text-zinc-600">
@@ -353,13 +347,13 @@ export default function TransactionsPage() {
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2">
                             <input
-                              value={editPattern}
-                              onChange={(e) => setEditPattern(e.target.value)}
+                              value={form.pattern}
+                              onChange={(e) => edit({ pattern: e.target.value })}
                               placeholder="texte à rechercher"
                               className="w-52 rounded border border-zinc-300 px-1 py-0.5 font-mono text-xs"
                             />
                             <span className="text-xs text-zinc-400">
-                              {!editPattern.trim()
+                              {!form.pattern.trim()
                                 ? ""
                                 : matchCount == null
                                 ? "…"
@@ -372,15 +366,15 @@ export default function TransactionsPage() {
                             <input
                               type="number"
                               title="Priorité — le plus petit nombre l’emporte"
-                              value={editPriority}
-                              onChange={(e) => setEditPriority(e.target.value)}
+                              value={form.priority}
+                              onChange={(e) => edit({ priority: e.target.value })}
                               className="w-16 rounded border border-zinc-300 px-1 py-0.5"
                             />
                             <label className="flex items-center gap-1 text-zinc-600">
                               <input
                                 type="checkbox"
-                                checked={editAnchor}
-                                onChange={(e) => setEditAnchor(e.target.checked)}
+                                checked={form.is_income_anchor}
+                                onChange={(e) => edit({ is_income_anchor: e.target.checked })}
                               />
                               ancre de revenu
                             </label>
@@ -388,8 +382,8 @@ export default function TransactionsPage() {
                         </div>
                       )}
                       <input
-                        value={editNote}
-                        onChange={(e) => setEditNote(e.target.value)}
+                        value={form.description}
+                        onChange={(e) => edit({ description: e.target.value })}
                         placeholder={
                           editMode === "rule"
                             ? "Description de la règle (facultatif)"

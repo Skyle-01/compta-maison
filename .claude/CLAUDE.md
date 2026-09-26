@@ -30,6 +30,7 @@ frontend/              # Next.js App Router; src/app/{page,import,transactions,s
   src/lib/moneyFlow.ts # the Sankey transform (moneyFlow), pure; vitest tests sit next to it (src/lib/*.test.ts)
   src/lib/budget.ts    # Budget section helpers (ratio, ok/warn/over tone, target parsing), vitest-tested
   src/lib/manualTransfers.ts # groups kind_manual rows into transfer decisions for Settings (pure, vitest-tested)
+  src/lib/ruleForm.ts  # RuleForm (editable rule, strings while typing) + emptyRuleForm/ruleToForm/ruleFormToPayload, shared by the Settings rule editor and the Transactions categorise editor (vitest-tested)
 backlog/               # one Markdown per item in bug/, feat/, tech/ (no ids, no priority order); see backlog/README.md
 data/                  # FICTIONAL example config (accounts.csv, categories.csv, rules.csv, transfer_markers.csv, bank_profiles.toml) — fallback for reset_db.py --source defaults; never put real data here
 _config/               # the user's PRIVATE config, same files (+ optional transfer_markers.csv, overrides.csv, bank_profiles.toml) — gitignored, preferred by --source defaults (override with $COMPTA_CONFIG_DIR)
@@ -79,7 +80,7 @@ npm run dev --prefix frontend                          # http://localhost:3000, 
 .venv/Scripts/python -m pytest backend/tests -v
 .venv/Scripts/ruff check backend && .venv/Scripts/ruff format --check backend
 npm run lint --prefix frontend
-npm test --prefix frontend                             # vitest: pure helpers (budget, manualTransfers, api) + moneyFlow only (the UI moves too fast for more)
+npm test --prefix frontend                             # vitest: pure helpers (budget, manualTransfers, ruleForm, api) + moneyFlow only (the UI moves too fast for more)
 npm run build --prefix frontend                        # type-check only (Next 16's build no longer lints)
 ```
 Gotchas:
