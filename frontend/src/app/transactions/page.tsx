@@ -9,9 +9,11 @@ import {
   type TransferMode,
   formatEuro,
   frenchMonth,
+  signedAmount,
   suggestPattern,
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
+import SignedAmount from "@/components/SignedAmount";
 
 const PAGE_SIZE = 50;
 
@@ -220,7 +222,7 @@ export default function TransactionsPage() {
         <div className="flex flex-wrap items-center gap-3 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
           <span className="text-zinc-600">
             {selectedRows.length} sélectionnée(s) :{" "}
-            {selectedRows.map((tx) => `${tx.libelle} (${formatEuro(tx.credit > 0 ? tx.credit : -tx.debit)})`).join(" ↔ ")}
+            {selectedRows.map((tx) => `${tx.libelle} (${formatEuro(signedAmount(tx))})`).join(" ↔ ")}
           </span>
           {selectedRows.length === 2 ? (
             <button
@@ -282,12 +284,8 @@ export default function TransactionsPage() {
                   {tx.libelle}
                 </td>
                 <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{tx.account}</td>
-                <td
-                  className={`whitespace-nowrap px-3 py-1.5 text-right ${
-                    tx.credit > 0 ? "text-green-700" : "text-red-700"
-                  }`}
-                >
-                  {formatEuro(tx.credit > 0 ? tx.credit : -tx.debit)}
+                <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                  <SignedAmount tx={tx} />
                 </td>
                 <td className="px-3 py-1.5">
                   {tx.kind === "transfer" ? (

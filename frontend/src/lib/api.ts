@@ -279,6 +279,11 @@ export function formatEuro(amount: number): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(amount);
 }
 
+/** A transaction's amount as one signed number: the credit, or minus the debit. */
+export function signedAmount(tx: Pick<Transaction, "credit" | "debit">): number {
+  return tx.credit > 0 ? tx.credit : -tx.debit;
+}
+
 /** "2026-06" -> "juin 2026" (French long month + year). Falls back to the raw value. */
 export function frenchMonth(month: string): string {
   const [year, m] = month.split("-").map(Number);

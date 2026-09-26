@@ -6,6 +6,7 @@ import {
   formatEuro,
   frenchMonth,
   frenchMonthShort,
+  signedAmount,
   suggestPattern,
 } from "./api";
 
@@ -69,5 +70,12 @@ describe("errorMessage", () => {
   });
   it("stringifies anything else", () => {
     expect(errorMessage("boom")).toBe("boom");
+  });
+});
+
+describe("signedAmount", () => {
+  it("is the credit, or minus the debit", () => {
+    expect(signedAmount({ credit: 12.5, debit: 0 })).toBe(12.5);
+    expect(signedAmount({ credit: 0, debit: 40 })).toBe(-40);
   });
 });

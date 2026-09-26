@@ -25,6 +25,7 @@ import {
   frenchMonth,
   frenchMonthShort,
 } from "@/lib/api";
+import SignedAmount from "@/components/SignedAmount";
 import { barWidth, budgetLeft, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
 import { type FlowNodeDatum, type FlowRole, moneyFlow } from "@/lib/moneyFlow";
 
@@ -336,9 +337,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
               <span className="min-w-0 truncate pr-2">
                 <span className="text-zinc-400">{t.date_valeur}</span> {t.libelle}
               </span>
-              <span className={t.credit > 0 ? "text-green-700" : "text-red-700"}>
-                {formatEuro(t.credit > 0 ? t.credit : -t.debit)}
-              </span>
+              <SignedAmount tx={t} />
             </div>
           ))
         ) : (

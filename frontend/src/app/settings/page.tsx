@@ -11,6 +11,7 @@ import {
   shortPath,
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
+import SignedAmount from "@/components/SignedAmount";
 import { parseTarget } from "@/lib/budget";
 import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
 
@@ -799,12 +800,8 @@ export default function SettingsPage() {
                     {tx.libelle}
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{tx.account}</td>
-                  <td
-                    className={`whitespace-nowrap px-3 py-1.5 text-right ${
-                      tx.credit > 0 ? "text-green-700" : "text-red-700"
-                    }`}
-                  >
-                    {formatEuro(tx.credit > 0 ? tx.credit : -tx.debit)}
+                  <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                    <SignedAmount tx={tx} />
                   </td>
                   <td className="px-3 py-1.5">{manualPath(tx)}</td>
                   <td className="px-3 py-1.5 text-zinc-500">
@@ -886,14 +883,6 @@ const TRANSFER_TYPE_LABEL: Record<ManualTransfer["type"], string> = {
   none: "Pas un virement",
 };
 
-function amountCell(tx: Transaction) {
-  return (
-    <span className={tx.credit > 0 ? "text-green-700" : "text-red-700"}>
-      {formatEuro(tx.credit > 0 ? tx.credit : -tx.debit)}
-    </span>
-  );
-}
-
 /** Transfer decisions made on the Transactions page (kind_manual), with a way back to detection. */
 function ManualTransfersSection() {
   const [rows, setRows] = useState<Transaction[]>([]);
@@ -962,7 +951,9 @@ function ManualTransfersSection() {
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right">
                     {legs.map((t) => (
-                      <div key={t.id}>{amountCell(t)}</div>
+                      <div key={t.id}>
+                        <SignedAmount tx={t} />
+                      </div>
                     ))}
                   </td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-right">
