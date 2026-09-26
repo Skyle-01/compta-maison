@@ -8,6 +8,7 @@ import {
   type Rule,
   type Transaction,
   formatEuro,
+  frenchDate,
   shortPath,
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
@@ -765,7 +766,7 @@ export default function SettingsPage() {
                   key={tx.id}
                   className={`border-t border-zinc-100 ${flashTxId === tx.id ? "bg-amber-50" : ""}`}
                 >
-                  <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{tx.date_valeur}</td>
+                  <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{frenchDate(tx.date_valeur)}</td>
                   <td className="max-w-xs truncate px-3 py-1.5" title={tx.libelle}>
                     {tx.libelle}
                   </td>
@@ -811,14 +812,14 @@ export default function SettingsPage() {
                       <>
                         <button
                           onClick={() => startEditNote(tx)}
-                          className="mr-2 text-zinc-400 hover:text-zinc-900"
+                          className="mr-2 text-zinc-600 hover:text-zinc-900"
                           title="Modifier la description"
                         >
                           ✎
                         </button>
                         <button
                           onClick={() => deleteAssignment(tx)}
-                          className="text-zinc-400 hover:text-red-700"
+                          className="text-zinc-600 hover:text-red-700"
                           title="Supprimer le classement manuel"
                         >
                           ✕
@@ -909,7 +910,7 @@ function ManualTransfersSection() {
                   <td className="whitespace-nowrap px-3 py-1.5">{TRANSFER_TYPE_LABEL[d.type]}</td>
                   <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">
                     {legs.map((t) => (
-                      <div key={t.id}>{t.date_valeur}</div>
+                      <div key={t.id}>{frenchDate(t.date_valeur)}</div>
                     ))}
                   </td>
                   <td className="max-w-md px-3 py-1.5">
@@ -929,7 +930,7 @@ function ManualTransfersSection() {
                   <td className="whitespace-nowrap px-3 py-1.5 text-right">
                     <button
                       onClick={() => backToAuto(legs[0].id)}
-                      className="text-zinc-400 hover:text-zinc-900"
+                      className="text-zinc-600 hover:text-zinc-900"
                       title="Revenir à la détection automatique"
                     >
                       Auto

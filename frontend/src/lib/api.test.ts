@@ -4,6 +4,7 @@ import {
   errorDetails,
   errorMessage,
   formatEuro,
+  frenchDate,
   frenchMonth,
   frenchMonthShort,
   signedAmount,
@@ -17,6 +18,17 @@ describe("formatEuro", () => {
   it("formats French style", () => {
     expect(plain(formatEuro(1234.5))).toBe("1 234,50 €");
     expect(plain(formatEuro(-12))).toBe("-12,00 €");
+  });
+});
+
+describe("frenchDate", () => {
+  it("formats an ISO date the French way", () => {
+    expect(frenchDate("2026-09-21")).toBe("21/09/2026");
+    expect(frenchDate("2026-01-05")).toBe("05/01/2026");
+  });
+  it("falls back to the raw value", () => {
+    expect(frenchDate("2026-09")).toBe("2026-09");
+    expect(frenchDate("")).toBe("");
   });
 });
 

@@ -22,6 +22,7 @@ import {
   type MonthTotals,
   type Transaction,
   formatEuro,
+  frenchDate,
   frenchMonth,
   frenchMonthShort,
 } from "@/lib/api";
@@ -335,7 +336,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
               style={childIndent}
             >
               <span className="min-w-0 truncate pr-2">
-                <span className="text-zinc-400">{t.date_valeur}</span> {t.libelle}
+                <span className="text-zinc-500">{frenchDate(t.date_valeur)}</span> {t.libelle}
               </span>
               <SignedAmount tx={t} />
             </div>

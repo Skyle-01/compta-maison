@@ -8,6 +8,7 @@ import {
   type Transaction,
   type TransferMode,
   formatEuro,
+  frenchDate,
   frenchMonth,
   signedAmount,
   suggestPattern,
@@ -273,7 +274,7 @@ export default function TransactionsPage() {
                     aria-label="Sélectionner"
                   />
                 </td>
-                <td className="whitespace-nowrap px-3 py-1.5">{tx.date_valeur}</td>
+                <td className="whitespace-nowrap px-3 py-1.5">{frenchDate(tx.date_valeur)}</td>
                 <td className="max-w-md truncate px-3 py-1.5" title={tx.libelle}>
                   {tx.libelle}
                 </td>
@@ -291,14 +292,14 @@ export default function TransactionsPage() {
                         ⇄ virement
                       </span>
                       {tx.kind_manual && (
-                        <span className="text-zinc-400" title="Décision manuelle">
+                        <span className="text-zinc-500" title="Décision manuelle">
                           ✎
                         </span>
                       )}
                       {(tx.transfer_group_id != null || tx.kind_manual) && (
                         <button
                           onClick={() => setMode(tx, "none", "Virement dissocié.")}
-                          className="text-zinc-400 hover:text-zinc-900"
+                          className="text-zinc-600 hover:text-zinc-900"
                           title="Ce n’est pas un virement : compter dans les revenus/dépenses"
                         >
                           Dissocier
@@ -307,7 +308,7 @@ export default function TransactionsPage() {
                       {tx.kind_manual && (
                         <button
                           onClick={() => setMode(tx, "auto", "Détection automatique rétablie.")}
-                          className="text-zinc-400 hover:text-zinc-900"
+                          className="text-zinc-600 hover:text-zinc-900"
                           title="Revenir à la détection automatique"
                         >
                           Auto
@@ -412,21 +413,21 @@ export default function TransactionsPage() {
                       <span>{tx.category}</span>
                       <NotTransferBadge tx={tx} onAuto={() => setMode(tx, "auto", "Détection automatique rétablie.")} />
                       {tx.category_manual ? (
-                        <span className="text-xs text-zinc-400" title="Assigné manuellement">
+                        <span className="text-xs text-zinc-500" title="Assigné manuellement">
                           ✎
                         </span>
                       ) : tx.rule_id != null ? (
                         <span
-                          className="text-xs text-zinc-400"
+                          className="text-xs text-zinc-500"
                           title={`Classé par la règle « ${tx.rule_pattern} »`}
                         >
                           ⚙
                         </span>
                       ) : null}
-                      {tx.note && <span className="text-xs italic text-zinc-400">— {tx.note}</span>}
+                      {tx.note && <span className="text-xs italic text-zinc-500">— {tx.note}</span>}
                       <button
                         onClick={() => openEditor(tx)}
-                        className="text-xs text-zinc-400 hover:text-zinc-900"
+                        className="text-xs text-zinc-600 hover:text-zinc-900"
                         title="Modifier le classement"
                       >
                         Modifier
@@ -486,9 +487,9 @@ export default function TransactionsPage() {
 function NotTransferBadge({ tx, onAuto }: { tx: Transaction; onAuto: () => void }) {
   if (!tx.kind_manual) return null;
   return (
-    <span className="text-xs text-zinc-400" title="Décision manuelle : n’est pas un virement">
+    <span className="text-xs text-zinc-500" title="Décision manuelle : n’est pas un virement">
       ✎ pas un virement ·{" "}
-      <button onClick={onAuto} className="hover:text-zinc-900" title="Revenir à la détection automatique">
+      <button onClick={onAuto} className="text-zinc-600 hover:text-zinc-900" title="Revenir à la détection automatique">
         Auto
       </button>
     </span>

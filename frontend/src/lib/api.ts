@@ -284,6 +284,13 @@ export function signedAmount(tx: Pick<Transaction, "credit" | "debit">): number 
   return tx.credit > 0 ? tx.credit : -tx.debit;
 }
 
+/** "2026-09-21" -> "21/09/2026" (French numeric date). Falls back to the raw value. */
+export function frenchDate(date: string): string {
+  const [year, m, d] = date.split("-").map(Number);
+  if (!year || !m || !d) return date;
+  return new Intl.DateTimeFormat("fr-FR").format(new Date(year, m - 1, d));
+}
+
 /** "2026-06" -> "juin 2026" (French long month + year). Falls back to the raw value. */
 export function frenchMonth(month: string): string {
   const [year, m] = month.split("-").map(Number);
