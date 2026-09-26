@@ -27,12 +27,12 @@ export default function CategoryPicker({
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Leaf-only assignment: a category is selectable when it is not a top-level group and
-  // no other category is parented to it (mirrors the backend's reject_group_target guard).
+  // Leaf-only assignment: a category is selectable when no other category is parented to it,
+  // top-level or not (mirrors the backend's reject_group_target guard).
   const parentIds = new Set(
     categories.map((c) => c.parent_id).filter((id): id is number => id != null),
   );
-  const selectable = categories.filter((c) => !c.is_root && !parentIds.has(c.id));
+  const selectable = categories.filter((c) => !parentIds.has(c.id));
   const selected = value != null ? selectable.find((c) => c.id === value) ?? null : null;
   const matches = query
     ? selectable.filter((c) => shortPath(c).toLowerCase().includes(query.toLowerCase()))
