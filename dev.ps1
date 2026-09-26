@@ -8,9 +8,7 @@
         Frontend: http://localhost:3000  (proxies /api -> :8000)
 #>
 [CmdletBinding()]
-param(
-    [int]$BackendPort = 8000
-)
+param()
 
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
@@ -22,9 +20,9 @@ if (-not (Test-Path $python)) {
 
 $procs = @()
 try {
-    Write-Host "Starting backend on http://localhost:$BackendPort ..." -ForegroundColor Cyan
+    Write-Host "Starting backend on http://localhost:8000 ..." -ForegroundColor Cyan
     $procs += Start-Process -FilePath $python `
-        -ArgumentList @("-m", "uvicorn", "app.main:app", "--port", "$BackendPort", "--reload") `
+        -ArgumentList @("-m", "uvicorn", "app.main:app", "--port", "8000", "--reload") `
         -WorkingDirectory (Join-Path $root "backend") -NoNewWindow -PassThru
 
     Write-Host "Starting frontend on http://localhost:3000 ..." -ForegroundColor Cyan
