@@ -243,16 +243,30 @@ function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean })
       </div>
       <div className="rounded-lg border border-zinc-200 bg-white p-4">
         <BudgetLine label="Total des objectifs" actual={budget.actual} target={budget.target} strong />
-        <div className="mt-3 grid gap-4 md:grid-cols-2">
+        {/* Masonry-like flow (CSS columns) rather than a grid: grid rows stretch every card to the
+            tallest one, leaving short groups mostly empty. */}
+        <div className="mt-3 gap-4 md:columns-2">
           {budget.groups.map((g) => (
-            <div key={g.id} className="rounded-md border border-zinc-100 px-3 py-1">
-              <BudgetLine label={g.name} actual={g.actual} target={g.target} strong />
-              {g.leaves.length > 0 && (
-                <div className="border-t border-zinc-100 pl-3">
-                  {g.leaves.map((l) => (
-                    <BudgetLine key={l.id} label={l.name} actual={l.actual} target={l.target} />
-                  ))}
-                </div>
+            <div key={g.id} className="mb-4 break-inside-avoid rounded-md border border-zinc-100 px-3 py-1 last:mb-0">
+              {g.leaves.length === 1 ? (
+                // A single targeted leaf carries the group's exact figures: one line, not two.
+                <BudgetLine
+                  label={`${g.name} · ${g.leaves[0].name}`}
+                  actual={g.actual}
+                  target={g.target}
+                  strong
+                />
+              ) : (
+                <>
+                  <BudgetLine label={g.name} actual={g.actual} target={g.target} strong />
+                  {g.leaves.length > 0 && (
+                    <div className="border-t border-zinc-100 pl-3">
+                      {g.leaves.map((l) => (
+                        <BudgetLine key={l.id} label={l.name} actual={l.actual} target={l.target} />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
           ))}
