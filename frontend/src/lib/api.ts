@@ -198,6 +198,37 @@ function json(method: string, body: unknown): RequestInit {
   return { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
 }
 
+export interface TransactionFilters {
+  month?: string;
+  account?: string;
+  categoryId?: number;
+  libelleContains?: string;
+  uncategorized?: boolean;
+  manual?: boolean;
+  manualTransfer?: boolean;
+}
+
+function transactionSearch(params: TransactionFilters): URLSearchParams {
+  const search = new URLSearchParams();
+  if (params.month) search.set("month", params.month);
+  if (params.account) search.set("account", params.account);
+  if (params.categoryId != null) search.set("category_id", String(params.categoryId));
+  if (params.libelleContains) search.set("libelle_contains", params.libelleContains);
+  if (params.uncategorized) search.set("uncategorized", "true");
+  if (params.manual) search.set("manual", "true");
+  if (params.manualTransfer) search.set("manual_transfer", "true");
+  return search;
+}
+
+/** Download link for the spreadsheet CSV of the transactions matching the list filters (every
+ *  row, no pagination; the export ignores the Settings-only manual filters). */
+export function transactionsExportUrl(
+  params: Omit<TransactionFilters, "manual" | "manualTransfer">,
+): string {
+  const search = transactionSearch(params).toString();
+  return `/api/transactions/export${search ? `?${search}` : ""}`;
+}
+
 export const api = {
   uploadCsv(file: File, account: string): Promise<ImportResult> {
     const form = new FormData();
@@ -206,25 +237,8 @@ export const api = {
     return request("/api/imports", { method: "POST", body: form });
   },
 
-  listTransactions(params: {
-    month?: string;
-    account?: string;
-    categoryId?: number;
-    libelleContains?: string;
-    uncategorized?: boolean;
-    manual?: boolean;
-    manualTransfer?: boolean;
-    limit?: number;
-    offset?: number;
-  }): Promise<TransactionPage> {
-    const search = new URLSearchParams();
-    if (params.month) search.set("month", params.month);
-    if (params.account) search.set("account", params.account);
-    if (params.categoryId != null) search.set("category_id", String(params.categoryId));
-    if (params.libelleContains) search.set("libelle_contains", params.libelleContains);
-    if (params.uncategorized) search.set("uncategorized", "true");
-    if (params.manual) search.set("manual", "true");
-    if (params.manualTransfer) search.set("manual_transfer", "true");
+  listTransactions(params: TransactionFilters & { limit?: number; offset?: number }): Promise<TransactionPage> {
+    const search = transactionSearch(params);
     if (params.limit) search.set("limit", String(params.limit));
     if (params.offset) search.set("offset", String(params.offset));
     return request(`/api/transactions?${search}`);

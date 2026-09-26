@@ -12,6 +12,7 @@ import {
   frenchMonth,
   signedAmount,
   suggestPattern,
+  transactionsExportUrl,
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
 import SignedAmount from "@/components/SignedAmount";
@@ -180,9 +181,9 @@ export default function TransactionsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold">Transactions</h1>
-        <div className="flex items-center gap-4 text-sm">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <label className="flex items-center gap-1.5">
             <input
               type="checkbox"
@@ -209,6 +210,13 @@ export default function TransactionsPage() {
               </option>
             ))}
           </select>
+          <a
+            href={transactionsExportUrl({ month: month || undefined, uncategorized: onlyUncategorized })}
+            download
+            className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50"
+          >
+            Exporter CSV
+          </a>
         </div>
       </div>
 

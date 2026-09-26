@@ -9,6 +9,7 @@ import {
   frenchMonthShort,
   signedAmount,
   suggestPattern,
+  transactionsExportUrl,
 } from "./api";
 
 // Intl's fr-FR output uses (narrow) no-break spaces; compare with plain ones.
@@ -89,5 +90,17 @@ describe("signedAmount", () => {
   it("is the credit, or minus the debit", () => {
     expect(signedAmount({ credit: 12.5, debit: 0 })).toBe(12.5);
     expect(signedAmount({ credit: 0, debit: 40 })).toBe(-40);
+  });
+});
+
+describe("transactionsExportUrl", () => {
+  it("carries the list filters", () => {
+    expect(transactionsExportUrl({ month: "2026-06", uncategorized: true })).toBe(
+      "/api/transactions/export?month=2026-06&uncategorized=true",
+    );
+  });
+
+  it("exports every month without filters", () => {
+    expect(transactionsExportUrl({})).toBe("/api/transactions/export");
   });
 });
