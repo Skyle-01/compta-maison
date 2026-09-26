@@ -85,6 +85,18 @@ function RuleEditor({
   );
 }
 
+// Section order on the page; the ids are URL fragments (e.g. /settings#regles).
+const SECTIONS = [
+  { id: "categories", label: "Catégories" },
+  { id: "regles", label: "Règles" },
+  { id: "virements-internes", label: "Virements internes" },
+  { id: "modifications-manuelles", label: "Modifications manuelles" },
+  { id: "virements-manuels", label: "Virements manuels" },
+] as const;
+
+// scroll-mt keeps a section title clear of the sticky table of contents when jumping to it.
+const SECTION_CLASS = "scroll-mt-16 space-y-3";
+
 export default function SettingsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
@@ -520,11 +532,31 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-10">
+      <h1 className="text-2xl font-semibold">Réglages</h1>
+      {/* A direct child of the page container, so it stays stuck for the whole page. */}
+      <nav
+        aria-label="Sections des réglages"
+        className="sticky top-0 z-10 -mx-6 -mt-7 overflow-x-auto border-b border-zinc-200 bg-zinc-50/95 px-6 py-2 backdrop-blur"
+      >
+        <ul className="flex gap-2 whitespace-nowrap text-sm">
+          {SECTIONS.map(({ id, label }) => (
+            <li key={id}>
+              <a
+                href={`#${id}`}
+                className="block rounded-full border border-zinc-300 bg-white px-3 py-1 text-zinc-700 hover:border-zinc-500 hover:text-zinc-900"
+              >
+                {label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
       {error && <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
 
-      <section className="space-y-3">
+      <section id="categories" className={SECTION_CLASS}>
         <div className="flex items-center">
-          <h1 className="text-xl font-semibold">Catégories</h1>
+          <h2 className="text-xl font-semibold">Catégories</h2>
           <a
             href="/api/categories/export"
             download
@@ -571,9 +603,9 @@ export default function SettingsPage() {
         </form>
       </section>
 
-      <section className="space-y-3">
+      <section id="regles" className={SECTION_CLASS}>
         <div className="flex items-center">
-          <h1 className="text-xl font-semibold">Règles de classement</h1>
+          <h2 className="text-xl font-semibold">Règles de classement</h2>
           <a
             href="/api/rules/export"
             download
@@ -712,9 +744,9 @@ export default function SettingsPage() {
 
       <TransferMarkersSection />
 
-      <section className="space-y-3">
+      <section id="modifications-manuelles" className={SECTION_CLASS}>
         <div className="flex items-center">
-          <h1 className="text-xl font-semibold">Modifications manuelles</h1>
+          <h2 className="text-xl font-semibold">Modifications manuelles</h2>
           <a
             href="/api/transactions/export-overrides"
             download
@@ -881,8 +913,8 @@ function ManualTransfersSection() {
   const decisions = groupManualTransfers(rows);
 
   return (
-    <section className="space-y-3">
-      <h1 className="text-xl font-semibold">Virements manuels</h1>
+    <section id="virements-manuels" className={SECTION_CLASS}>
+      <h2 className="text-xl font-semibold">Virements manuels</h2>
       <p className="text-sm text-zinc-500">
         Les décisions prises sur la page Transactions : deux opérations associées en virement, une
         opération marquée comme virement seule, ou un virement détecté que vous avez dissocié. « Auto »
@@ -981,8 +1013,8 @@ function TransferMarkersSection() {
   }
 
   return (
-    <section className="space-y-3">
-      <h1 className="text-xl font-semibold">Virements internes</h1>
+    <section id="virements-internes" className={SECTION_CLASS}>
+      <h2 className="text-xl font-semibold">Virements internes</h2>
       <p className="text-sm text-zinc-500">
         Un débit et un crédit de même montant sur deux comptes, à 3 jours d’écart au plus, sont
         associés en virement (exclus des revenus/dépenses) si les deux libellés commencent par l’un
