@@ -206,12 +206,8 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
     Early-dev: there is no migration ladder — the schema is a single version. If the
     shape changes, rebuild with scripts/reset_db.py (snapshots taxonomy+overrides first).
     """
-    conn = sqlite3.connect(db_path)
-    try:
-        with conn:
-            conn.executescript(SCHEMA)
-    finally:
-        conn.close()
+    with connect(db_path) as conn:
+        conn.executescript(SCHEMA)
 
 
 # ---------------------------------------------------------------------------
