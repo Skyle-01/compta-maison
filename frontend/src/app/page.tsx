@@ -30,7 +30,7 @@ import {
 } from "@/lib/api";
 import SignedAmount from "@/components/SignedAmount";
 import { barWidth, budgetLeft, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
-import { type FlowNodeDatum, type FlowRole, moneyFlow } from "@/lib/moneyFlow";
+import { type FlowData, type FlowNodeDatum, type FlowRole, moneyFlow } from "@/lib/moneyFlow";
 import { monthTick, trendTicks, trendValueLabels } from "@/lib/trend";
 
 // The tree's structural node names come from the backend in English ("total", "uncategorised");
@@ -449,35 +449,123 @@ const ROLE_COLORS: Record<FlowRole, string> = {
   net: "#0d9488", // teal — the balancing surplus / deficit
 };
 
-/** Custom Sankey node: a coloured rectangle plus a two-line label (name over amount, so each line
- *  stays short and fits the margins). Terminal nodes (no outgoing links, right-aligned by recharts)
- *  label to the right into the right gutter; every other node labels to the left of its bar. */
+/** Custom Sankey node: a coloured rectangle plus its label. Sources (no incoming links) label to the
+ *  left into the left gutter, terminal nodes (no outgoing links, right-aligned by recharts) to the
+ *  right; middle-column nodes label to the left of their bar over a white halo so the links passing
+ *  through don't cover the text. A node tall enough for two lines shows name over amount; a short
+ *  one gets a single line (name + amount at the edges, name only in the middle — the tooltip
+ *  still has the amount). */
 interface FlowNodeProps {
   x: number;
   y: number;
   width: number;
   height: number;
-  payload: FlowNodeDatum;
+  payload: FlowNodeDatum & { sourceNodes?: number[] };
 }
+
+// Label length caps: a one-line label also carries the amount, so its name gets less room.
+const FLOW_LABEL_MAX = 26;
+const FLOW_LABEL_MAX_ONE_LINE = 18;
+const TWO_LINE_MIN_HEIGHT = 22;
+// White outline behind label text (drawn under the fill), readable over links.
+const HALO = { stroke: "#ffffff", strokeWidth: 3, strokeLinejoin: "round", paintOrder: "stroke" } as const;
 
 function FlowNode({ x, y, width, height, payload }: FlowNodeProps) {
   const isTerminal = (payload.targetNodes?.length ?? 0) === 0;
+  const isSource = (payload.sourceNodes?.length ?? 0) === 0;
+  const isMiddle = !isTerminal && !isSource;
   const fill = ROLE_COLORS[payload.role];
   const labelX = isTerminal ? x + width + 6 : x - 6;
   const anchor = isTerminal ? "start" : "end";
   const midY = y + height / 2;
-  const name = payload.name.length > 22 ? `${payload.name.slice(0, 21)}…` : payload.name;
+  const twoLines = height >= TWO_LINE_MIN_HEIGHT;
+  const max = twoLines || isMiddle ? FLOW_LABEL_MAX : FLOW_LABEL_MAX_ONE_LINE;
+  const name = payload.name.length > max ? `${payload.name.slice(0, max - 1)}…` : payload.name;
+  const amount = formatEuro(payload.value ?? 0);
   return (
     <g>
       <Rectangle x={x} y={y} width={width} height={height} fill={fill} fillOpacity={0.9} />
-      <text x={labelX} y={midY - 5} textAnchor={anchor} fontSize={11} fill="#3f3f46">
-        {name}
-      </text>
-      <text x={labelX} y={midY + 8} textAnchor={anchor} fontSize={10} fill="#a1a1aa">
-        {formatEuro(payload.value ?? 0)}
-      </text>
+      {twoLines ? (
+        <>
+          <text x={labelX} y={midY - 3} textAnchor={anchor} fontSize={11} fill="#3f3f46" {...HALO}>
+            {name}
+          </text>
+          <text x={labelX} y={midY + 10} textAnchor={anchor} fontSize={10} fill="#71717a" {...HALO}>
+            {amount}
+          </text>
+        </>
+      ) : (
+        <text x={labelX} y={midY + 4} textAnchor={anchor} fontSize={11} fill="#3f3f46" {...HALO}>
+          {name}
+          {!isMiddle && (
+            <tspan fontSize={10} fill="#71717a">
+              {"  "}
+              {amount}
+            </tspan>
+          )}
+        </text>
+      )}
     </g>
   );
+}
+
+/** Custom Sankey link: the default cubic band, tinted by what the flow carries (income green,
+ *  expenses red, épargne violet, reste teal) so a flow can be followed from Budget to its leaf. */
+interface FlowLinkProps {
+  sourceX: number;
+  sourceY: number;
+  sourceControlX: number;
+  targetX: number;
+  targetY: number;
+  targetControlX: number;
+  linkWidth: number;
+  payload: { role: FlowRole };
+}
+
+function FlowLinkPath({
+  sourceX,
+  sourceY,
+  sourceControlX,
+  targetX,
+  targetY,
+  targetControlX,
+  linkWidth,
+  payload,
+}: FlowLinkProps) {
+  return (
+    <path
+      d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
+      fill="none"
+      stroke={ROLE_COLORS[payload.role]}
+      strokeOpacity={0.2}
+      strokeWidth={Math.max(1, linkWidth)}
+    />
+  );
+}
+
+/** Nodes in the Sankey's busiest column, which sets the chart height. Columns are recharts' depths
+ *  (longest path from a source), with terminal nodes pushed into the last one like its layout does. */
+function busiestColumn(flow: FlowData): number {
+  const depth = new Array<number>(flow.nodes.length).fill(0);
+  // Links run left to right, so relaxing them as many times as there are nodes settles every depth.
+  for (let pass = 0; pass < flow.nodes.length; pass++) {
+    let changed = false;
+    for (const l of flow.links) {
+      if (depth[l.target] < depth[l.source] + 1) {
+        depth[l.target] = depth[l.source] + 1;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  const last = Math.max(...depth);
+  const hasOut = new Set(flow.links.map((l) => l.source));
+  const counts = new Map<number, number>();
+  flow.nodes.forEach((_, i) => {
+    const col = hasOut.has(i) ? depth[i] : last;
+    counts.set(col, (counts.get(col) ?? 0) + 1);
+  });
+  return Math.max(...counts.values());
 }
 
 export default function DashboardPage() {
@@ -587,18 +675,26 @@ export default function DashboardPage() {
         <h2 className="mb-3 font-medium">Flux d’argent</h2>
         <div className="rounded-lg border border-zinc-200 bg-white p-4">
           {flow.links.length > 0 ? (
-            <ResponsiveContainer width="100%" height={Math.max(360, flow.nodes.length * 30)}>
-              <Sankey
-                data={flow}
-                nodePadding={20}
-                nodeWidth={12}
-                node={(props) => <FlowNode {...(props as unknown as FlowNodeProps)} />}
-                link={{ stroke: "#475569", strokeOpacity: 0.28 }}
-                margin={{ left: 140, right: 168, top: 12, bottom: 12 }}
-              >
-                <Tooltip formatter={(v) => formatEuro(Number(v))} />
-              </Sankey>
-            </ResponsiveContainer>
+            // Too wide for a phone: the chart keeps a readable width and scrolls sideways inside
+            // its card instead of squashing its columns together.
+            <div className="-mx-4 overflow-x-auto px-4">
+              <p className="mb-2 text-xs text-zinc-400 md:hidden">Faites défiler le graphique vers la droite →</p>
+              <div className="min-w-[760px]">
+                <ResponsiveContainer width="100%" height={Math.max(360, busiestColumn(flow) * 40)}>
+                  <Sankey
+                    data={flow}
+                    sort={false}
+                    nodePadding={24}
+                    nodeWidth={12}
+                    node={(props) => <FlowNode {...(props as unknown as FlowNodeProps)} />}
+                    link={(props) => <FlowLinkPath {...(props as unknown as FlowLinkProps)} />}
+                    margin={{ left: 180, right: 180, top: 12, bottom: 12 }}
+                  >
+                    <Tooltip formatter={(v) => formatEuro(Number(v))} />
+                  </Sankey>
+                </ResponsiveContainer>
+              </div>
+            </div>
           ) : (
             <p className="text-sm text-zinc-400">Aucun revenu ni dépense catégorisée pour l’instant.</p>
           )}

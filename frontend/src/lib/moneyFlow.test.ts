@@ -41,7 +41,7 @@ function flowOf(data: Dashboard) {
     nodes.findIndex((n) => n.name === name && (role === undefined || n.role === role));
   const into = (i: number) => links.filter((l) => l.target === i).reduce((s, l) => s + l.value, 0);
   const outOf = (i: number) => links.filter((l) => l.source === i).reduce((s, l) => s + l.value, 0);
-  return { nodes, index, into, outOf };
+  return { nodes, links, index, into, outOf };
 }
 
 describe("moneyFlow", () => {
@@ -70,5 +70,59 @@ describe("moneyFlow", () => {
     expect(index("Reste")).toBe(-1);
     expect(outOf(index("Découvert"))).toBeCloseTo(-data.reste);
     expect(into(index("Budget"))).toBeCloseTo(outOf(index("Budget")));
+  });
+
+  it("skips the Revenus hub for a lone income source, keeping the income total", () => {
+    const data = dashboard(2500);
+    data.by_category.children = data.by_category.children.filter((c) => c.name !== "uncategorised");
+    data.income = 2500;
+    const { index, into, outOf, links } = flowOf(data);
+    expect(index("Revenus")).toBe(-1);
+    expect(links).toContainEqual({ source: index("Salaire"), target: index("Budget"), value: 2500, role: "income" });
+    expect(into(index("Budget"))).toBeCloseTo(data.income);
+    expect(into(index("Budget"))).toBeCloseTo(outOf(index("Budget")));
+  });
+
+  it("keeps the hub when several sources feed the budget", () => {
+    const data = dashboard(2500);
+    const fixe = data.by_category.children[0];
+    fixe.children.push(node("Loyer perçu", 700, 0));
+    data.income += 700;
+    const { index, into } = flowOf(data);
+    expect(into(index("Revenus"))).toBeCloseTo(3200);
+    expect(into(index("Budget"))).toBeCloseTo(data.income);
+  });
+
+  it("colours each link by what it carries", () => {
+    const { links, index } = flowOf(dashboard(2500));
+    const roleOf = (from: string, to: string, fromRole?: string, toRole?: string) =>
+      links.find((l) => l.source === index(from, fromRole) && l.target === index(to, toRole))?.role;
+    expect(roleOf("Salaire", "Revenus")).toBe("income");
+    expect(roleOf("Revenus", "Budget")).toBe("income");
+    expect(roleOf("Budget", "Fixe")).toBe("expense");
+    expect(roleOf("Budget", "Épargne", undefined, "savings")).toBe("savings");
+    expect(roleOf("Budget", "Reste")).toBe("net");
+  });
+
+  it("orders groups and leaves largest first, with Non classé, Épargne and Reste last", () => {
+    const { nodes, index } = flowOf(dashboard(2500));
+    expect(index("Fixe")).toBeLessThan(index("Variable")); // 800 before 325
+    expect(index("Courses")).toBeLessThan(index("Autres (Variable)"));
+    const tail = nodes.slice(-3).map((n) => n.name);
+    expect(tail).toEqual(["Non classé", "Épargne", "Reste"]);
+  });
+
+  it("disambiguates a leaf name used under several groups", () => {
+    const data = dashboard(4000);
+    data.by_category.children.push(
+      node("Immobilier", 0, 0, [
+        node("Résidence", 0, 0, [node("Prêt", 0, 900)]),
+        node("Locatif", 0, 0, [node("Prêt", 0, 500)]),
+      ]),
+    );
+    const { index, into } = flowOf(data);
+    expect(index("Prêt")).toBe(-1);
+    expect(into(index("Prêt (Résidence)"))).toBeCloseTo(900);
+    expect(into(index("Prêt (Locatif)"))).toBeCloseTo(500);
   });
 });

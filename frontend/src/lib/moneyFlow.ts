@@ -14,6 +14,9 @@ export interface FlowLink {
   source: number;
   target: number;
   value: number;
+  /** What the flow is (drives its colour): the role of the node it feeds, or of the node it comes
+   *  from when it feeds the Revenus hub / Budget (income, désépargne, a deficit). */
+  role: FlowRole;
 }
 export interface FlowData {
   nodes: FlowNodeDatum[];
@@ -28,7 +31,8 @@ function topLevel(tree: CategoryNode, name: string): CategoryNode | undefined {
 }
 
 /** Build the money-flow Sankey, symmetric around a central Budget node: income sources fan into a
- *  Revenus hub (alongside uncategorised income and any désépargne) which feeds the Budget; the
+ *  Revenus hub (alongside uncategorised income and any désépargne) which feeds the Budget — or
+ *  straight into the Budget when there is a single source and nothing else coming in; the
  *  Budget then fans out to expense groups → leaves, uncategorised spend, Épargne, and a balancing
  *  Net branch (a surplus flows out on the right; a deficit flows in on the left).
  *  Flow values are rolled UP from the leaves: an expense node is its leaves' net debit
@@ -37,16 +41,25 @@ function topLevel(tree: CategoryNode, name: string): CategoryNode | undefined {
  *  without hiding that group's expenses or creating a Budget↔group cycle. The uncategorised bucket
  *  is shown gross on both sides (it usually holds both income and spending). Net balances the
  *  Budget node so its inflow and outflow always match. To keep the right edge legible, tiny
- *  expense leaves within a group are folded into a single "Autres" node. Returns indexed
- *  {nodes, links}. */
+ *  expense leaves within a group are folded into a single "Autres" node, and a leaf name used under
+ *  several groups (two "Prêt") gets its parent's name appended.
+ *  Node order is meaningful: the page renders with recharts' `sort={false}`, which keeps each
+ *  column in array order. Groups and leaves are emitted largest first, a group's sub-groups before
+ *  its leaves, and Non classé / Épargne / Reste last, so every column lists its nodes in the same
+ *  order as their parents and links don't cross. Returns indexed {nodes, links}. */
 export function moneyFlow(data: Dashboard): FlowData {
   const tree = data.by_category;
   const nodes: FlowNodeDatum[] = [];
   const links: FlowLink[] = [];
   const add = (name: string, role: FlowRole): number => nodes.push({ name, role }) - 1;
+  let revenus = -1; // the Revenus hub, once added
   const link = (source: number, target: number, value: number) => {
-    if (value > EPS) links.push({ source, target, value });
+    const into = nodes[target].role;
+    const role = into === "budget" || target === revenus ? nodes[source].role : into;
+    if (value > EPS) links.push({ source, target, value, role });
   };
+  // Parent group of each expense node, to disambiguate repeated leaf names at the end.
+  const parentOf = new Map<number, string>();
 
   const budget = add("Budget", "budget");
   const SKIP = new Set(["Épargne", "Déficit", "uncategorised"]);
@@ -64,8 +77,16 @@ export function moneyFlow(data: Dashboard): FlowData {
     } else node.children.forEach(collectIncome);
   };
   tree.children.forEach(collectIncome);
-  if (incomeLeaves.length > 0) {
-    const revenus = add("Revenus", "income");
+  incomeLeaves.sort((a, b) => b.value - a.value);
+  const uncIncome = unc && unc.credit > EPS ? unc.credit : 0;
+  const deficit = topLevel(tree, "Déficit");
+  const desepargne = deficit ? deficit.credit : 0;
+  if (incomeLeaves.length === 1 && uncIncome === 0 && desepargne <= EPS) {
+    // A lone source would draw three identical bars in a row (Salaire → Revenus → Budget).
+    link(add(incomeLeaves[0].name, "income"), budget, incomeLeaves[0].value);
+    incomeShown += incomeLeaves[0].value;
+  } else if (incomeLeaves.length > 0) {
+    revenus = add("Revenus", "income");
     for (const leaf of incomeLeaves) {
       link(add(leaf.name, "income"), revenus, leaf.value);
       incomeShown += leaf.value;
@@ -73,12 +94,10 @@ export function moneyFlow(data: Dashboard): FlowData {
     link(revenus, budget, incomeShown);
   }
   // Uncategorised income (gross credit) and désépargne (money pulled from savings) feed straight in.
-  if (unc && unc.credit > EPS) {
-    link(add("Non classé", "income"), budget, unc.credit);
-    incomeShown += unc.credit;
+  if (uncIncome > 0) {
+    link(add("Non classé", "income"), budget, uncIncome);
+    incomeShown += uncIncome;
   }
-  const deficit = topLevel(tree, "Déficit");
-  const desepargne = deficit ? deficit.credit : 0;
   if (desepargne > EPS) {
     link(add("Désépargne", "income"), budget, desepargne);
     incomeShown += desepargne;
@@ -96,37 +115,40 @@ export function moneyFlow(data: Dashboard): FlowData {
     tree.children.reduce((sum, g) => sum + expenseValue(g), 0) + (unc ? Math.max(0, unc.debit) : 0);
   const foldThreshold = totalExpenses * 0.025;
 
+  const byValue = (children: CategoryNode[]) =>
+    children
+      .map((c) => ({ node: c, value: expenseValue(c) }))
+      .filter((e) => e.value > EPS)
+      .sort((a, b) => b.value - a.value);
+  const addExpense = (name: string, parent: number, value: number): number => {
+    const idx = add(name, "expense");
+    parentOf.set(idx, nodes[parent].name);
+    link(parent, idx, value);
+    return idx;
+  };
   const emit = (node: CategoryNode, parent: number) => {
-    for (const child of node.children) {
-      if (child.children.length === 0) continue;
-      const value = expenseValue(child);
-      if (value <= EPS) continue;
-      const idx = add(child.name, "expense");
-      link(parent, idx, value);
-      emit(child, idx);
+    // Sub-groups first, then leaves (largest first, the folded "Autres" last): each column then
+    // keeps its parents' order (see the node-order note above).
+    for (const sub of byValue(node.children.filter((c) => c.children.length > 0))) {
+      emit(sub.node, addExpense(sub.node.name, parent, sub.value));
     }
-    const leaves = node.children
-      .filter((c) => c.children.length === 0)
-      .map((c) => ({ name: c.name, value: expenseValue(c) }))
-      .filter((e) => e.value > EPS);
+    const leaves = byValue(node.children.filter((c) => c.children.length === 0));
     const kept = leaves.filter((l) => l.value >= foldThreshold);
     const folded = leaves.filter((l) => l.value < foldThreshold);
-    for (const leaf of kept) link(parent, add(leaf.name, "expense"), leaf.value);
+    for (const leaf of kept) addExpense(leaf.node.name, parent, leaf.value);
     if (folded.length === 1) {
-      link(parent, add(folded[0].name, "expense"), folded[0].value);
+      addExpense(folded[0].node.name, parent, folded[0].value);
     } else if (folded.length > 1) {
       // Name the rolled-up node after its group so several "Autres" stay distinguishable.
-      link(parent, add(`Autres (${node.name})`, "expense"), folded.reduce((s, l) => s + l.value, 0));
+      addExpense(`Autres (${node.name})`, parent, folded.reduce((s, l) => s + l.value, 0));
     }
   };
 
-  for (const group of tree.children) {
-    const value = expenseValue(group);
-    if (value <= EPS) continue;
-    const idx = add(group.name, "expense");
-    link(budget, idx, value);
-    expensesShown += value;
-    emit(group, idx);
+  for (const group of byValue(tree.children)) {
+    const idx = add(group.node.name, "expense");
+    link(budget, idx, group.value);
+    expensesShown += group.value;
+    emit(group.node, idx);
   }
   if (unc && unc.debit > EPS) {
     link(budget, add("Non classé", "expense"), unc.debit);
@@ -144,6 +166,14 @@ export function moneyFlow(data: Dashboard): FlowData {
   const net = incomeShown - expensesShown - epargne;
   if (net > EPS) link(budget, add("Reste", "net"), net);
   else if (net < -EPS) link(add("Découvert", "net"), budget, -net);
+
+  // A leaf name repeated under several groups ("Prêt" under both Résidence principale and
+  // Locatif) is ambiguous on the chart: append the parent's name to each occurrence.
+  const seen = new Map<string, number>();
+  for (const idx of parentOf.keys()) seen.set(nodes[idx].name, (seen.get(nodes[idx].name) ?? 0) + 1);
+  for (const [idx, parent] of parentOf) {
+    if ((seen.get(nodes[idx].name) ?? 0) > 1) nodes[idx] = { ...nodes[idx], name: `${nodes[idx].name} (${parent})` };
+  }
 
   return { nodes, links };
 }
