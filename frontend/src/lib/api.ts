@@ -108,7 +108,11 @@ export interface MonthTotals {
   reste: number;
 }
 
+/** Dashboard `month` value (and `?month=`) for every budget month at once. */
+export const ALL_MONTHS = "all";
+
 export interface Dashboard {
+  /** The budget month shown, ALL_MONTHS for every month, null when there is no data yet. */
   month: string | null;
   months_available: string[];
   income: number;

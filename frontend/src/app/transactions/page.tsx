@@ -22,6 +22,7 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [month, setMonth] = useState("");
   const [months, setMonths] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
   const [onlyUncategorized, setOnlyUncategorized] = useState(false);
   const [offset, setOffset] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +44,9 @@ export default function TransactionsPage() {
   const [selected, setSelected] = useState<Map<number, Transaction>>(new Map());
 
   useEffect(() => {
-    // Honour a deep-link from the dashboard warning (?uncategorized=1&month=YYYY-MM); the URL month
-    // wins over the dashboard's default current month. Read once, client-side (no Suspense needed).
+    // Honour a deep-link from the dashboard warning (?uncategorized=1&month=YYYY-MM, or an empty
+    // month for every month); the URL month wins over the dashboard's default current month. Read
+    // once, client-side (no Suspense needed).
     const params = new URLSearchParams(window.location.search);
     const urlMonth = params.get("month");
     const urlUncategorized = Boolean(params.get("uncategorized"));
@@ -55,14 +57,15 @@ export default function TransactionsPage() {
         setMonths(d.months_available);
         // Applied with the month, in one render, so the list is fetched once with both filters.
         if (urlUncategorized) setOnlyUncategorized(true);
-        if (urlMonth) setMonth(urlMonth);
+        if (urlMonth !== null) setMonth(urlMonth);
         else if (d.month) setMonth(d.month);
       })
-      .catch((e) => setError(String(e)));
+      .catch((e) => setError(String(e)))
+      .finally(() => setReady(true));
   }, []);
 
   const load = useCallback(() => {
-    if (!month && months.length > 0) return;
+    if (!ready) return; // wait for the initial month, so the list is fetched once
     api
       .listTransactions({
         month: month || undefined,
@@ -75,7 +78,7 @@ export default function TransactionsPage() {
         setTotal(page.total);
       })
       .catch((e) => setError(String(e)));
-  }, [month, months, onlyUncategorized, offset]);
+  }, [ready, month, onlyUncategorized, offset]);
 
   useEffect(load, [load]);
 

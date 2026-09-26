@@ -106,7 +106,7 @@ class RuleOut(RuleIn):
 
 
 class Dashboard(BaseModel):
-    month: str | None
+    month: str | None = Field(description="The budget month shown, 'all' for every month, None if no data")
     months_available: list[str]
     income: float
     expenses: float

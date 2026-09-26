@@ -534,6 +534,20 @@ class TestDashboard:
         body = client.get("/api/dashboard").json()
         assert body["month"] == "2026-06"
 
+    def test_all_months(self, seeded_db, client):
+        _upload(client)
+        may = (
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            b'"04/05/2026";"04/05/2026";"CARTE SUPERMARCHE";"40,00";""\n'
+        )
+        _upload(client, filename="RELEVE_COMPTE_JOINT_2026_05_08.csv", content=may)
+        body = client.get("/api/dashboard", params={"month": "all"}).json()
+        assert body["month"] == "all"
+        assert len(body["history"]) == 2
+        assert body["income"] == pytest.approx(sum(h["income"] for h in body["history"]))
+        assert body["expenses"] == pytest.approx(sum(h["expenses"] for h in body["history"]))
+        assert body["reste"] == pytest.approx(body["by_category"]["balance"])
+
 
 class TestExport:
     def test_export_categories_csv(self, seeded_db, client):

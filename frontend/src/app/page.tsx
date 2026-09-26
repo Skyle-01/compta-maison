@@ -13,6 +13,7 @@ import {
   XAxis,
 } from "recharts";
 import {
+  ALL_MONTHS,
   api,
   type CategoryNode,
   type Dashboard,
@@ -69,9 +70,18 @@ function Stat({
  *  cards (Revenus − Dépenses − Épargne nette = Reste) in words. */
 function HeroSummary({ data }: { data: Dashboard }) {
   const positive = data.reste >= 0;
+  const all = data.month === ALL_MONTHS;
+  const when = all ? "sur l’ensemble de la période" : "ce mois-ci";
   return (
     <p className="text-base leading-relaxed text-zinc-700">
-      En <span className="font-medium">{frenchMonth(data.month ?? "")}</span>, vous avez gagné{" "}
+      {all ? (
+        "Sur l’ensemble de la période"
+      ) : (
+        <>
+          En <span className="font-medium">{frenchMonth(data.month ?? "")}</span>
+        </>
+      )}
+      , vous avez gagné{" "}
       <span className="font-medium text-green-700">{formatEuro(data.income)}</span> et dépensé{" "}
       <span className="font-medium text-red-700">{formatEuro(data.expenses)}</span>.{" "}
       {data.epargne > 0.005 && (
@@ -89,19 +99,19 @@ function HeroSummary({ data }: { data: Dashboard }) {
       {positive ? (
         <>
           Il vous reste <span className="font-semibold text-green-700">{formatEuro(data.reste)}</span>{" "}
-          ce mois-ci.
+          {when}.
         </>
       ) : data.epargne > 0.005 ? (
         <>
           En tenant compte de cette épargne, il vous manque{" "}
-          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span> ce
-          mois-ci.
+          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span>{" "}
+          {when}.
         </>
       ) : (
         <>
           Il vous manque{" "}
-          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span> ce
-          mois-ci.
+          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span>{" "}
+          {when}.
         </>
       )}
     </p>
@@ -160,7 +170,7 @@ function ResteTrend({ history, current }: { history: MonthTotals[]; current: str
   );
 }
 
-function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; month: string }) {
+function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; month?: string }) {
   const hasActivity = node.credit !== 0 || node.debit !== 0;
   const [open, setOpen] = useState(false);
   const [txns, setTxns] = useState<Transaction[] | null>(null);
@@ -315,6 +325,8 @@ export default function DashboardPage() {
     );
   }
 
+  const all = data.month === ALL_MONTHS;
+  const month = all ? undefined : data.month; // the transaction filter: none for every month
   const flow = moneyFlow(data);
   const hist = data.history;
   const cur = hist.findIndex((h) => h.month === data.month);
@@ -334,6 +346,7 @@ export default function DashboardPage() {
           value={data.month}
           onChange={(e) => load(e.target.value)}
         >
+          <option value={ALL_MONTHS}>Tous les mois</option>
           {data.months_available.map((m) => (
             <option key={m} value={m}>
               {frenchMonth(m)}
@@ -380,7 +393,7 @@ export default function DashboardPage() {
           {data.uncategorized.count} opération{data.uncategorized.count > 1 ? "s" : ""} encore sans
           catégorie ({formatEuro(Math.abs(data.uncategorized.difference))} d’écart dans les totaux).{" "}
           <Link
-            href={`/transactions?uncategorized=1&month=${data.month}`}
+            href={`/transactions?uncategorized=1&month=${month ?? ""}`}
             className="font-medium underline hover:no-underline"
           >
             Les classer →
@@ -414,7 +427,7 @@ export default function DashboardPage() {
         <details className="rounded-lg border border-zinc-200 bg-white">
           <summary className="cursor-pointer px-4 py-3 font-medium">Détail par catégorie</summary>
           <div className="border-t border-zinc-100 px-4 pb-3 pt-1">
-            <TreeNode key={data.month} node={data.by_category} depth={0} month={data.month} />
+            <TreeNode key={data.month} node={data.by_category} depth={0} month={month} />
           </div>
         </details>
       </section>

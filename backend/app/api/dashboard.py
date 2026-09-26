@@ -16,6 +16,10 @@ from app.schemas import Dashboard
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
+# `?month=all`: every budget month at once (savings then show both an Épargne and a Déficit leaf
+# for an account that saved some months and withdrew others; see category_tree).
+ALL_MONTHS = "all"
+
 
 def _savings_leaves(node: dict[str, Any]) -> list[dict[str, Any]]:
     """Every derived savings leaf (synthetic, childless) in the tree, wherever it hangs."""
@@ -35,9 +39,10 @@ def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)
         ]
     if month is None and months:
         month = months[0]
+    period = None if month == ALL_MONTHS else month
 
-    tree = category_tree(db_path, month)
-    income, expenses = income_and_expenses(db_path, month)
+    tree = category_tree(db_path, period)
+    income, expenses = income_and_expenses(db_path, period)
 
     # Savings are derived in the tree: money set aside is a debit leaf under 'Épargne', money pulled
     # from reserves a credit leaf under 'Déficit'. Sum only those derived leaves — not the whole
@@ -60,7 +65,7 @@ def get_dashboard(month: str | None = None, db_path: Path = Depends(get_db_path)
         desepargne=desepargne,
         reste=reste,
         by_category=tree,
-        uncategorized=uncategorized_balance(db_path, month),
-        transfers=transfers_summary(db_path, month),
+        uncategorized=uncategorized_balance(db_path, period),
+        transfers=transfers_summary(db_path, period),
         history=monthly_totals(db_path),
     )
