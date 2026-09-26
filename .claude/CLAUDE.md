@@ -99,7 +99,7 @@ Gotchas:
 - `core/` does logic only — no FastAPI imports; routers do I/O orchestration and HTTP errors.
 - `db.connect()` is a contextmanager (commit/rollback/close) — check `cur.rowcount` inside the `with` block.
 - Amounts: cents (int) in the DB and core logic; convert with `db.euros`/`db.to_cents`. The one exception: `core/categorize.py`'s dashboard aggregates (`category_tree`, `income_and_expenses`, `uncategorized_balance`, `transfers_summary`, `monthly_totals`, `budget_status`) already return euros, and `api/dashboard.py` combines them with `round(..., 2)`.
-- Type hints on all public functions; Pydantic models in `schemas.py` for everything crossing the API.
+- Type hints on all public functions; Pydantic models in `schemas.py` for everything crossing the API. `frontend/src/lib/api.ts` mirrors those shapes by hand (no OpenAPI generation: several dashboard payloads are `dict[str, Any]`): change it in the same commit as any response shape.
 - Routes: dependencies and `Query`/`Form` params as `Annotated` (`db_path: DbPath`, aliases in `api/deps.py`); the response model comes from the return annotation, no `response_model=` (ruff `FAST` enforces both).
 - **Git**: no pull requests in this project — commit directly to `main` and push (a session working on another branch fast-forwards `main` to it once checks pass).
 - **Backlog**: `backlog/{bug,feat,tech}/<slug>.md`, one item per file (template in `backlog/README.md`): context, everything needed to fix or investigate, dated progress notes. Update the item while working on it; delete the file in the commit that finishes it. No ids, no priorities.
