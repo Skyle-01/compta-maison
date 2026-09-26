@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/imports", tags=["imports"])
 
 
 @router.post("", response_model=ImportResult, status_code=201)
-async def upload_csv(
+def upload_csv(
     file: UploadFile,
     account: str = Form(""),
     db_path: Path = Depends(get_db_path),
@@ -47,7 +47,7 @@ async def upload_csv(
             detail=[f"Account {account!r} doesn't map to a known account ({', '.join(known_codes)})"],
         )
 
-    content = await file.read()
+    content = file.file.read()
     try:
         profile, rows = parse_statement(content, profiles)
     except CsvValidationError as exc:
