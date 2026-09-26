@@ -1,15 +1,10 @@
-import sys
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
-
-from app.db import connect, init_db, upsert_accounts  # noqa: E402
-from app.main import create_app  # noqa: E402
+from app.db import connect, init_db, upsert_accounts
+from app.main import create_app
 
 # Fictional accounts every test db starts with (a real db loads them from accounts.csv).
 TEST_ACCOUNTS = [
