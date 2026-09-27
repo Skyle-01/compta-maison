@@ -94,13 +94,34 @@ const SECTIONS = [
   { id: "virements-manuels", label: "Virements manuels" },
 ] as const;
 
+type SectionId = (typeof SECTIONS)[number]["id"];
+
 // scroll-mt keeps a section title clear of the sticky table of contents when jumping to it.
 const SECTION_CLASS = "scroll-mt-16 space-y-3";
+
+/** A failed action's message, shown in the section that raised it. It sticks just below the table
+ *  of contents while that section is on screen, so it stays in view from a row deep in a long
+ *  table or from the add form at the bottom of the section. */
+function SectionError({ message, onClose }: { message: string | null; onClose: () => void }) {
+  if (!message) return null;
+  return (
+    <div
+      role="alert"
+      className="sticky top-11 z-[5] flex items-start gap-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800 shadow-sm"
+    >
+      <p className="flex-1">{message}</p>
+      <button onClick={onClose} className="text-red-700 hover:text-red-900" title="Fermer" aria-label="Fermer">
+        ✕
+      </button>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // The last failed action and the section it came from (null: loading the page failed).
+  const [error, setError] = useState<{ section: SectionId | null; message: string } | null>(null);
 
   // Inline category-tree editing state.
   const [newGroup, setNewGroup] = useState("");
@@ -140,7 +161,7 @@ export default function SettingsPage() {
         setRules(ruleList);
         setManualTx(manual.items);
       })
-      .catch((e) => setError(errorMessage(e)));
+      .catch((e) => setError({ section: null, message: errorMessage(e) }));
   }, []);
 
   useEffect(load, [load]);
@@ -158,17 +179,21 @@ export default function SettingsPage() {
     return () => clearTimeout(timer);
   }, [flashTxId]);
 
-  async function run(action: () => Promise<unknown>): Promise<boolean> {
+  async function run(section: SectionId, action: () => Promise<unknown>): Promise<boolean> {
     setError(null);
     try {
       await action();
       load();
       return true;
     } catch (e) {
-      setError(errorMessage(e));
+      setError({ section, message: errorMessage(e) });
       return false;
     }
   }
+
+  const errorIn = (section: SectionId | null) => (
+    <SectionError message={error?.section === section ? error.message : null} onClose={() => setError(null)} />
+  );
 
   const byId = new Map(categories.map((c) => [c.id, c]));
   const tree = buildTree(categories);
@@ -212,7 +237,7 @@ export default function SettingsPage() {
   function saveCat(node: Category) {
     const name = editCatName.trim();
     if (!name) return;
-    run(() => api.updateCategory(node.id, { name, parent_id: editCatParent })).then(
+    run("categories", () => api.updateCategory(node.id, { name, parent_id: editCatParent })).then(
       (ok) => ok && setEditingCatId(null),
     );
   }
@@ -225,10 +250,13 @@ export default function SettingsPage() {
   function saveTarget(node: Category) {
     const target = parseTarget(targetInput);
     if (Number.isNaN(target)) {
-      setError(`Objectif invalide pour « ${node.name} » : saisissez un montant positif, ou laissez vide.`);
+      setError({
+        section: "categories",
+        message: `Objectif invalide pour « ${node.name} » : saisissez un montant positif, ou laissez vide.`,
+      });
       return;
     }
-    run(() => api.setCategoryTarget(node.id, target)).then((ok) => ok && setEditingTargetId(null));
+    run("categories", () => api.setCategoryTarget(node.id, target)).then((ok) => ok && setEditingTargetId(null));
   }
 
   // A group's target is the sum of its descendant leaves' targets (read-only).
@@ -305,7 +333,7 @@ export default function SettingsPage() {
 
   async function saveRule(id: number) {
     if (editRule.category_id == null || !editRule.pattern.trim()) return;
-    const ok = await run(() => api.updateRule(id, ruleFormToPayload(editRule)));
+    const ok = await run("regles", () => api.updateRule(id, ruleFormToPayload(editRule)));
     if (ok) {
       setEditingRuleId(null);
       setFlashRuleId(id);
@@ -321,7 +349,7 @@ export default function SettingsPage() {
       load();
       setFlashRuleId(created.id); // surface where the new rule landed in the sorted list
     } catch (e) {
-      setError(errorMessage(e));
+      setError({ section: "regles", message: errorMessage(e) });
     }
   }
 
@@ -331,7 +359,9 @@ export default function SettingsPage() {
   }
 
   async function saveNote(id: number) {
-    const ok = await run(() => api.updateTransaction(id, { note: editNoteValue.trim() || null }));
+    const ok = await run("modifications-manuelles", () =>
+      api.updateTransaction(id, { note: editNoteValue.trim() || null }),
+    );
     if (ok) {
       setEditingNoteTxId(null);
       setFlashTxId(id);
@@ -345,7 +375,7 @@ export default function SettingsPage() {
         `Supprimer le classement manuel de « ${tx.libelle} » ? L’opération repassera sous les règles automatiques.`,
       )
     )
-      run(() => api.updateTransaction(tx.id, { category_id: null, note: null }));
+      run("modifications-manuelles", () => api.updateTransaction(tx.id, { category_id: null, note: null }));
   }
 
   function toggleSort(key: typeof sortKey) {
@@ -475,7 +505,7 @@ export default function SettingsPage() {
                   lastChild && parent
                     ? `Supprimer « ${node.name} » ? Ses règles, opérations et son objectif remonteront vers « ${parent.name} ».`
                     : `Supprimer la catégorie « ${node.name} » ? Ses règles seront supprimées et ses opérations déclassées.`;
-                if (confirm(msg)) run(() => api.deleteCategory(node.id));
+                if (confirm(msg)) run("categories", () => api.deleteCategory(node.id));
               }}
               className="hover:text-red-700"
               title="Supprimer la catégorie"
@@ -499,7 +529,7 @@ export default function SettingsPage() {
                 )
               )
                 return;
-              run(() => api.createCategory({ name, parent_id: node.id })).then(
+              run("categories", () => api.createCategory({ name, parent_id: node.id })).then(
                 (ok) => ok && setAddingUnder(null)
               );
             }}
@@ -552,7 +582,7 @@ export default function SettingsPage() {
         </ul>
       </nav>
 
-      {error && <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
+      {errorIn(null)}
 
       <section id="categories" className={SECTION_CLASS}>
         <div className="flex items-center">
@@ -565,6 +595,7 @@ export default function SettingsPage() {
             Exporter CSV
           </a>
         </div>
+        {errorIn("categories")}
         <p className="text-sm text-zinc-500">
           Un seul arbre, indépendant du sens — revenu ou dépense dépend de chaque opération, pas de
           la catégorie. ＋ pour imbriquer une sous-catégorie sous n’importe quel nœud (sans limite de
@@ -587,7 +618,9 @@ export default function SettingsPage() {
             e.preventDefault();
             const name = newGroup.trim();
             if (!name) return;
-            run(() => api.createCategory({ name, parent_id: null })).then((ok) => ok && setNewGroup(""));
+            run("categories", () => api.createCategory({ name, parent_id: null })).then(
+              (ok) => ok && setNewGroup(""),
+            );
           }}
         >
           <input
@@ -614,6 +647,7 @@ export default function SettingsPage() {
             Exporter CSV
           </a>
         </div>
+        {errorIn("regles")}
         <p className="text-sm text-zinc-500">
           Les règles sont de simples sous-chaînes comparées au libellé bancaire (pas de regex). En
           cas de correspondance multiple, la règle au plus petit numéro de priorité l’emporte. ⚓
@@ -712,7 +746,8 @@ export default function SettingsPage() {
                       </button>
                       <button
                         onClick={() => {
-                          if (confirm(`Supprimer la règle « ${r.pattern} » ?`)) run(() => api.deleteRule(r.id));
+                          if (confirm(`Supprimer la règle « ${r.pattern} » ?`))
+                            run("regles", () => api.deleteRule(r.id));
                         }}
                         className="text-zinc-400 hover:text-red-700"
                         title="Supprimer la règle"
@@ -755,6 +790,7 @@ export default function SettingsPage() {
             Exporter CSV
           </a>
         </div>
+        {errorIn("modifications-manuelles")}
         <p className="text-sm text-zinc-500">
           Les opérations que vous avez classées à la main (catégorie choisie directement plutôt que
           par une règle), avec leur description. ✎ pour modifier la description, ✕ pour supprimer le
@@ -915,13 +951,13 @@ function ManualTransfersSection() {
   return (
     <section id="virements-manuels" className={SECTION_CLASS}>
       <h2 className="text-xl font-semibold">Virements manuels</h2>
+      <SectionError message={status} onClose={() => setStatus(null)} />
       <p className="text-sm text-zinc-500">
         Les décisions prises sur la page Transactions : deux opérations associées en virement, une
         opération marquée comme virement seule, ou un virement détecté que vous avez dissocié. « Auto »
         rend l’opération (et son éventuel partenaire) à la détection automatique. Elles font partie
         de l’export des modifications manuelles ci-dessus.
       </p>
-      {status && <p className="text-sm text-red-700">{status}</p>}
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-sm">
