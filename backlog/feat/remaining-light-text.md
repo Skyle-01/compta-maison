@@ -19,6 +19,7 @@ user reads or clicks:
 
 - Apply the same rule (actions zinc-600 + hover zinc-900, informative zinc-500), keeping what is
   deliberately subtle (a « stable » delta) readable; check each on the demo database at 1400 px.
+- When done, drop the pointer to this file at the end of CLAUDE.md's « Text contrast » convention.
 
 ## Progress
 
