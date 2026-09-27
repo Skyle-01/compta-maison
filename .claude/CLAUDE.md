@@ -26,6 +26,7 @@ backend/
   pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B/FAST)
 frontend/              # Next.js App Router; src/app/{page,import,transactions,settings}
   src/app/page.tsx     # dashboard: hero summary, 4 reconciling cards + deltas & Reste sparkline, Budget section (BudgetSection), "Money flow" Sankey (FlowNode, graph from lib/moneyFlow.ts), collapsible balance tree (TreeNode)
+  src/components/      # shared client components: CategoryPicker (leaf-only category select), SignedAmount (green/red signed amount)
   src/lib/api.ts       # typed fetch client (+ frenchMonth/frenchDate/signedAmount/suggestPattern/errorMessage helpers); /api/* proxied to :8000 via next.config.ts rewrites; ApiError carries the `detail` strings (validation objects by their `msg`), pages show `errorMessage(e)` (never `String(e)`, which prefixes an English "Error: ")
   src/lib/moneyFlow.ts # the Sankey transform (moneyFlow), pure; vitest tests sit next to it (src/lib/*.test.ts)
   src/lib/budget.ts    # Budget section helpers (ratio, ok/warn/over tone, target parsing), vitest-tested
@@ -108,7 +109,7 @@ Gotchas:
 - Backend formatted by `ruff format` (110 cols); `ruff check` and the frontend eslint must pass (CI enforces). Never hand-resolve a formatting conflict: re-run `ruff format`.
 - **Language**: user-facing frontend strings are French (typographic apostrophe `’`, not `'`, to satisfy `react/no-unescaped-entities`); code, comments, and docs (incl. this file) stay English. French category names in `data/` are data, not UI text. Date display uses `frenchMonth` / `frenchDate` (`Intl`, fr-FR; transaction lists show the **value date** `date_valeur`, the one that orders the list and sets `budget_month`); amounts use `formatEuro` (fr-FR).
 
-## Current State (2026-09-26)
+## Current State (2026-09-27)
 - FastAPI + Next.js app, single schema (no migrations, early dev): canonical `accounts` table + aliases, transaction flow `kind` + auto/manual internal transfers, flat flow-agnostic leaf-only category tree, paycheck-anchored budget months, derived savings leaves, stdlib CSV parsing with bank profiles. UI in French; `dev.ps1` starts backend+frontend together.
 - **Dashboard**: hero summary, four reconciling cards with month-over-month deltas + a `Reste` sparkline, a "Budget" section (spending vs per-category targets, hidden without targets), the Money-flow Sankey, the balance tree in a collapsed `<details>`, and a "Tous les mois" option (see the dashboard-cards / Money-flow / Savings business rules).
 - **Transactions page**: one button-confirmed categorisation editor per row (manual or rule), ⚙ rule / ✎ manual provenance badges, transfer pairing / Dissocier / Auto, and an "Exporter CSV" link (`GET /api/transactions/export`, built by `lib/api.ts::transactionsExportUrl`): every row matching the list filters, oldest first, as a CSV for a French Excel — French headers, dd/mm/yyyy dates, comma decimals, full category path — unlike the Settings exports, which keep the `import_csv.py` format.
