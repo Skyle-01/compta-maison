@@ -18,6 +18,7 @@ Transactions always come from _inputs/*.csv (the durable bank-statement archive)
 snapshot under _backups/ is therefore taxonomy-only: a full restore point = the latest
 _backups/<ts>/ **plus** your current _inputs/. Whenever a DB already exists it is snapshotted to
 _backups/<ts>/ before being deleted, so every rebuild leaves a recoverable restore point.
+_backups/ sits next to the DB (--db, else $COMPTA_DB, else the repo's compta.db).
 
 Personal data lives only in gitignored places: _inputs/ (statements), _config/ (your
 accounts.csv, categories.csv, rules.csv, optional overrides.csv, transfer_markers.csv and
@@ -56,7 +57,6 @@ from scripts.import_csv import import_csv, load_accounts_csv, load_transfer_mark
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
 INPUTS_DIR = DEFAULT_INPUTS_DIR
-BACKUPS_DIR = REPO_ROOT / "_backups"
 CONFIG_DIR = DEFAULT_CONFIG_DIR
 
 
@@ -152,7 +152,13 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
     return cat_csv, rules_csv, overrides_csv
 
 
-def _latest_backup(root: Path = BACKUPS_DIR) -> Path:
+def backups_dir(db_path: Path) -> Path:
+    """Where a DB's snapshots go: `_backups/` next to it (the repo root for the default compta.db),
+    so rebuilding a throwaway DB (a demo, a test) never adds a snapshot to the real restore points."""
+    return db_path.parent / "_backups"
+
+
+def _latest_backup(root: Path) -> Path:
     """Most recent _backups/<ts>/ snapshot directory. Exits if there are none."""
     snaps = sorted((p for p in root.glob("*") if p.is_dir()), reverse=True) if root.exists() else []
     if not snaps:
@@ -188,12 +194,13 @@ def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
     # A broken bank_profiles.toml stops here, before the snapshot and the delete.
     profiles = _load_profiles()
     # Resolve the backup target BEFORE the safety snapshot, so the snapshot can't shadow "latest".
-    backup_dir = (from_dir or _latest_backup(BACKUPS_DIR)) if source == "backup" else None
+    backups = backups_dir(db_path)
+    backup_dir = (from_dir or _latest_backup(backups)) if source == "backup" else None
 
     # Safety snapshot of the existing DB (also the source for --source live).
     snapshot_dir: Path | None = None
     if db_path.exists():
-        snapshot_dir = BACKUPS_DIR / datetime.now().strftime("%Y%m%d_%H%M%S")
+        snapshot_dir = backups / datetime.now().strftime("%Y%m%d_%H%M%S")
         export_current(db_path, snapshot_dir)
 
     if source == "live":
@@ -251,7 +258,7 @@ if __name__ == "__main__":
         dest="from_dir",
         type=Path,
         default=None,
-        help="With --source backup: the snapshot dir to restore (default: latest under _backups/). "
+        help="With --source backup: the snapshot dir to restore (default: latest under the DB's _backups/). "
         "With --source defaults: the config dir to rebuild from (default: _config/, else data/).",
     )
     parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)

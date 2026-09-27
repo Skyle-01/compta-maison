@@ -779,7 +779,7 @@ class TestResetDb:
         reset_db.INPUTS_DIR.mkdir()
         # Same filename _upload uses, so the inferred account (and thus import_hash) matches.
         (reset_db.INPUTS_DIR / "RELEVE_COMPTE_JOINT_2026_06_08.csv").write_bytes(SAMPLE_CSV)
-        return reset_db, reset_db.BACKUPS_DIR
+        return reset_db, tmp_path / "_backups"  # next to seeded_db
 
     @staticmethod
     def _mystery_row(db_path):
@@ -884,6 +884,18 @@ class TestResetDb:
         assert (snaps[0] / "accounts.csv").exists()
         assert self._accounts(seeded_db)[0] == ("PERSO", "Compte perso", None)
         assert ("ENFANT", "Livret enfant", "VERS LIVRET ENFANT") in self._accounts(seeded_db)
+
+    def test_snapshots_sit_next_to_the_db(self, seeded_db, tmp_path, monkeypatch):
+        """Rebuilding a throwaway DB elsewhere never adds a snapshot to the real restore points."""
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
+        demo_db = tmp_path / "demo" / "compta.db"
+        demo_db.parent.mkdir()
+        reset_db.reset(demo_db, "defaults", None)
+
+        reset_db.reset(demo_db, "defaults", None)  # the demo DB exists now: it gets snapshotted
+
+        assert len(list((demo_db.parent / "_backups").glob("*"))) == 1
+        assert not backups.exists()
 
     def test_live_rebuild_keeps_transfer_markers(self, seeded_db, client, tmp_path, monkeypatch):
         reset_db, backups = self._isolate(tmp_path, monkeypatch)

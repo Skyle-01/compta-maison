@@ -55,10 +55,9 @@ def make_db(path: Path) -> Path:
 
 
 def isolate_reset_db(tmp_path: Path, monkeypatch):
-    """Point reset_db.py's _inputs/, _backups/ and config dir at tmp_path (the same _inputs/ the app
-    archives uploads to, see _no_private_config); returns the module."""
+    """Point reset_db.py's _inputs/ and config dir at tmp_path (the same _inputs/ the app archives
+    uploads to, see _no_private_config); returns the module. _backups/ follows the DB (tmp_path too)."""
     monkeypatch.setattr(reset_db_module, "INPUTS_DIR", tmp_path / "_inputs")
-    monkeypatch.setattr(reset_db_module, "BACKUPS_DIR", tmp_path / "_backups")
     monkeypatch.setattr(reset_db_module, "CONFIG_DIR", tmp_path / "_config")  # absent unless a test writes it
     return reset_db_module
 

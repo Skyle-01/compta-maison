@@ -65,7 +65,7 @@ so a rebuild keeps it. Edit categories, rules and transfer markers from the app'
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
 pair; these manual decisions are listed in Settings and kept across rebuilds. To rebuild while
 keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current
-setup to `_backups/<timestamp>/` first. `--source backup` restores the latest snapshot. Copy a
+setup to `_backups/<timestamp>/` (next to the database) first. `--source backup` restores the latest snapshot. Copy a
 snapshot's files into `_config/` to make it your new reference setup.
 
 ## Other banks
