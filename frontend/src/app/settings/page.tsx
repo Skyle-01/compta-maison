@@ -270,7 +270,7 @@ export default function SettingsPage() {
     if (node.children.length > 0) {
       const sum = sumTargets(node);
       return sum > 0 ? (
-        <span className="text-xs text-zinc-400" title="Somme des objectifs de ses sous-catégories">
+        <span className="text-xs text-zinc-500" title="Somme des objectifs de ses sous-catégories">
           Σ {formatEuro(sum)} / mois
         </span>
       ) : null;
@@ -300,7 +300,7 @@ export default function SettingsPage() {
           <button
             type="button"
             onClick={() => setEditingTargetId(null)}
-            className="text-xs text-zinc-400 hover:text-zinc-700"
+            className="text-xs text-zinc-600 hover:text-zinc-900"
           >
             Annuler
           </button>
@@ -318,7 +318,7 @@ export default function SettingsPage() {
     ) : (
       <button
         onClick={() => startEditTarget(node)}
-        className="text-xs text-zinc-300 opacity-0 group-hover:opacity-100 hover:text-zinc-700 focus:opacity-100"
+        className="text-xs text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-zinc-900 focus:opacity-100"
         title="Définir un objectif de dépense mensuel"
       >
         ＋ objectif
@@ -465,7 +465,7 @@ export default function SettingsPage() {
               <button
                 type="button"
                 onClick={() => setEditingCatId(null)}
-                className="text-xs text-zinc-400 hover:text-zinc-700"
+                className="text-xs text-zinc-600 hover:text-zinc-900"
               >
                 Annuler
               </button>
@@ -475,7 +475,7 @@ export default function SettingsPage() {
               {node.name}
             </span>
           )}
-          <span className="ml-auto flex items-center gap-2 text-zinc-400">
+          <span className="ml-auto flex items-center gap-2 text-zinc-500">
             {renderTarget(node)}
             {node.rule_count > 0 && (
               <span className="text-xs" title={`${node.rule_count} règle(s)`}>
@@ -484,14 +484,14 @@ export default function SettingsPage() {
             )}
             <button
               onClick={() => startAddChild(node.id)}
-              className="hover:text-zinc-900"
+              className="text-zinc-600 hover:text-zinc-900"
               title="Ajouter une sous-catégorie"
             >
               ＋
             </button>
             <button
               onClick={() => startEditCat(node)}
-              className="hover:text-zinc-900"
+              className="text-zinc-600 hover:text-zinc-900"
               title="Renommer ou déplacer"
             >
               ✎
@@ -507,7 +507,7 @@ export default function SettingsPage() {
                     : `Supprimer la catégorie « ${node.name} » ? Ses règles seront supprimées et ses opérations déclassées.`;
                 if (confirm(msg)) run("categories", () => api.deleteCategory(node.id));
               }}
-              className="hover:text-red-700"
+              className="text-zinc-600 hover:text-red-700"
               title="Supprimer la catégorie"
             >
               ✕
@@ -549,7 +549,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => setAddingUnder(null)}
-              className="text-xs text-zinc-400 hover:text-zinc-700"
+              className="text-xs text-zinc-600 hover:text-zinc-900"
             >
               Annuler
             </button>
@@ -606,7 +606,7 @@ export default function SettingsPage() {
         </p>
         <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white text-sm">
           {tree.length === 0 ? (
-            <p className="px-3 py-2 text-zinc-400">Aucune catégorie pour l’instant.</p>
+            <p className="px-3 py-2 text-zinc-500">Aucune catégorie pour l’instant.</p>
           ) : (
             tree.map((node) => renderNode(node, 0))
           )}
@@ -662,7 +662,7 @@ export default function SettingsPage() {
             placeholder="Rechercher un motif, une catégorie, une description…"
             className="w-full max-w-sm rounded border border-zinc-300 px-2 py-1 text-sm"
           />
-          <span className="text-sm text-zinc-400">
+          <span className="text-sm text-zinc-500">
             {visibleRules.length}
             {visibleRules.length !== rules.length ? ` / ${rules.length}` : ""} règle(s)
           </span>
@@ -725,7 +725,7 @@ export default function SettingsPage() {
                     key={r.id}
                     className={`border-t border-zinc-100 ${flashRuleId === r.id ? "bg-amber-50" : ""}`}
                   >
-                    <td className="px-3 py-1.5 text-right text-zinc-400">{r.priority}</td>
+                    <td className="px-3 py-1.5 text-right text-zinc-500">{r.priority}</td>
                     <td className="px-3 py-1.5 font-mono text-xs">
                       {r.pattern}
                       {r.is_income_anchor && (
@@ -739,7 +739,7 @@ export default function SettingsPage() {
                     <td className="whitespace-nowrap px-3 py-1.5 text-right">
                       <button
                         onClick={() => startEditRule(r)}
-                        className="mr-2 text-zinc-400 hover:text-zinc-900"
+                        className="mr-2 text-zinc-600 hover:text-zinc-900"
                         title="Modifier la règle"
                       >
                         ✎
@@ -749,7 +749,7 @@ export default function SettingsPage() {
                           if (confirm(`Supprimer la règle « ${r.pattern} » ?`))
                             run("regles", () => api.deleteRule(r.id));
                         }}
-                        className="text-zinc-400 hover:text-red-700"
+                        className="text-zinc-600 hover:text-red-700"
                         title="Supprimer la règle"
                       >
                         ✕
@@ -809,7 +809,7 @@ export default function SettingsPage() {
             placeholder="Rechercher un libellé, une catégorie, une description…"
             className="w-full max-w-sm rounded border border-zinc-300 px-2 py-1 text-sm"
           />
-          <span className="text-sm text-zinc-400">
+          <span className="text-sm text-zinc-500">
             {visibleManual.length}
             {visibleManual.length !== manualTx.length ? ` / ${manualTx.length}` : ""} opération(s)
           </span>
@@ -865,13 +865,13 @@ export default function SettingsPage() {
                       <>
                         <button
                           onClick={() => saveNote(tx.id)}
-                          className="mr-2 text-zinc-600 hover:text-zinc-900"
+                          className="mr-2 rounded bg-zinc-900 px-2 py-0.5 text-xs text-white"
                         >
                           Enregistrer
                         </button>
                         <button
                           onClick={() => setEditingNoteTxId(null)}
-                          className="text-zinc-400 hover:text-zinc-700"
+                          className="text-xs text-zinc-600 hover:text-zinc-900"
                         >
                           Annuler
                         </button>
@@ -1068,7 +1068,7 @@ function TransferMarkersSection() {
         <button onClick={save} className="rounded bg-zinc-900 px-3 py-1 text-white">
           Enregistrer
         </button>
-        {isDefault && <span className="text-xs text-zinc-400">(par défaut)</span>}
+        {isDefault && <span className="text-xs text-zinc-500">(par défaut)</span>}
         {status && <span className="text-xs text-zinc-500">{status}</span>}
       </div>
     </section>
