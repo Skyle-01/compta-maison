@@ -57,19 +57,23 @@ class TestParseCsv:
 
     def test_missing_column_rejected(self):
         content = b'"Date operation";"Libelle";"Debit"\n"06/06/2026";"X";"1,00"'
-        with pytest.raises(CsvValidationError, match="Missing column"):
+        with pytest.raises(CsvValidationError, match="Colonne.*manquante.*Date valeur"):
             parse_csv(content)
 
     def test_invalid_date_reported_with_row(self):
-        with pytest.raises(CsvValidationError, match="Row 2.*Date valeur"):
+        with pytest.raises(CsvValidationError, match="Ligne 2 : date invalide.*« Date valeur »"):
             parse_csv(_csv('"06/06/2026";"not a date";"X";"1,00";""'))
 
     def test_invalid_amount_reported_with_row(self):
-        with pytest.raises(CsvValidationError, match="Row 2.*Debit"):
+        with pytest.raises(CsvValidationError, match="Ligne 2 : montant invalide.*« Debit »"):
             parse_csv(_csv('"06/06/2026";"06/06/2026";"X";"abc";""'))
 
+    def test_binary_file_rejected(self):
+        with pytest.raises(CsvValidationError, match="illisible en utf-8-sig, cp1252"):
+            parse_csv(b"PK\x03\x04\x81\x8d")
+
     def test_empty_csv_rejected(self):
-        with pytest.raises(CsvValidationError, match="no transactions"):
+        with pytest.raises(CsvValidationError, match="aucune opération"):
             parse_csv(_csv())
 
 
@@ -202,16 +206,16 @@ class TestBankProfiles:
     @pytest.mark.parametrize(
         ("keys", "message"),
         [
-            ({**SIGNED, "debit": "Débit", "credit": "Crédit"}, "either amount"),
-            ({k: v for k, v in SIGNED.items() if k != "amount"}, "either amount"),
-            ({k: v for k, v in SIGNED.items() if k != "amount"} | {"debit": "Débit"}, "either amount"),
-            ({**SIGNED, "delimeter": ";"}, "unknown key"),
+            ({**SIGNED, "debit": "Débit", "credit": "Crédit"}, "soit amount"),
+            ({k: v for k, v in SIGNED.items() if k != "amount"}, "soit amount"),
+            ({k: v for k, v in SIGNED.items() if k != "amount"} | {"debit": "Débit"}, "soit amount"),
+            ({**SIGNED, "delimeter": ";"}, "inconnue.*delimeter"),
             ({**SIGNED, "filename_pattern": "^export_(.+)"}, "account"),
             ({**SIGNED, "filename_pattern": "^export_(?P<account>"}, "filename_pattern"),
             ({**SIGNED, "encoding": "klingon"}, "encoding"),
-            ({**SIGNED, "delimiter": ";;"}, "single character"),
+            ({**SIGNED, "delimiter": ";;"}, "un seul caractère"),
             ({**SIGNED, "decimal": "x"}, "decimal"),
-            ({**SIGNED, "name": "default"}, "reserved"),
+            ({**SIGNED, "name": "default"}, "réservé"),
             ({k: v for k, v in SIGNED.items() if k != "libelle"}, "libelle"),
         ],
     )
@@ -220,7 +224,7 @@ class TestBankProfiles:
             parse_bank_profiles(_toml(**keys))
 
     def test_rejects_duplicate_names(self):
-        with pytest.raises(BankProfileError, match="duplicate"):
+        with pytest.raises(BankProfileError, match="en double"):
             parse_bank_profiles(_toml(**SIGNED) + _toml(**SIGNED))
 
     def test_rejects_bad_toml(self):
@@ -257,7 +261,7 @@ class TestProfileParsing:
         preamble = ("Compte n° 000,,", "Solde,,100.00", "")
         rows = parse_csv(_signed_csv("2026-06-01,A,-1.00", preamble=preamble), self.profiles)
         assert [r["Libelle"] for r in rows] == ["A"]
-        with pytest.raises(CsvValidationError, match="Row 5: invalid date in 'Date'"):
+        with pytest.raises(CsvValidationError, match="Ligne 5 : date invalide dans la colonne « Date »"):
             parse_csv(_signed_csv("01/06/2026,A,-1.00", preamble=preamble), self.profiles)
 
     def test_first_matching_profile_wins(self):
@@ -272,13 +276,15 @@ class TestProfileParsing:
     def test_no_match_lists_missing_columns_per_profile(self):
         with pytest.raises(CsvValidationError) as exc:
             parse_csv(b"Foo,Bar\n1,2\n", self.profiles)
-        assert exc.value.errors[0] == "No bank profile matches this file."
-        assert exc.value.errors[1].startswith("signe: Missing column(s): Date, Libellé, Montant")
-        assert exc.value.errors[2].startswith("default: Missing column(s): Date operation")
+        assert exc.value.errors[0] == "Aucun format de banque ne correspond à ce fichier :"
+        assert exc.value.errors[1].startswith(
+            "Format « signe » : colonne(s) manquante(s) : Date, Libellé, Montant"
+        )
+        assert exc.value.errors[2].startswith("Format par défaut : colonne(s) manquante(s) : Date operation")
 
     def test_row_error_does_not_fall_through(self):
         # The header is the signed profile's: its date error is reported, not the default's columns.
-        with pytest.raises(CsvValidationError, match="invalid date in 'Date'"):
+        with pytest.raises(CsvValidationError, match="date invalide dans la colonne « Date »"):
             parse_csv(_signed_csv("pas une date,A,-1.00"), self.profiles)
 
     def test_output_keys_canonical(self):

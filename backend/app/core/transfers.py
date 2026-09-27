@@ -188,9 +188,10 @@ def pair_manually(db_path: Path, a_id: int, b_id: int) -> int:
     (those follow their deposit_pattern). Any previous partner of either leg goes back to automatic
     detection, so every manual group keeps exactly two legs. Returns the new group id.
 
-    Raises LookupError for an unknown id, ValueError for an invalid pair."""
+    Raises LookupError for an unknown id, ValueError for an invalid pair (French messages, shown
+    as they are by the Transactions page)."""
     if a_id == b_id:
-        raise ValueError("A transfer needs two different operations")
+        raise ValueError("Un virement associe deux opérations différentes")
     with connect(db_path) as conn:
         rows = {}
         labels = []
@@ -202,19 +203,19 @@ def pair_manually(db_path: Path, a_id: int, b_id: int) -> int:
             labels.append(libelle)
         missing = [id_ for id_ in (a_id, b_id) if id_ not in rows]
         if missing:
-            raise LookupError(f"No transaction with id {missing[0]}")
+            raise LookupError(f"Opération {missing[0]} introuvable")
         patterns = _deposit_patterns(conn)
         if any(_is_external_deposit(label, patterns) for label in labels):
-            raise ValueError("A deposit to an external savings account can't be paired")
+            raise ValueError("Un versement vers une épargne externe ne peut pas être associé")
         debits = [id_ for id_, (_acc, debit, _credit) in rows.items() if debit > 0]
         credits = [id_ for id_, (_acc, _debit, credit) in rows.items() if credit > 0]
         if len(debits) != 1 or len(credits) != 1:
-            raise ValueError("A transfer pairs one debit with one credit")
+            raise ValueError("Un virement associe un débit et un crédit")
         (d_acc, d_cents, _), (c_acc, _, c_cents) = rows[debits[0]], rows[credits[0]]
         if d_acc is None or d_acc == c_acc:
-            raise ValueError("The two operations must be on two different accounts")
+            raise ValueError("Les deux opérations doivent être sur deux comptes différents")
         if d_cents != c_cents:
-            raise ValueError("The two operations must have the same amount")
+            raise ValueError("Les deux opérations doivent avoir le même montant")
 
         partners = [p for id_ in (a_id, b_id) for p in _partner_ids(conn, id_) if p not in (a_id, b_id)]
         _release(conn, partners)
@@ -244,7 +245,7 @@ def set_transfer_mode(db_path: Path, transaction_id: int, mode: TransferMode) ->
     Raises LookupError for an unknown id."""
     with connect(db_path) as conn:
         if conn.execute("SELECT 1 FROM transactions WHERE id = ?", (transaction_id,)).fetchone() is None:
-            raise LookupError(f"No transaction with id {transaction_id}")
+            raise LookupError(f"Opération {transaction_id} introuvable")
         partners = _partner_ids(conn, transaction_id)
         if mode == "none":
             touched = [transaction_id, *partners]

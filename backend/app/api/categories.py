@@ -102,6 +102,10 @@ def category_rows(conn) -> list[list[str]]:
     )
 
 
+def _name(conn, category_id: int) -> str:
+    return conn.execute("SELECT name FROM categories WHERE id = ?", (category_id,)).fetchone()[0]
+
+
 def reject_group_target(conn, category_id: int) -> None:
     """Leaf-only assignment: raise 422 if `category_id` is an existing non-leaf (has children).
 
@@ -109,9 +113,8 @@ def reject_group_target(conn, category_id: int) -> None:
     """
     child = conn.execute("SELECT 1 FROM categories WHERE parent_id = ?", (category_id,)).fetchone()
     if child:
-        raise HTTPException(
-            422, detail=[f"Category {category_id} is a group; assign rules/transactions to a leaf instead"]
-        )
+        name = _name(conn, category_id)
+        raise HTTPException(422, detail=[f"« {name} » est un groupe : choisissez une de ses sous-catégories"])
 
 
 def reject_populated_parent(conn, parent_id: int | None) -> None:
@@ -129,8 +132,8 @@ def reject_populated_parent(conn, parent_id: int | None) -> None:
         raise HTTPException(
             422,
             detail=[
-                "That parent already has transactions, rules or a budget target; "
-                "move them to a leaf before nesting under it"
+                f"« {_name(conn, parent_id)} » a déjà des opérations, des règles ou un objectif : "
+                "créez-y d’abord une sous-catégorie, qui les reprendra"
             ],
         )
 
@@ -139,7 +142,7 @@ def _get_one(conn, category_id: int) -> CategoryOut:
     for category in _load_all(conn):
         if category.id == category_id:
             return category
-    raise HTTPException(404, detail=[f"No category with id {category_id}"])
+    raise HTTPException(404, detail=[f"Catégorie {category_id} introuvable"])
 
 
 @router.get("")
@@ -167,7 +170,10 @@ def create_category(category: CategoryIn, db_path: DbPath) -> CategoryOut:
             )
         except sqlite3.IntegrityError as exc:
             raise HTTPException(
-                409, detail=[f"'{category.name}' already exists under that parent, or the parent is unknown"]
+                409,
+                detail=[
+                    f"« {category.name} » existe déjà à cet endroit, ou la catégorie parente est introuvable"
+                ],
             ) from exc
         child_id = cur.lastrowid
         # Subdivide: a populated leaf hands its direct rules + transactions down to the new child,
@@ -205,10 +211,15 @@ def update_category(category_id: int, category: CategoryIn, db_path: DbPath) -> 
         current: int | None = category.parent_id
         while current is not None:
             if current == category_id:
-                raise HTTPException(422, detail=["A category cannot be moved under itself"])
+                raise HTTPException(
+                    422,
+                    detail=[
+                        "Une catégorie ne peut pas être déplacée sous elle-même ni sous une de ses sous-catégories"
+                    ],
+                )
             row = conn.execute("SELECT parent_id FROM categories WHERE id = ?", (current,)).fetchone()
             if row is None:
-                raise HTTPException(422, detail=[f"No category with id {category.parent_id}"])
+                raise HTTPException(422, detail=[f"Catégorie {category.parent_id} introuvable"])
             current = row[0]
         reject_populated_parent(conn, category.parent_id)
         try:
@@ -217,9 +228,9 @@ def update_category(category_id: int, category: CategoryIn, db_path: DbPath) -> 
                 (category.name, category.parent_id, category_id),
             )
         except sqlite3.IntegrityError as exc:
-            raise HTTPException(409, detail=[f"'{category.name}' already exists under that parent"]) from exc
+            raise HTTPException(409, detail=[f"« {category.name} » existe déjà à cet endroit"]) from exc
         if cur.rowcount == 0:
-            raise HTTPException(404, detail=[f"No category with id {category_id}"])
+            raise HTTPException(404, detail=[f"Catégorie {category_id} introuvable"])
         return _get_one(conn, category_id)
 
 
@@ -232,7 +243,7 @@ def set_category_target(category_id: int, target: CategoryTargetIn, db_path: DbP
         reject_group_target(conn, category_id)
         cents = to_cents(target.budget_target) if target.budget_target is not None else None
         if cents is not None and cents <= 0:
-            raise HTTPException(422, detail=["A budget target must be at least 0.01 €"])
+            raise HTTPException(422, detail=["Un objectif doit valoir au moins 0,01 €"])
         conn.execute("UPDATE categories SET budget_target_cents = ? WHERE id = ?", (cents, category_id))
         return _get_one(conn, category_id)
 
@@ -242,10 +253,12 @@ def delete_category(category_id: int, db_path: DbPath) -> None:
     with connect(db_path) as conn:
         child = conn.execute("SELECT id FROM categories WHERE parent_id = ?", (category_id,)).fetchone()
         if child:
-            raise HTTPException(409, detail=["This category has subcategories; delete or move them first"])
+            raise HTTPException(
+                409, detail=["Cette catégorie a des sous-catégories : supprimez-les ou déplacez-les d’abord"]
+            )
         row = conn.execute("SELECT parent_id FROM categories WHERE id = ?", (category_id,)).fetchone()
         if row is None:
-            raise HTTPException(404, detail=[f"No category with id {category_id}"])
+            raise HTTPException(404, detail=[f"Catégorie {category_id} introuvable"])
         parent_id = row[0]
         siblings = (
             conn.execute("SELECT COUNT(*) FROM categories WHERE parent_id = ?", (parent_id,)).fetchone()[0]

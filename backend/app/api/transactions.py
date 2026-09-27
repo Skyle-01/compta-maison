@@ -298,12 +298,12 @@ def patch_transaction(
     fields = patch.model_fields_set
     with connect(db_path) as conn:
         if conn.execute("SELECT 1 FROM transactions WHERE id = ?", (transaction_id,)).fetchone() is None:
-            raise HTTPException(404, detail=[f"No transaction with id {transaction_id}"])
+            raise HTTPException(404, detail=[f"Opération {transaction_id} introuvable"])
         if "category_id" in fields:
             if patch.category_id is not None:
                 known = conn.execute("SELECT 1 FROM categories WHERE id = ?", (patch.category_id,)).fetchone()
                 if not known:
-                    raise HTTPException(422, detail=[f"Unknown category id: {patch.category_id}"])
+                    raise HTTPException(422, detail=[f"Catégorie {patch.category_id} introuvable"])
                 reject_group_target(conn, patch.category_id)
             conn.execute(
                 "UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL WHERE id = ?",

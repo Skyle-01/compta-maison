@@ -227,7 +227,7 @@ class TestManualTransfers:
     def test_pair_manually_rejects_external_deposit(self, db):
         import_rows(db, *self.DEPOSIT_AND_GIFT)
         ids = self._ids(db)
-        with pytest.raises(ValueError, match="external savings"):
+        with pytest.raises(ValueError, match="épargne externe"):
             pair_manually(db, ids["VIR VERS LIVRET ENFANT"], ids["VIR SEPA MAMIE"])
 
     def test_manual_unpair_survives_recompute(self, db):

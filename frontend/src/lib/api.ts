@@ -177,16 +177,32 @@ export function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** An error response without a `detail` (the dev proxy answers a bare 500 while the backend is
+ *  stopped): its status text would be English. */
+export function statusMessage(status: number): string {
+  return status >= 500
+    ? `Erreur ${status} du serveur — le backend est-il démarré ?`
+    : `La requête a échoué (erreur ${status})`;
+}
+
+/** fetch rejected: nothing answered (the browser's own message is English). */
+export const UNREACHABLE = "Serveur injoignable — l’application est-elle démarrée ?";
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, init);
+  let res: Response;
+  try {
+    res = await fetch(path, init);
+  } catch {
+    throw new ApiError(0, [UNREACHABLE]);
+  }
   if (!res.ok) {
-    let details = [res.statusText];
+    let details = [statusMessage(res.status)];
     try {
       const body = await res.json();
       const fromBody = errorDetails(body.detail);
       if (fromBody.length) details = fromBody;
     } catch {
-      // non-JSON error body — keep the status text
+      // non-JSON error body — keep the status message
     }
     throw new ApiError(res.status, details);
   }

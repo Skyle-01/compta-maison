@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.categories import _load_all, category_paths
+from app.api.errors import french_message
 from app.core.parsing import parse_csv
 from app.db import connect, get_transfer_markers, import_transactions, init_db
 from app.main import create_app
@@ -91,6 +92,7 @@ class TestImports:
             data={"account": "WEIRD"},
         )
         assert resp.status_code == 422
+        assert resp.json()["detail"][0].startswith("« WEIRD » ne désigne aucun compte connu")
 
     def test_upload_with_user_profile(self, seeded_db, client, tmp_path):
         _write_profiles(tmp_path)
@@ -376,6 +378,7 @@ class TestCategories:
         bar = _category_id(client, "bar")
         resp = client.put(f"/api/categories/{sortie}", json={"name": "sortie", "parent_id": bar})
         assert resp.status_code == 422
+        assert resp.json()["detail"][0].startswith("Une catégorie ne peut pas être déplacée sous elle-même")
 
     def test_subdivide_migrates_to_child(self, seeded_db, client):
         # Adding a child to a populated leaf moves its rules + transactions down into the new child;
@@ -388,7 +391,9 @@ class TestCategories:
         assert cats["courses"]["rule_count"] == 0  # rules moved down
         assert cats["bio"]["rule_count"] == 2  # SUPERMARCHE + LECLERC
         # 'courses' is now a group -> rules can no longer target it.
-        assert client.post("/api/rules", json={"category_id": courses, "pattern": "X"}).status_code == 422
+        resp = client.post("/api/rules", json={"category_id": courses, "pattern": "X"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == ["« courses » est un groupe : choisissez une de ses sous-catégories"]
         # The matching transaction now lives under the new leaf.
         items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]
         assert next(t for t in items if "SUPERMARCHE" in t["libelle"])["category"] == "bio"
@@ -421,6 +426,7 @@ class TestCategories:
         variable = _category_id(client, "variable")
         resp = client.post("/api/categories", json={"name": "courses", "parent_id": variable})
         assert resp.status_code == 409
+        assert resp.json()["detail"][0].startswith("« courses » existe déjà à cet endroit")
 
 
 class TestRules:
@@ -1044,6 +1050,47 @@ def _targets(db_path) -> dict[str, int | None]:
 RULES_HEADER_ONLY = "category_path;pattern;priority;is_income_anchor;description\n"
 
 
+class TestFrenchValidationErrors:
+    """Pydantic's English messages are rewritten (api/errors.py): the pages show `msg` as it is."""
+
+    def test_negative_target(self, seeded_db, client):
+        resp = client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": -5})
+        assert resp.status_code == 422
+        [error] = resp.json()["detail"]
+        assert error["msg"] == "Objectif : la valeur doit être supérieure à 0"
+        assert (error["type"], error["loc"]) == ("greater_than", ["body", "budget_target"])  # shape kept
+
+    def test_rule_fields(self, seeded_db, client):
+        resp = client.post(
+            "/api/rules", json={"category_id": _category_id(client, "bar"), "pattern": "", "priority": 1.5}
+        )
+        assert [e["msg"] for e in resp.json()["detail"]] == [
+            "Motif : ne peut pas être vide",
+            "Priorité : un nombre entier est attendu",
+        ]
+
+    def test_without_a_field(self, client):
+        resp = client.post("/api/rules", content=b"{bad", headers={"Content-Type": "application/json"})
+        assert [e["msg"] for e in resp.json()["detail"]] == ["Requête illisible (JSON invalide)"]
+
+    def test_list_item_and_constraints(self, client):
+        resp = client.put("/api/transfer-markers", json={"markers": [1]})
+        assert [e["msg"] for e in resp.json()["detail"]] == ["Marqueurs : un texte est attendu"]
+        resp = client.post("/api/transactions/transfer-pair", json={"transaction_ids": [1]})
+        assert [e["msg"] for e in resp.json()["detail"]] == ["Opérations : 2 élément(s) au minimum"]
+        resp = client.put("/api/transactions/1/transfer", json={"mode": "x"})
+        assert [e["msg"] for e in resp.json()["detail"]] == [
+            "Mode : valeur attendue : 'transfer', 'none' ou 'auto'"
+        ]
+
+    def test_unknown_type_and_field(self):
+        assert french_message({"type": "uuid_parsing", "loc": ("query", "ref")}) == "ref : valeur invalide"
+        assert french_message({"type": "greater_than", "loc": ("body", "x")}) == "x : valeur invalide"
+        assert french_message({"type": "less_than_equal", "loc": ("body",), "ctx": {"le": 2.5}}) == (
+            "La valeur doit être inférieure ou égale à 2,5"
+        )
+
+
 class TestBudgetTargets:
     def test_set_and_clear(self, seeded_db, client):
         bar = _category_id(client, "bar")
@@ -1098,6 +1145,9 @@ class TestBudgetTargets:
         created = client.post("/api/categories", json={"name": "voyage", "parent_id": None}).json()
         resp = client.put(f"/api/categories/{created['id']}", json={"name": "voyage", "parent_id": courses})
         assert resp.status_code == 422
+        assert resp.json()["detail"][0].startswith(
+            "« courses » a déjà des opérations, des règles ou un objectif"
+        )
 
     def test_export_and_round_trip(self, seeded_db, client, tmp_path):
         client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": 12.5})

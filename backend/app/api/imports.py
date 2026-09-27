@@ -26,7 +26,7 @@ def upload_csv(
     try:
         profiles = load_bank_profiles(config_dir)
     except BankProfileError as exc:
-        raise HTTPException(500, detail=[f"Invalid {PROFILES_FILENAME}: {exc}"]) from exc
+        raise HTTPException(500, detail=[f"{PROFILES_FILENAME} invalide : {exc}"]) from exc
     with connect(db_path) as conn:
         aliases = load_account_aliases(conn)
         known_codes = [code for (code,) in conn.execute("SELECT code FROM accounts ORDER BY sort_order")]
@@ -40,11 +40,11 @@ def upload_csv(
     if not account or (inferred_code is not None and inferred_code == resolve_account_code(account, aliases)):
         account = inferred or ""
     if not account:
-        raise HTTPException(422, detail=["No account given and none inferable from the filename"])
+        raise HTTPException(422, detail=["Aucun compte choisi, et le nom du fichier n’en désigne aucun"])
     if resolve_account_code(account, aliases) is None:
         raise HTTPException(
             422,
-            detail=[f"Account {account!r} doesn't map to a known account ({', '.join(known_codes)})"],
+            detail=[f"« {account} » ne désigne aucun compte connu ({', '.join(known_codes)})"],
         )
 
     content = file.file.read()

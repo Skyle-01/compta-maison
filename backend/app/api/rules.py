@@ -77,7 +77,7 @@ def create_rule(rule: RuleIn, db_path: DbPath) -> RuleOut:
             )
             rule_id = cur.lastrowid
     except sqlite3.IntegrityError as exc:
-        raise HTTPException(422, detail=[f"Unknown category id: {rule.category_id}"]) from exc
+        raise HTTPException(422, detail=[f"Catégorie {rule.category_id} introuvable"]) from exc
     _refresh(db_path)
     return RuleOut(id=rule_id, **rule.model_dump())
 
@@ -100,9 +100,9 @@ def update_rule(rule_id: int, rule: RuleIn, db_path: DbPath) -> RuleOut:
                 ),
             )
             if cur.rowcount == 0:
-                raise HTTPException(404, detail=[f"No rule with id {rule_id}"])
+                raise HTTPException(404, detail=[f"Règle {rule_id} introuvable"])
     except sqlite3.IntegrityError as exc:
-        raise HTTPException(422, detail=[f"Unknown category id: {rule.category_id}"]) from exc
+        raise HTTPException(422, detail=[f"Catégorie {rule.category_id} introuvable"]) from exc
     _refresh(db_path)
     return RuleOut(id=rule_id, **rule.model_dump())
 
@@ -112,5 +112,5 @@ def delete_rule(rule_id: int, db_path: DbPath) -> None:
     with connect(db_path) as conn:
         cur = conn.execute("DELETE FROM label_rules WHERE id = ?", (rule_id,))
         if cur.rowcount == 0:
-            raise HTTPException(404, detail=[f"No rule with id {rule_id}"])
+            raise HTTPException(404, detail=[f"Règle {rule_id} introuvable"])
     _refresh(db_path)

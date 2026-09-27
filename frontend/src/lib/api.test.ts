@@ -8,6 +8,7 @@ import {
   frenchMonth,
   frenchMonthShort,
   signedAmount,
+  statusMessage,
   suggestPattern,
   transactionsExportUrl,
 } from "./api";
@@ -56,18 +57,18 @@ describe("suggestPattern", () => {
 
 describe("errorDetails", () => {
   it("keeps the routers' string details", () => {
-    expect(errorDetails("Unknown account")).toEqual(["Unknown account"]);
-    expect(errorDetails(["line 3: bad date", "line 7: bad amount"])).toEqual([
-      "line 3: bad date",
-      "line 7: bad amount",
+    expect(errorDetails("Règle 3 introuvable")).toEqual(["Règle 3 introuvable"]);
+    expect(errorDetails(["Ligne 3 : date invalide", "Ligne 7 : montant invalide"])).toEqual([
+      "Ligne 3 : date invalide",
+      "Ligne 7 : montant invalide",
     ]);
   });
   it("shows a validation error by its msg, not [object Object]", () => {
     const detail = [
-      { type: "string_too_short", loc: ["body", "pattern"], msg: "String should have at least 1 character" },
+      { type: "string_too_short", loc: ["body", "pattern"], msg: "Motif : ne peut pas être vide" },
       "plain",
     ];
-    expect(errorDetails(detail)).toEqual(["String should have at least 1 character", "plain"]);
+    expect(errorDetails(detail)).toEqual(["Motif : ne peut pas être vide", "plain"]);
   });
   it("is empty when there is no detail", () => {
     expect(errorDetails(undefined)).toEqual([]);
@@ -83,6 +84,13 @@ describe("errorMessage", () => {
   });
   it("stringifies anything else", () => {
     expect(errorMessage("boom")).toBe("boom");
+  });
+});
+
+describe("statusMessage", () => {
+  it("replaces the English status text, pointing at the backend for a server error", () => {
+    expect(statusMessage(500)).toBe("Erreur 500 du serveur — le backend est-il démarré ?");
+    expect(statusMessage(404)).toBe("La requête a échoué (erreur 404)");
   });
 });
 

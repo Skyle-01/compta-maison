@@ -16,7 +16,8 @@ PROFILES_FILENAME = "bank_profiles.toml"
 
 
 class BankProfileError(ValueError):
-    """bank_profiles.toml is unreadable or describes an invalid profile."""
+    """bank_profiles.toml is unreadable or describes an invalid profile (French message: the Import
+    page shows it)."""
 
 
 @dataclass(frozen=True)
@@ -71,50 +72,50 @@ _KEYS = {*_STR_KEYS, "encoding"}
 def profile_from_dict(data: dict) -> BankProfile:
     """Validate one [[profile]] table. Raises BankProfileError naming the problem."""
     name = data.get("name")
-    label = f"profile {name!r}" if name else "a profile"
+    label = f"profil « {name} »" if name else "un profil"
     unknown = sorted(set(data) - _KEYS)
     if unknown:
-        raise BankProfileError(f"{label}: unknown key(s) {', '.join(unknown)}")
+        raise BankProfileError(f"{label} : clé(s) inconnue(s) {', '.join(unknown)}")
     for key in _STR_KEYS:
         if key in data and not isinstance(data[key], str):
-            raise BankProfileError(f"{label}: {key} must be a string")
+            raise BankProfileError(f"{label} : {key} doit être un texte")
     if not name:
-        raise BankProfileError("every profile needs a name")
+        raise BankProfileError("chaque profil doit avoir un nom (name)")
     for key in ("date_operation", "libelle"):
         if not data.get(key):
-            raise BankProfileError(f"{label}: {key} (the column name) is required")
+            raise BankProfileError(f"{label} : {key} (le nom de la colonne) est obligatoire")
 
     has_amount = bool(data.get("amount"))
     has_debit, has_credit = bool(data.get("debit")), bool(data.get("credit"))
     if (has_amount and (has_debit or has_credit)) or (not has_amount and not (has_debit and has_credit)):
-        raise BankProfileError(f"{label}: give either amount, or both debit and credit")
+        raise BankProfileError(f"{label} : indiquez soit amount, soit debit et credit")
 
     delimiter = data.get("delimiter", ";")
     if len(delimiter) != 1:
-        raise BankProfileError(f"{label}: delimiter must be a single character")
+        raise BankProfileError(f"{label} : delimiter doit être un seul caractère")
     decimal = data.get("decimal", ",")
     if decimal not in (",", "."):
-        raise BankProfileError(f"{label}: decimal must be ',' or '.'")
+        raise BankProfileError(f"{label} : decimal doit valoir ',' ou '.'")
 
     encodings = data.get("encoding", ["utf-8-sig", "cp1252"])
     if isinstance(encodings, str):
         encodings = [encodings]
     if not encodings or not all(isinstance(e, str) for e in encodings):
-        raise BankProfileError(f"{label}: encoding must be a string or a list of strings")
+        raise BankProfileError(f"{label} : encoding doit être un texte ou une liste de textes")
     for encoding in encodings:
         try:
             codecs.lookup(encoding)
         except LookupError as exc:
-            raise BankProfileError(f"{label}: unknown encoding {encoding!r}") from exc
+            raise BankProfileError(f"{label} : encoding inconnu « {encoding} »") from exc
 
     pattern = None
     if data.get("filename_pattern"):
         try:
             pattern = re.compile(data["filename_pattern"])
         except re.error as exc:
-            raise BankProfileError(f"{label}: invalid filename_pattern: {exc}") from exc
+            raise BankProfileError(f"{label} : filename_pattern invalide ({exc})") from exc
         if "account" not in pattern.groupindex:
-            raise BankProfileError(f"{label}: filename_pattern needs an (?P<account>...) group")
+            raise BankProfileError(f"{label} : filename_pattern doit contenir un groupe (?P<account>...)")
 
     return BankProfile(
         name=name,
@@ -137,21 +138,23 @@ def parse_bank_profiles(text: str) -> list[BankProfile]:
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:
-        raise BankProfileError(f"invalid TOML: {exc}") from exc
+        raise BankProfileError(f"TOML invalide ({exc})") from exc
     unknown = sorted(set(data) - {"profile"})
     if unknown:
-        raise BankProfileError(f"unknown top-level key(s) {', '.join(unknown)} (expected [[profile]] tables)")
+        raise BankProfileError(
+            f"clé(s) inconnue(s) {', '.join(unknown)} (seules des tables [[profile]] sont attendues)"
+        )
     tables = data.get("profile", [])
     if not isinstance(tables, list) or not all(isinstance(t, dict) for t in tables):
-        raise BankProfileError("profiles must be [[profile]] tables")
+        raise BankProfileError("les profils doivent être des tables [[profile]]")
 
     profiles = [profile_from_dict(t) for t in tables]
     seen: set[str] = set()
     for profile in profiles:
         if profile.name == DEFAULT_PROFILE.name:
-            raise BankProfileError(f"the name {profile.name!r} is reserved for the built-in format")
+            raise BankProfileError(f"le nom « {profile.name} » est réservé au format intégré")
         if profile.name in seen:
-            raise BankProfileError(f"duplicate profile name {profile.name!r}")
+            raise BankProfileError(f"nom de profil en double : « {profile.name} »")
         seen.add(profile.name)
     return profiles
 

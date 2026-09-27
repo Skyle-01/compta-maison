@@ -12,6 +12,10 @@ REQUIRED_COLUMNS = ["Date operation", "Date valeur", "Libelle", "Debit", "Credit
 HEADER_SCAN_LINES = 30
 
 
+# Messages are French: the Import page shows them as they are.
+NO_TRANSACTIONS = "Le fichier ne contient aucune opération"
+
+
 class CsvValidationError(ValueError):
     def __init__(self, errors: list[str]):
         super().__init__("; ".join(errors))
@@ -80,6 +84,10 @@ def _header_line(table: list[list[str]], columns: list[str]) -> tuple[int, list[
     return -1, best or columns
 
 
+def _format_label(profile: BankProfile) -> str:
+    return "Format par défaut" if profile.name == DEFAULT_PROFILE.name else f"Format « {profile.name} »"
+
+
 def detect_profile(
     content: bytes, profiles: Sequence[BankProfile]
 ) -> tuple[BankProfile, list[list[str]], int]:
@@ -90,20 +98,26 @@ def detect_profile(
         try:
             text = _decode(content, profile.encodings)
             table = list(csv.reader(io.StringIO(text), delimiter=profile.delimiter))
-        except (UnicodeDecodeError, csv.Error) as exc:
-            failures.append((profile, f"Unreadable CSV: {exc}"))
+        except UnicodeDecodeError:
+            encodings = ", ".join(profile.encodings)
+            failures.append((profile, f"fichier illisible en {encodings} (est-ce bien un CSV ?)"))
+            continue
+        except csv.Error as exc:
+            failures.append((profile, f"CSV illisible : {exc}"))
             continue
         if not table:
-            raise CsvValidationError(["CSV contains no transactions"])
+            raise CsvValidationError([NO_TRANSACTIONS])
         idx, missing = _header_line(table, profile.required_columns)
         if idx >= 0:
             return profile, table, idx
-        failures.append((profile, f"Missing column(s): {', '.join(missing)}"))
+        failures.append((profile, f"colonne(s) manquante(s) : {', '.join(missing)}"))
 
     if len(failures) == 1:
-        raise CsvValidationError([failures[0][1]])
+        reason = failures[0][1]
+        raise CsvValidationError([reason[0].upper() + reason[1:]])
     raise CsvValidationError(
-        ["No bank profile matches this file."] + [f"{p.name}: {reason}" for p, reason in failures]
+        ["Aucun format de banque ne correspond à ce fichier :"]
+        + [f"{_format_label(p)} : {reason}" for p, reason in failures]
     )
 
 
@@ -137,14 +151,16 @@ def parse_statement(content: bytes, profiles: Sequence[BankProfile]) -> tuple[Ba
             try:
                 record[key] = datetime.strptime(value, profile.date_format).strftime("%Y-%m-%d")
             except ValueError:
-                errors.append(f"Row {line_no}: invalid date in '{column}': {value!r}")
+                errors.append(f"Ligne {line_no} : date invalide dans la colonne « {column} » : « {value} »")
                 record[key] = None
 
         if profile.amount:
             value = cell(raw, profile.amount)
             signed = _parse_number(value, profile.decimal)
             if signed is None:
-                errors.append(f"Row {line_no}: invalid amount in '{profile.amount}': {value!r}")
+                errors.append(
+                    f"Ligne {line_no} : montant invalide dans la colonne « {profile.amount} » : « {value} »"
+                )
                 signed = 0.0
             # Literal 0.0 on the unused side (never -0.0, whose text would change import_hash).
             record["Debit"] = -signed if signed < 0 else 0.0
@@ -154,7 +170,9 @@ def parse_statement(content: bytes, profiles: Sequence[BankProfile]) -> tuple[Ba
                 value = cell(raw, column)
                 parsed = _parse_amount(value, profile.decimal)
                 if parsed is None:
-                    errors.append(f"Row {line_no}: invalid amount in '{column}': {value!r}")
+                    errors.append(
+                        f"Ligne {line_no} : montant invalide dans la colonne « {column} » : « {value} »"
+                    )
                     parsed = 0.0
                 record[key] = parsed
 
@@ -164,7 +182,7 @@ def parse_statement(content: bytes, profiles: Sequence[BankProfile]) -> tuple[Ba
     if errors:
         raise CsvValidationError(errors)
     if not rows:
-        raise CsvValidationError(["CSV contains no transactions"])
+        raise CsvValidationError([NO_TRANSACTIONS])
 
     rows.sort(key=lambda r: r["Date valeur"])
     return profile, rows

@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from app.api import accounts, categories, dashboard, imports, rules, transactions, transfer_markers
+from app.api.errors import french_validation_errors
 from app.db import DEFAULT_CONFIG_DIR, DEFAULT_DB_PATH, DEFAULT_INPUTS_DIR, init_db
 
 
@@ -21,6 +23,7 @@ def create_app(
     # Resolved here, not as a default argument, so tests can point it at a temp dir.
     app.state.config_dir = config_dir if config_dir is not None else DEFAULT_CONFIG_DIR
     app.state.inputs_dir = inputs_dir if inputs_dir is not None else DEFAULT_INPUTS_DIR
+    app.add_exception_handler(RequestValidationError, french_validation_errors)
 
     app.include_router(imports.router)
     app.include_router(transactions.router)
