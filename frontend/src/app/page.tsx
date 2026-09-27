@@ -46,7 +46,7 @@ function DeltaLine({ delta, prevMonth, goodIsUp }: { delta: number; prevMonth: s
   const up = delta > 0;
   const good = up === goodIsUp;
   return (
-    <div className={`mt-1 text-xs ${good ? "text-green-600" : "text-red-600"}`}>
+    <div className={`mt-1 text-xs ${good ? "text-green-700" : "text-red-700"}`}>
       {up ? "▲" : "▼"} {formatEuro(Math.abs(delta))} vs {frenchMonthShort(prevMonth)}
     </div>
   );
