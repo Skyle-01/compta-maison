@@ -38,7 +38,7 @@ backlog/               # one Markdown per item in bug/, feat/, tech/ (no ids, no
 data/                  # FICTIONAL example config (accounts.csv, categories.csv, rules.csv, transfer_markers.csv, bank_profiles.toml) — fallback for reset_db.py --source defaults; never put real data here
   demo/                # fictional statements (PERSO/JOINT/LIVRET, Apr–Sep 2026): copy to _inputs/ + `reset_db.py --source defaults` for a demo DB (also the data for UI checks); `test_demo_statements_build_a_working_example` keeps them importable
 _config/               # the user's PRIVATE config, same files (+ optional transfer_markers.csv, overrides.csv, bank_profiles.toml) — gitignored, preferred by --source defaults (override with $COMPTA_CONFIG_DIR)
-_inputs/               # bank CSV exports (gitignored); _inputs/compta.db.bak = pre-refactor DB
+_inputs/               # bank CSV exports (gitignored)
 compta.db              # SQLite, source of truth (gitignored)
 ```
 
