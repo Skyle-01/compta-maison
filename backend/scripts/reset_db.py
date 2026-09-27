@@ -128,11 +128,7 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
         cat_rows = category_rows(conn)
         rules = rule_rows(conn, path_by_id)
         overrides = override_rows(conn, path_by_id)
-        # A live DB from before transfer markers existed has no such table: skip, default applies.
-        has_markers = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transfer_markers'"
-        ).fetchone()
-        markers = get_transfer_markers(conn) if has_markers else []
+        markers = get_transfer_markers(conn)
 
     _write_csv(
         accounts_csv,
@@ -146,8 +142,8 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
     _write_csv(cat_csv, CATEGORIES_HEADER, cat_rows)
     _write_csv(rules_csv, RULES_HEADER, rules)
     _write_csv(overrides_csv, OVERRIDES_HEADER, overrides)
-    if has_markers:  # written even when empty, so a live rebuild keeps "default" as-is
-        _write_csv(out_dir / "transfer_markers.csv", ["marker"], [[m] for m in markers])
+    # Written even when empty, so a live rebuild keeps "default" as-is.
+    _write_csv(out_dir / "transfer_markers.csv", ["marker"], [[m] for m in markers])
     print(
         f"Exported {len(account_rows)} accounts, {len(path_by_id)} categories, {len(rules)} rules, {len(overrides)} overrides, "
         f"{len(markers)} transfer markers "

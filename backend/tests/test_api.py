@@ -1186,15 +1186,6 @@ class TestBudgetTargets:
         with pytest.raises(ValueError, match="line 2"):
             import_csv(cats_csv, rules_csv, fresh)
 
-    def test_snapshot_of_db_without_the_column(self, seeded_db, tmp_path):
-        """reset_db.py --source live snapshots a DB built before the column existed."""
-        with connect(seeded_db) as conn:
-            conn.execute("ALTER TABLE categories DROP COLUMN budget_target_cents")
-        cat_csv, _rules, _overrides = export_current(seeded_db, tmp_path / "snap")
-        lines = cat_csv.read_text(encoding="utf-8-sig").splitlines()
-        assert lines[0] == "path;budget_target"
-        assert "variable / sortie / bar;" in lines
-
     def test_dashboard_budget(self, seeded_db, client):
         _upload(client)
         client.put(f"/api/categories/{_category_id(client, 'courses')}/target", json={"budget_target": 50})

@@ -35,8 +35,7 @@ def csv_response(rows: list[list], header: list[str], filename: str) -> Response
 
 
 def _path_map(conn) -> dict[int, str]:
-    """Map each category id to its full ` / `-joined path. Reads only id/name/parent_id, so it also
-    works on a database from before the budget-target column (reset_db.py snapshots one)."""
+    """Map each category id to its full ` / `-joined path."""
     by_id = {
         cid: (name, parent_id)
         for cid, name, parent_id in conn.execute("SELECT id, name, parent_id FROM categories")
@@ -86,16 +85,10 @@ CATEGORIES_HEADER = ["path", "budget_target"]
 
 def category_rows(conn) -> list[list[str]]:
     """categories.csv rows `[path, budget_target]`, sorted by path so parents precede children.
-    The target is in euros (`300.00`), empty when unset — or always empty on a database from before
-    the budget-target column (a pre-change live DB snapshotted by reset_db.py)."""
-    columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)")}
-    targets: dict[int, int] = {}
-    if "budget_target_cents" in columns:
-        targets = dict(
-            conn.execute(
-                "SELECT id, budget_target_cents FROM categories WHERE budget_target_cents IS NOT NULL"
-            ).fetchall()
-        )
+    The target is in euros (`300.00`), empty when unset."""
+    targets: dict[int, int] = dict(
+        conn.execute("SELECT id, budget_target_cents FROM categories WHERE budget_target_cents IS NOT NULL")
+    )
     paths = _path_map(conn)
     return sorted(
         [path, f"{euros(targets[cid]):.2f}" if cid in targets else ""] for cid, path in paths.items()
