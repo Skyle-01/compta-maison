@@ -2,10 +2,11 @@
 
 ## Context
 
-`frontend/src/app/layout.tsx` lays the nav out as `flex items-center gap-6 px-6` with no wrapping
-or scrolling. At 390 px the four links don't fit: "Tableau de bord" breaks over two lines and
-"Réglages" is cut off at the right edge, so the Settings page can't be reached from the menu on a
-phone.
+`frontend/src/app/layout.tsx` lays the header nav (compta, Tableau de bord, Transactions, Importer,
+Réglages) out as a single non-wrapping flex row with `gap-6 px-6`. At 390 px it is ~430 px wide:
+"Tableau de bord" breaks over two lines, "Réglages" is cut off at the right edge (so Settings can't
+be reached from the menu on a phone), and every page gets a horizontal scroll (`scrollWidth` 428 on
+`/` and `/settings`).
 
 ## To do / to investigate
 
@@ -15,4 +16,5 @@ phone.
 
 ## Progress
 
-- 2026-09-26: seen on a Playwright capture of the Transactions page at 390 px (fictional data).
+- 2026-09-26: seen on Playwright captures at 390 px (fictional data) by two sessions of the backlog
+  sprint (Transactions page, then `/` and `/settings`); their two items are merged here.

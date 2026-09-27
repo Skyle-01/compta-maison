@@ -1,4 +1,4 @@
-# Settings tables are clipped at phone width
+# Tables are clipped at phone width (Settings and Transactions)
 
 ## Context
 
@@ -12,9 +12,12 @@ on a phone.
 
 - Make the wrappers scroll horizontally (`overflow-x-auto`, keeping the rounded border), or stack
   the rows as cards below a breakpoint.
-- Check the Transactions page tables for the same pattern.
+- The Transactions table has the same wrapper (`transactions/page.tsx`, `overflow-hidden rounded-lg
+  border`): at 390 px only Date and Libellé show; the amount, the category and the Classer /
+  Modifier / Dissocier actions are out of reach. Fix both pages the same way.
 
 ## Progress
 
 - 2026-09-26: seen in Playwright captures at 390 px (fictional data) while adding the Settings
   table of contents.
+- 2026-09-27: confirmed on the Transactions page at 390 px (sprint closeout visual pass).
