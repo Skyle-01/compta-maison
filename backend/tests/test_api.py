@@ -774,7 +774,8 @@ class TestResetDb:
     """reset_db.py rebuilds the DB from _inputs/ + a taxonomy source, preserving manual overrides."""
 
     def _isolate(self, tmp_path, monkeypatch):
-        """Point reset_db at a temp _inputs/ (holding the sample statement) and _backups/."""
+        """Point reset_db at a temp _inputs/ (holding the sample statement); return the _backups/ next
+        to seeded_db, where reset_db snapshots it."""
         reset_db = isolate_reset_db(tmp_path, monkeypatch)
         reset_db.INPUTS_DIR.mkdir()
         # Same filename _upload uses, so the inferred account (and thus import_hash) matches.
