@@ -5,8 +5,7 @@
 Since the chart height follows the busiest column (`busiestColumn` in `frontend/src/app/page.tsx`),
 the short left-hand columns (income sources, `Revenus`, `Budget`) are laid out low in the card: with
 the fictional data (two income sources, ~12 expense leaves) the top third of the card left of the
-expense groups is empty on desktop, and on a phone (760 px chart scrolled sideways) the first screen
-of the card shows only blank space above Salaire / Revenus, with a "Faites défiler…" hint at the top.
+expense groups is empty.
 
 ## To do / to investigate
 
@@ -16,5 +15,5 @@ of the card shows only blank space above Salaire / Revenus, with a "Faites défi
 
 ## Progress
 
-- 2026-09-27: seen on Playwright captures of the dashboard (desktop and 390 px, fictional data)
-  during the backlog-sprint closeout.
+- 2026-09-27: seen on a Playwright capture of the dashboard (1400 px, fictional data) during the
+  backlog-sprint closeout.
