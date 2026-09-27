@@ -27,3 +27,7 @@ been rebuilt.
   existing DB is snapshotted first. Their path: leave the old `compta.db` out of the new clone,
   put the exported categories/rules/overrides CSVs plus a hand-written `accounts.csv` in
   `_config/`, and run `reset_db.py --source defaults`.
+- 2026-09-27: unblocked. The owner rebuilt their real DB that way: every statement resolved to
+  an account, all manual overrides restored (none skipped). No DB built before 2026-09-26 is left,
+  so the compat branches can go; the pre-accounts crash above needs no fix either (no such DB
+  remains).
