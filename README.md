@@ -103,8 +103,9 @@ Known bugs and ideas live in [`backlog/`](backlog/), one file per item.
 
 CI runs the same checks on every push (Python 3.11 and 3.14). Python dependencies are pinned to
 exact versions in `backend/requirements*.txt`: to update, check `pip list --outdated`, edit the
-pins and re-run the checks. npm versions are pinned by `frontend/package-lock.json`. Dependabot
-opens a monthly update PR per ecosystem (pip, npm, GitHub Actions).
+pins and re-run the checks. npm versions are pinned by `frontend/package-lock.json`: check
+`npm outdated --prefix frontend`, install the new versions and re-run the checks. No bot opens
+update PRs: dependencies are updated by hand.
 
 ## License
 
