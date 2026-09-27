@@ -1025,7 +1025,9 @@ function ManualTransfersSection() {
 function TransferMarkersSection() {
   const [text, setText] = useState("");
   const [isDefault, setIsDefault] = useState(true);
-  const [status, setStatus] = useState<string | null>(null);
+  // The success note stays next to the button; a failure goes to the red banner.
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api
@@ -1034,23 +1036,26 @@ function TransferMarkersSection() {
         setText(m.markers.join("\n"));
         setIsDefault(m.is_default);
       })
-      .catch((e) => setStatus(errorMessage(e)));
+      .catch((e) => setError(errorMessage(e)));
   }, []);
 
   async function save() {
+    setSaved(false);
+    setError(null);
     try {
       const m = await api.setTransferMarkers(text.split("\n"));
       setText(m.markers.join("\n"));
       setIsDefault(m.is_default);
-      setStatus("Enregistré — virements recalculés.");
+      setSaved(true);
     } catch (e) {
-      setStatus(errorMessage(e));
+      setError(errorMessage(e));
     }
   }
 
   return (
     <section id="virements-internes" className={SECTION_CLASS}>
       <h2 className="text-xl font-semibold">Virements internes</h2>
+      <SectionError message={error} onClose={() => setError(null)} />
       <p className="text-sm text-zinc-500">
         Un débit et un crédit de même montant sur deux comptes, à 3 jours d’écart au plus, sont
         associés en virement (exclus des revenus/dépenses) si les deux libellés commencent par l’un
@@ -1069,7 +1074,7 @@ function TransferMarkersSection() {
           Enregistrer
         </button>
         {isDefault && <span className="text-xs text-zinc-500">(par défaut)</span>}
-        {status && <span className="text-xs text-zinc-500">{status}</span>}
+        {saved && <span className="text-xs text-zinc-500">Enregistré — virements recalculés.</span>}
       </div>
     </section>
   );
