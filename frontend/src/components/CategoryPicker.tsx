@@ -78,7 +78,7 @@ export default function CategoryPicker({
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => choose(null)}
-              className="block w-full px-2 py-1 text-left text-zinc-400 hover:bg-zinc-50"
+              className="block w-full px-2 py-1 text-left text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900"
             >
               — sans catégorie —
             </button>
@@ -97,7 +97,7 @@ export default function CategoryPicker({
               </button>
             </li>
           ))}
-          {matches.length === 0 && <li className="px-2 py-1 text-zinc-400">Aucun résultat</li>}
+          {matches.length === 0 && <li className="px-2 py-1 text-zinc-500">Aucun résultat</li>}
         </ul>
       )}
     </div>

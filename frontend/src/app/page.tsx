@@ -41,7 +41,7 @@ const treeLabel = (name: string): string => TREE_LABELS[name] ?? name;
  *  by whether an increase is good (revenus, reste) or bad (dépenses). */
 function DeltaLine({ delta, prevMonth, goodIsUp }: { delta: number; prevMonth: string; goodIsUp: boolean }) {
   if (Math.abs(delta) < 0.005) {
-    return <div className="mt-1 text-xs text-zinc-400">stable vs {frenchMonthShort(prevMonth)}</div>;
+    return <div className="mt-1 text-xs text-zinc-500">stable vs {frenchMonthShort(prevMonth)}</div>;
   }
   const up = delta > 0;
   const good = up === goodIsUp;
@@ -215,7 +215,7 @@ function ResteTrend({ history, current }: { history: MonthTotals[]; current: str
             y={0}
             stroke="#a1a1aa"
             strokeDasharray="3 3"
-            label={{ value: "0 €", position: "left", fontSize: 10, fill: "#a1a1aa" }}
+            label={{ value: "0 €", position: "left", fontSize: 10, fill: "#71717a" }}
           />
           <Tooltip
             formatter={(v) => [formatEuro(Number(v)), "Reste"] as [string, string]}
@@ -253,7 +253,7 @@ const TONE_BAR: Record<BudgetTone, string> = {
   over: "bg-red-500",
 };
 const TONE_TEXT: Record<BudgetTone, string> = {
-  ok: "text-zinc-400",
+  ok: "text-zinc-500",
   warn: "text-amber-700",
   over: "text-red-700",
 };
@@ -278,7 +278,7 @@ function BudgetLine({
       <div className="flex items-baseline justify-between gap-3 text-sm">
         <span className={`min-w-0 truncate ${strong ? "font-medium" : "text-zinc-700"}`}>{label}</span>
         <span className="shrink-0 tabular-nums">
-          {formatEuro(actual)} <span className="text-zinc-400">/ {formatEuro(target)}</span>
+          {formatEuro(actual)} <span className="text-zinc-500">/ {formatEuro(target)}</span>
         </span>
       </div>
       <div className={`mt-1 rounded-full bg-zinc-100 ${strong ? "h-2" : "h-1.5"}`}>
@@ -309,7 +309,7 @@ function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean })
             </span>
           )}
         </h2>
-        <Link href="/settings" className="text-xs text-zinc-500 underline hover:no-underline">
+        <Link href="/settings" className="text-xs text-zinc-600 underline hover:text-zinc-900 hover:no-underline">
           Modifier les objectifs
         </Link>
       </div>
@@ -401,7 +401,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
       >
         <span className={depth <= 1 ? "font-medium" : ""}>
           {expandable && (
-            <span className="mr-1 inline-block w-3 text-zinc-400">{open ? "▾" : "▸"}</span>
+            <span className="mr-1 inline-block w-3 text-zinc-500">{open ? "▾" : "▸"}</span>
           )}
           {treeLabel(node.name)}
         </span>
@@ -411,7 +411,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
       </div>
       {open &&
         (loading ? (
-          <div className="py-1 text-xs text-zinc-400" style={childIndent}>
+          <div className="py-1 text-xs text-zinc-500" style={childIndent}>
             Chargement…
           </div>
         ) : txns && txns.length > 0 ? (
@@ -428,7 +428,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
             </div>
           ))
         ) : (
-          <div className="py-1 text-xs text-zinc-400" style={childIndent}>
+          <div className="py-1 text-xs text-zinc-500" style={childIndent}>
             Aucune transaction dans cette catégorie.
           </div>
         ))}
@@ -715,7 +715,7 @@ export default function DashboardPage() {
               </div>
             </div>
           ) : (
-            <p className="text-sm text-zinc-400">Aucun revenu ni dépense catégorisée pour l’instant.</p>
+            <p className="text-sm text-zinc-500">Aucun revenu ni dépense catégorisée pour l’instant.</p>
           )}
         </div>
       </section>

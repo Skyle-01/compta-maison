@@ -361,7 +361,7 @@ export default function TransactionsPage() {
                               placeholder="texte à rechercher"
                               className="w-52 rounded border border-zinc-300 px-1 py-0.5 font-mono text-xs"
                             />
-                            <span className="text-xs text-zinc-400">
+                            <span className="text-xs text-zinc-500">
                               {!form.pattern.trim()
                                 ? ""
                                 : matchCount == null
