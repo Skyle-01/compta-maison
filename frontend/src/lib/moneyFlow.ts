@@ -6,9 +6,6 @@ export type FlowRole = "income" | "budget" | "expense" | "savings" | "net";
 export interface FlowNodeDatum {
   name: string;
   role: FlowRole;
-  /** Filled in by recharts' layout, read back in the custom node renderer. */
-  value?: number;
-  targetNodes?: number[];
 }
 export interface FlowLink {
   source: number;
@@ -43,8 +40,7 @@ function topLevel(tree: CategoryNode, name: string): CategoryNode | undefined {
  *  Budget node so its inflow and outflow always match. To keep the right edge legible, tiny
  *  expense leaves within a group are folded into a single "Autres" node, and a leaf name used under
  *  several groups (two "Prêt") gets its parent's name appended.
- *  Node order is meaningful: the page renders with recharts' `sort={false}`, which keeps each
- *  column in array order. Groups and leaves are emitted largest first, a group's sub-groups before
+ *  Node order is meaningful: the layout (lib/flowLayout.ts) keeps each column in array order. Groups and leaves are emitted largest first, a group's sub-groups before
  *  its leaves, and Non classé / Épargne / Reste last, so every column lists its nodes in the same
  *  order as their parents and links don't cross. Returns indexed {nodes, links}. */
 export function moneyFlow(data: Dashboard): FlowData {
