@@ -9,7 +9,7 @@ your machine; nothing is sent anywhere.
 
 | Path | Holds | Tracked? |
 | --- | --- | --- |
-| `data/` | a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles) | yes |
+| `data/` | a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles) and six months of fictional statements in `data/demo/` | yes |
 | `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`, `bank_profiles.toml`) | no |
 | `_inputs/` | your bank statement CSVs | no |
 | `_backups/` | automatic snapshots taken before each rebuild | no |
@@ -29,6 +29,11 @@ npm ci --prefix frontend
 ```
 
 The commands below assume the virtualenv is active.
+
+To try the app before using your own data, copy `data/demo/*.csv` to `_inputs/` and run
+`python backend/scripts/reset_db.py --source defaults`: six months of fictional statements for the
+example accounts. Delete them from `_inputs/` before you add your own statements and config (with
+your own `accounts.csv` their account names no longer resolve).
 
 1. Put your bank exports in `_inputs/`. Files are named like
    `RELEVE_COMPTE_JOINT_2026_06_08.csv`: the part between `RELEVE_[COMPTE_]` and the date is the

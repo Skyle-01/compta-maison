@@ -811,6 +811,25 @@ class TestResetDb:
         assert self._count(db_path, "label_rules") > 0
         assert self._count(db_path, "transactions") == 4  # the sample statement resolved to JOINT
 
+    def test_demo_statements_build_a_working_example(self, tmp_path, monkeypatch):
+        # data/demo/ holds fictional statements for data/'s example accounts: copied into _inputs/,
+        # they must all import, pair their transfers and leave little uncategorised.
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
+        shutil.copytree(EXAMPLE_PROFILES.parent / "demo", reset_db.INPUTS_DIR)
+        db_path = tmp_path / "demo.db"
+
+        reset_db.reset(db_path, "defaults", None)
+
+        with connect(db_path) as conn:
+            accounts = {a for (a,) in conn.execute("SELECT DISTINCT account_id FROM transactions")}
+            kinds = dict(conn.execute("SELECT kind, COUNT(*) FROM transactions GROUP BY kind").fetchall())
+            uncategorised = conn.execute(
+                "SELECT COUNT(*) FROM transactions WHERE category_id IS NULL AND kind != 'transfer'"
+            ).fetchone()[0]
+        assert accounts == {"PERSO", "JOINT", "LIVRET"}
+        assert kinds["transfer"] > 0 and kinds["income"] > 0 and kinds["expense"] > 0
+        assert 0 < uncategorised < kinds["expense"] / 5  # a few rows left to classify, not most
+
     def test_defaults_prefers_private_config_dir(self, tmp_path, monkeypatch):
         reset_db, _backups = self._isolate(tmp_path, monkeypatch)
         config = tmp_path / "_config"
