@@ -14,15 +14,14 @@ import {
   type UncategorizedGroup,
 } from "@/lib/api";
 import SignedAmount from "@/components/SignedAmount";
+import { leafCategories, searchCategories } from "@/lib/categorySearch";
 import { DEFAULT_RULE_PRIORITY, ruleFormToPayload } from "@/lib/ruleForm";
 import {
   classedMessage,
   defaultMode,
-  leafCategories,
   nextActiveIndex,
   operations,
   previewMessage,
-  searchCategories,
   suggestionReason,
   type TriageMode,
 } from "@/lib/triage";

@@ -1,50 +1,8 @@
-import type { Category, RulePreview, UncategorizedGroup } from "./api";
+import type { RulePreview, UncategorizedGroup } from "./api";
 
-/** Pure helpers of the « À classer » page: category search, default mode, messages. */
+/** Pure helpers of the « À classer » page: default mode, next active group, messages. */
 
 export type TriageMode = "rule" | "manual";
-
-/** Lower case without accents, so « epa » finds « Épargne ». */
-export function fold(text: string): string {
-  return text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
-
-/** Fuzzy score of `query` against `text`: its characters in order, not necessarily adjacent.
- *  Word starts and runs of adjacent characters score higher; null when `text` doesn't match. */
-export function fuzzyScore(query: string, text: string): number | null {
-  const q = fold(query).replace(/\s+/g, "");
-  const t = fold(text);
-  if (!q) return 0;
-  let score = 0;
-  let from = 0;
-  let previous = -2;
-  for (const char of q) {
-    const at = t.indexOf(char, from);
-    if (at === -1) return null;
-    score += 1;
-    if (at === 0 || /[\s/·-]/.test(t[at - 1])) score += 5;
-    if (at === previous + 1) score += 3;
-    previous = at;
-    from = at + 1;
-  }
-  return score;
-}
-
-/** Categories a row can be assigned to: leaves only (no category is parented to them), like
- *  CategoryPicker and the backend's reject_group_target. */
-export function leafCategories(categories: Category[]): Category[] {
-  const parents = new Set(categories.map((c) => c.parent_id).filter((id) => id != null));
-  return categories.filter((c) => !parents.has(c.id));
-}
-
-/** Leaves matching `query` on their full path, best match first (ties by path). */
-export function searchCategories(query: string, leaves: Category[]): Category[] {
-  return leaves
-    .map((c) => ({ c, score: fuzzyScore(query, c.path || c.name) }))
-    .filter((m): m is { c: Category; score: number } => m.score != null)
-    .sort((a, b) => b.score - a.score || (a.c.path || a.c.name).localeCompare(b.c.path || b.c.name, "fr"))
-    .map((m) => m.c);
-}
 
 /** A group of similar operations defaults to a rule, a lone one (or a too generic pattern, which
  *  would swallow unrelated operations) to a one-off manual assignment. */

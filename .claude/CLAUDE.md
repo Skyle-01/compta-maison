@@ -28,14 +28,15 @@ backend/
   pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B/FAST)
 frontend/              # Next.js App Router; src/app/{page,import,transactions,a-classer,settings}
   src/app/page.tsx     # dashboard: hero summary, 4 reconciling cards + deltas & Reste sparkline, Budget section (BudgetSection), "Money flow" Sankey (MoneyFlowChart: plain SVG, FlowNode/FlowLinkPath, graph from lib/moneyFlow.ts, layout from lib/flowLayout.ts), collapsible balance tree (TreeNode)
-  src/components/      # shared client components: Nav (top nav + « À classer (N) » counter), CategoryPicker (leaf-only category select), SignedAmount (green/red signed amount)
+  src/components/      # shared client components: Nav (top nav + « À classer (N) » counter), CategoryPicker (leaf-only category typeahead: lib/categorySearch fuzzy search, ↑/↓ + Enter), SignedAmount (green/red signed amount)
   src/lib/api.ts       # typed fetch client (+ frenchMonth/frenchDate/signedAmount/suggestPattern/errorMessage helpers); /api/* proxied to :8000 via next.config.ts rewrites; ApiError carries the `detail` strings (validation objects by their `msg`; a detail-less error gets `statusMessage(status)`, a failed fetch `UNREACHABLE`, both French), pages show `errorMessage(e)` (never `String(e)`, which prefixes an English "Error: ")
   src/lib/moneyFlow.ts # the Sankey transform (moneyFlow), pure; vitest tests sit next to it (src/lib/*.test.ts)
   src/lib/flowLayout.ts # the Sankey layout (flowColumns/busiestColumn/flowLayout: columns, centred stacking, band offsets), pure, vitest-tested
   src/lib/budget.ts    # Budget section helpers (ratio, ok/warn/over tone, target parsing), vitest-tested
   src/lib/trend.ts     # Reste sparkline helpers (short month ticks, thinning, which points print their amount), vitest-tested
   src/lib/manualTransfers.ts # groups kind_manual rows into transfer decisions for Settings (pure, vitest-tested)
-  src/lib/triage.ts    # « À classer » helpers (fuzzy category search on the full path, leaf filter, default mode, next active group, French messages), vitest-tested
+  src/lib/categorySearch.ts # category search shared by CategoryPicker and « À classer » (leaf filter, accent-folded fuzzy match on the full path), vitest-tested
+  src/lib/triage.ts    # « À classer » helpers (default mode, next active group, French messages), vitest-tested
   src/lib/ruleForm.ts  # RuleForm (editable rule, strings while typing) + emptyRuleForm/ruleToForm/ruleFormToPayload, shared by the Settings rule editor and the Transactions categorise editor (vitest-tested)
 backlog/               # one Markdown per item in bug/, feat/, tech/ (no ids, no priority order); see backlog/README.md
 data/                  # FICTIONAL example config (accounts.csv, categories.csv, rules.csv, transfer_markers.csv, bank_profiles.toml) - fallback for reset_db.py --source defaults; never put real data here
@@ -92,7 +93,7 @@ npm run dev --prefix frontend                          # http://localhost:3000, 
 .venv/Scripts/python -m pytest backend/tests/test_triage.py -k TestLabelKey # one file / one test
 .venv/Scripts/ruff check backend && .venv/Scripts/ruff format --check backend
 npm run lint --prefix frontend
-npm test --prefix frontend                             # vitest: pure helpers (budget, trend, manualTransfers, ruleForm, triage, api) + moneyFlow/flowLayout only (the UI moves too fast for more)
+npm test --prefix frontend                             # vitest: pure helpers (budget, trend, manualTransfers, ruleForm, categorySearch, triage, api) + moneyFlow/flowLayout only (the UI moves too fast for more)
 npm test --prefix frontend -- src/lib/triage.test.ts   # one vitest file
 npm run build --prefix frontend                        # type-check only (Next 16's build no longer lints)
 ```
