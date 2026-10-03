@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     label                TEXT NOT NULL,
     type                 TEXT NOT NULL,                 /* 'checking' | 'savings' */
     sort_order           INTEGER NOT NULL DEFAULT 0,
-    deposit_pattern      TEXT                           /* external savings: libellé substring identifying its deposits */
+    deposit_pattern      TEXT                           /* external savings: libellé substring (case-insensitive) identifying its deposits */
 );
 
 CREATE TABLE IF NOT EXISTS account_aliases (
@@ -187,6 +187,9 @@ def connect(db_path: Path = DEFAULT_DB_PATH) -> Iterator[sqlite3.Connection]:
     """Connection with foreign keys on; commits on success, rolls back on error, always closes."""
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
+    # SQLite's lower() folds ASCII only; this lets SQL fold case exactly like Python does
+    # (deposit_pattern matching, core/transfers.py::_is_external_deposit).
+    conn.create_function("casefold", 1, lambda s: s.casefold() if s is not None else None, deterministic=True)
     try:
         with conn:
             yield conn

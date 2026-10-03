@@ -43,7 +43,7 @@ your own `accounts.csv` their account names no longer resolve).
    - `accounts.csv`: one line per account. `aliases` (`|`-separated) must match the account
      name taken from your statement filenames. `type` is `checking` or `savings`. Set
      `deposit_pattern` only for a savings account with no statement of its own: its deposits are
-     the checking-account lines containing that text.
+     the checking-account lines containing that text, whatever its case.
    - `categories.csv`: `path;budget_target` — one full category path per line
      (`Variable / Courses`), with an optional monthly spending target in euros on leaf categories
      (`450.00`; a file with only the `path` column still loads).
@@ -67,7 +67,7 @@ After that, import new statements from the Import page: each upload is also copi
 (under its own name, or `RELEVE_<account>_<date>_<name>.csv` when you picked the account by hand),
 so a rebuild keeps it. To add several statements at once, drop them in `_inputs/` and click
 "Importer les nouveaux relevés" on the Import page, or run `./import_inputs.ps1`: only operations
-not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. Edit categories, rules and transfer markers from the app's Settings page. To classify what the rules missed, open « À classer »: similar operations are grouped, each with a category suggested from the ones already classified (computed locally), and a whole group goes to one rule or one manual assignment, from the keyboard; an operation that could be one leg of an internal transfer lists its possible other legs, each with an « Associer en virement » button. On the
+not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. Edit categories, rules and transfer markers from the app's Settings page. Accounts can't be edited in the app: to change one (a `label`, a `deposit_pattern`), run `reset_db.py` once to take a fresh snapshot, copy the new `_backups/<timestamp>/` folder, edit its `accounts.csv`, run `reset_db.py --source backup --from <that copy>` (categories, rules and manual decisions are kept), and make the same edit in `_config/accounts.csv`. To classify what the rules missed, open « À classer »: similar operations are grouped, each with a category suggested from the ones already classified (computed locally), and a whole group goes to one rule or one manual assignment, from the keyboard; an operation that could be one leg of an internal transfer lists its possible other legs, each with an « Associer en virement » button. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
 pair; these manual decisions are listed in Settings and kept across rebuilds. To rebuild while
 keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current

@@ -145,7 +145,8 @@ export interface CategoryNode {
   balance: number;
   children: CategoryNode[];
   /** Derived savings leaf (épargne/désépargne). Drill-down is by account_id for an imported
-   *  savings account, or by libelle_match (libellé substring) for an external one (kids). */
+   *  savings account, or by libelle_match (its deposit_pattern, a case-insensitive libellé
+   *  substring) for an external one (kids). */
   synthetic?: boolean;
   account_id?: string | null;
   libelle_match?: string | null;
@@ -283,6 +284,8 @@ export interface TransactionFilters {
   account?: string;
   categoryId?: number;
   libelleContains?: string;
+  /** External savings deposits: case-insensitive libellé substring (unlike libelleContains). */
+  depositPattern?: string;
   uncategorized?: boolean;
   manual?: boolean;
   manualTransfer?: boolean;
@@ -294,6 +297,7 @@ function transactionSearch(params: TransactionFilters): URLSearchParams {
   if (params.account) search.set("account", params.account);
   if (params.categoryId != null) search.set("category_id", String(params.categoryId));
   if (params.libelleContains) search.set("libelle_contains", params.libelleContains);
+  if (params.depositPattern) search.set("deposit_pattern", params.depositPattern);
   if (params.uncategorized) search.set("uncategorized", "true");
   if (params.manual) search.set("manual", "true");
   if (params.manualTransfer) search.set("manual_transfer", "true");

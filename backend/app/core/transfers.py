@@ -50,8 +50,10 @@ def _deposit_patterns(conn: sqlite3.Connection) -> list[str]:
 
 
 def _is_external_deposit(libelle: str, patterns: Sequence[str]) -> bool:
-    """Same case-sensitive substring test as the external-savings pass (SQL instr)."""
-    return any(pattern in libelle for pattern in patterns)
+    """Same case-insensitive substring test as the external-savings pass (SQL casefold + instr):
+    banks don't keep a payee's casing ('vers LIVRET' for a 'VERS LIVRET' pattern)."""
+    label = libelle.casefold()
+    return any(pattern.casefold() in label for pattern in patterns)
 
 
 def has_transfer_marker(libelle: str, markers: Sequence[str]) -> bool:
@@ -248,7 +250,7 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
         )
         marked = 2 * len(pairs)
 
-        # External savings deposits: a checking-account row whose libellé matches the pattern
+        # External savings deposits: a checking-account row whose libellé contains the pattern (any case)
         # of a savings account that has no statement of its own. Mark as transfer (out of
         # expenses); the reset above already restored these to income/expense, so this is safe.
         for _code, _label, pattern in savings_accounts(conn):
@@ -256,7 +258,7 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
                 continue
             cur = conn.execute(
                 "UPDATE transactions SET kind = 'transfer' "
-                "WHERE kind_manual = 0 AND kind != 'transfer' AND instr(libelle, ?) > 0",
+                "WHERE kind_manual = 0 AND kind != 'transfer' AND instr(casefold(libelle), casefold(?)) > 0",
                 (pattern,),
             )
             marked += cur.rowcount

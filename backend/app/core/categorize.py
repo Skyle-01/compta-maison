@@ -346,7 +346,7 @@ def _savings_net_cents(conn, month: str | None) -> list[tuple[str, str, str | No
     An imported account (deposit_pattern NULL, e.g. LIVRET): per-month net = Σcredit − Σdebit on
     its own rows (any kind — a paired transfer leg, interest, …; credit in = saving). An external
     account (deposit_pattern set, the kids' Livret A): per-month net = Σdebit − Σcredit of the
-    checking-account rows whose libellé matches the pattern (a debit out = a deposit to savings).
+    checking-account rows whose libellé contains the pattern, any case (a debit out = a deposit to savings).
     Accounts with no movement are omitted."""
     results: list[tuple[str, str, str | None, int, int]] = []
     for code, label, pattern in savings_accounts(conn):
@@ -369,7 +369,7 @@ def _savings_month_nets(conn, code: str, pattern: str | None, month: str | None)
     if pattern:
         query = (
             "SELECT budget_month, COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0) "
-            "FROM transactions WHERE instr(libelle, ?) > 0"
+            "FROM transactions WHERE instr(casefold(libelle), casefold(?)) > 0"
         )
         params: list = [pattern]
     else:

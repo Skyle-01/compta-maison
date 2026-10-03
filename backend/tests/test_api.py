@@ -199,6 +199,16 @@ class TestTransactions:
         # Case-sensitive, mirroring the rule engine's instr().
         assert client.get("/api/transactions", params={"libelle_contains": "mystery"}).json()["total"] == 0
 
+    def test_filter_by_deposit_pattern_ignores_case(self, db, client):
+        # The external-savings drill-down: same case-insensitive test as recompute_transfers.
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "vers Livret Enfant", 25, 0, "JOINT"),
+            ("2026-06-11", "2026-06-11", "SUPERMARCHE", 30, 0, "JOINT"),
+        )
+        body = client.get("/api/transactions", params={"deposit_pattern": "VERS LIVRET ENFANT"}).json()
+        assert [t["libelle"] for t in body["items"]] == ["vers Livret Enfant"]
+
     def test_categorized_transaction_carries_name(self, seeded_db, client):
         _upload(client)
         items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]

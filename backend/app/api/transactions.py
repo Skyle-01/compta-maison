@@ -122,6 +122,7 @@ def _filter_clause(
     uncategorized: bool,
     manual: bool,
     manual_transfer: bool,
+    deposit_pattern: str | None = None,
 ) -> tuple[str, list]:
     """The WHERE clause (over `transactions t`) and params shared by the list and the export."""
     where = ["1=1"]
@@ -139,6 +140,11 @@ def _filter_clause(
         # Case-sensitive substring, mirroring the rule engine's instr() (core/categorize.py).
         where.append("instr(t.libelle, ?) > 0")
         params.append(libelle_contains)
+    if deposit_pattern:
+        # An external savings account's deposits: the same case-insensitive test as
+        # recompute_transfers and the derived Épargne leaves (the dashboard drill-down).
+        where.append("instr(casefold(t.libelle), casefold(?)) > 0")
+        params.append(deposit_pattern)
     if uncategorized:
         # Transfers (incl. single-legged savings deposits) have no spending category by design.
         where.append(f"t.category_id IS NULL AND {real_flow_clause('t.kind')}")
@@ -161,11 +167,12 @@ def list_transactions(
     uncategorized: bool = False,
     manual: bool = False,
     manual_transfer: bool = False,
+    deposit_pattern: str | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TransactionPage:
     clause, params = _filter_clause(
-        month, account, category_id, libelle_contains, uncategorized, manual, manual_transfer
+        month, account, category_id, libelle_contains, uncategorized, manual, manual_transfer, deposit_pattern
     )
     with connect(db_path) as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM transactions t WHERE {clause}", params).fetchone()[0]

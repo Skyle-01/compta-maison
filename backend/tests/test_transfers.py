@@ -166,6 +166,11 @@ class TestTransferMarkers:
         import_rows(db, ("2026-06-10", "2026-06-10", "PRLV VERS LIVRET ENFANT", 25, 0, "JOINT"))
         assert recompute_transfers(db) == 1
 
+    def test_external_savings_deposit_pattern_ignores_case(self, db):
+        # Banks don't keep the payee's casing: 'vers Livret Enfant' still matches 'VERS LIVRET ENFANT'.
+        import_rows(db, ("2026-06-10", "2026-06-10", "vers Livret Enfant", 25, 0, "JOINT"))
+        assert recompute_transfers(db) == 1
+
 
 class TestPairingAmbiguity:
     """A pair forms only when nothing else could be the other leg: a wrong pair silently hides an
@@ -413,6 +418,21 @@ class TestManualTransfers:
         ids = self._ids(db)
         with pytest.raises(ValueError, match="épargne externe"):
             pair_manually(db, ids["VIR VERS LIVRET ENFANT"], ids["VIR SEPA MAMIE"])
+
+    def test_lowercase_external_deposit_is_never_paired(self, db):
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers Livret Enfant", 50, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR SEPA MAMIE", 0, 50, "JOINT"),
+        )
+        recompute_transfers(db)
+        assert self._state(db) == {
+            "VIR vers Livret Enfant": ("transfer", 0, False),
+            "VIR SEPA MAMIE": ("income", 0, False),
+        }
+        ids = self._ids(db)
+        with pytest.raises(ValueError, match="épargne externe"):
+            pair_manually(db, ids["VIR vers Livret Enfant"], ids["VIR SEPA MAMIE"])
 
     def test_manual_unpair_survives_recompute(self, db):
         import_rows(db, *self.LEGS)

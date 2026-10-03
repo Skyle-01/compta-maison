@@ -245,6 +245,12 @@ class TestSavingsTreeNodes:
         assert leaf["libelle_match"] == "VERS LIVRET ENFANT"  # external -> drill down by libellé
         assert "account_id" not in leaf
 
+    def test_external_savings_deposit_matches_any_case(self, db):
+        import_rows(db, ("2026-06-10", "2026-06-10", "vers Livret Enfant", 25, 0, "JOINT"))
+        recompute_transfers(db)
+        assert income_and_expenses(db, "2026-06") == (0.0, 0.0)
+        assert _find(_find(category_tree(db, "2026-06"), "Épargne"), "Livret enfant")["balance"] == -25
+
     def test_single_legged_savings_excluded_from_transfers_summary(self, db):
         # A paired internal transfer (PERSO -> LIVRET) plus a single-legged external-savings
         # deposit. Only the paired one is an "internal transfer"; both stay out of real flows.

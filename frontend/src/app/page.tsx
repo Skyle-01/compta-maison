@@ -376,7 +376,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
         node.synthetic && node.account_id
           ? { month, account: node.account_id, limit: 500 }
           : node.synthetic && node.libelle_match
-            ? { month, libelleContains: node.libelle_match, limit: 500 }
+            ? { month, depositPattern: node.libelle_match, limit: 500 }
             : node.id === null
               ? { month, uncategorized: true, limit: 500 }
               : { month, categoryId: node.id, limit: 500 };
