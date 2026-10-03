@@ -40,17 +40,14 @@ from app.api.categories import CATEGORIES_HEADER, category_paths, category_rows,
 from app.api.rules import RULES_HEADER, rule_rows  # noqa: E402
 from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
 from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_profiles  # noqa: E402
-from app.core.parsing import CsvValidationError, infer_account, parse_statement  # noqa: E402
+from app.core.inputs import import_inputs_dir  # noqa: E402
 from app.db import (  # noqa: E402
     DEFAULT_CONFIG_DIR,
     DEFAULT_DB_PATH,
     DEFAULT_INPUTS_DIR,
     connect,
     get_transfer_markers,
-    import_transactions,
     init_db,
-    load_account_aliases,
-    resolve_account_code,
 )
 from scripts.import_csv import import_csv, load_accounts_csv, load_transfer_markers_csv  # noqa: E402
 
@@ -75,31 +72,15 @@ def _load_profiles() -> list[BankProfile]:
 
 
 def _import_inputs(db_path: Path, profiles: list[BankProfile]) -> int:
-    """Import every bank CSV in _inputs/, inferring the account from the filename.
-    Files that don't map to a known account or fail to parse are skipped with a note.
-    Returns the number of newly inserted transactions (re-runs are deduped by hash)."""
-    if not INPUTS_DIR.exists():
-        return 0
-    with connect(db_path) as conn:
-        aliases = load_account_aliases(conn)
-
-    total_new = 0
-    for path in sorted(INPUTS_DIR.glob("*.csv")):
-        account = infer_account(path.name, profiles)
-        if not account or resolve_account_code(account, aliases) is None:
-            print(f"Skipping {path.name}: no known account in filename")
-            continue
-        try:
-            profile, rows = parse_statement(path.read_bytes(), profiles)
-        except CsvValidationError as exc:
-            print(f"Skipping {path.name}: {exc}")
-            continue
-        for row in rows:
-            row["account"] = account
-        new = import_transactions(rows, db_path)
-        total_new += new
-        print(f"Imported {new}/{len(rows)} new rows from {path.name} -> {account} [{profile.name}]")
-    return total_new
+    """Import every bank CSV in _inputs/ (see core.inputs.import_inputs_dir), printing a line per
+    file. Returns the number of newly inserted transactions (re-runs are deduped by hash)."""
+    results = import_inputs_dir(db_path, INPUTS_DIR, profiles)
+    for r in results:
+        if r.error:
+            print(f"Skipping {r.name}: {r.error}")
+        else:
+            print(f"Imported {r.rows_new}/{r.rows_total} new rows from {r.name} -> {r.account} [{r.profile}]")
+    return sum(r.rows_new for r in results)
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list]) -> None:

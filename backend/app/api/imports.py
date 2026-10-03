@@ -1,18 +1,27 @@
+from dataclasses import asdict
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile
 
 from app.api.deps import ConfigDir, DbPath, InputsDir
-from app.core.bank_profiles import PROFILES_FILENAME, BankProfileError, load_bank_profiles
+from app.core.bank_profiles import PROFILES_FILENAME, BankProfile, BankProfileError, load_bank_profiles
 from app.core.categorize import apply_rules, uncategorized_balance
-from app.core.inputs import archive_statement
+from app.core.inputs import archive_statement, import_inputs_dir
 from app.core.parsing import CsvValidationError, infer_account, parse_statement
 from app.core.periods import recompute_budget_months
 from app.core.transfers import recompute_transfers
 from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
-from app.schemas import ImportResult
+from app.schemas import ImportResult, InputFileResult, InputsImportResult
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
+
+
+def _profiles(config_dir: Path) -> list[BankProfile]:
+    try:
+        return load_bank_profiles(config_dir)
+    except BankProfileError as exc:
+        raise HTTPException(500, detail=[f"{PROFILES_FILENAME} invalide : {exc}"]) from exc
 
 
 @router.post("", status_code=201)
@@ -23,10 +32,7 @@ def upload_csv(
     inputs_dir: InputsDir,
     account: Annotated[str, Form()] = "",
 ) -> ImportResult:
-    try:
-        profiles = load_bank_profiles(config_dir)
-    except BankProfileError as exc:
-        raise HTTPException(500, detail=[f"{PROFILES_FILENAME} invalide : {exc}"]) from exc
+    profiles = _profiles(config_dir)
     with connect(db_path) as conn:
         aliases = load_account_aliases(conn)
         known_codes = [code for (code,) in conn.execute("SELECT code FROM accounts ORDER BY sort_order")]
@@ -88,4 +94,18 @@ def upload_csv(
         balance_warnings=warnings,
         profile=profile.name,
         archived_as=archived_as,
+    )
+
+
+@router.post("/inputs")
+def import_inputs(db_path: DbPath, config_dir: ConfigDir, inputs_dir: InputsDir) -> InputsImportResult:
+    """Import every statement dropped in _inputs/ into the existing DB (already imported rows are
+    skipped), then recompute like an upload."""
+    results = import_inputs_dir(db_path, inputs_dir, _profiles(config_dir))
+    recompute_budget_months(db_path)
+    recompute_transfers(db_path)
+    apply_rules(db_path)
+    return InputsImportResult(
+        files=[InputFileResult(**asdict(r)) for r in results],
+        rows_new=sum(r.rows_new for r in results),
     )

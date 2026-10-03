@@ -20,6 +20,20 @@ class ImportResult(BaseModel):
     )
 
 
+class InputFileResult(BaseModel):
+    name: str
+    account: str | None
+    rows_total: int
+    rows_new: int
+    profile: str | None
+    error: str | None = Field(None, description="Why the file was skipped (French)")
+
+
+class InputsImportResult(BaseModel):
+    files: list[InputFileResult]
+    rows_new: int
+
+
 class Transaction(BaseModel):
     id: int
     date_operation: str

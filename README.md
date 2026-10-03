@@ -61,7 +61,9 @@ your own `accounts.csv` their account names no longer resolve).
 
 After that, import new statements from the Import page: each upload is also copied to `_inputs/`
 (under its own name, or `RELEVE_<account>_<date>_<name>.csv` when you picked the account by hand),
-so a rebuild keeps it. Edit categories, rules and transfer markers from the app's Settings page. On the
+so a rebuild keeps it. To add several statements at once, drop them in `_inputs/` and click
+"Importer les nouveaux relevés" on the Import page, or run `./import_inputs.ps1`: only operations
+not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. Edit categories, rules and transfer markers from the app's Settings page. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
 pair; these manual decisions are listed in Settings and kept across rebuilds. To rebuild while
 keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current

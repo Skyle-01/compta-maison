@@ -1,12 +1,15 @@
 """The _inputs/ statement archive: reset_db.py rebuilds every transaction from it, so an upload is
-copied there under a name that yields the same account string it was hashed with."""
+copied there under a name that yields the same account string it was hashed with. Statements
+dropped there by hand are imported in bulk by import_inputs_dir."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
 from app.core.bank_profiles import BankProfile
-from app.core.parsing import infer_account
+from app.core.parsing import CsvValidationError, infer_account, parse_statement
+from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
 
 
 def archive_filename(filename: str, account: str, profiles: Sequence[BankProfile], today: date) -> str | None:
@@ -49,3 +52,46 @@ def archive_statement(
         return None
     (inputs_dir / candidate).write_bytes(content)
     return candidate
+
+
+@dataclass(frozen=True)
+class InputFileResult:
+    name: str
+    account: str | None
+    rows_total: int = 0
+    rows_new: int = 0
+    profile: str | None = None
+    error: str | None = None
+
+
+def import_inputs_dir(
+    db_path: Path, inputs_dir: Path, profiles: Sequence[BankProfile]
+) -> list[InputFileResult]:
+    """Import every bank CSV in `inputs_dir` into the existing DB, inferring the account from the
+    filename. Re-importing a file adds nothing (import_transactions dedupes), so the whole folder
+    can be rescanned after dropping new statements in. A file that maps to no known account or
+    fails to parse is reported with its error and skipped. The caller recomputes periods,
+    transfers and rules afterwards."""
+    if not inputs_dir.exists():
+        return []
+    with connect(db_path) as conn:
+        aliases = load_account_aliases(conn)
+
+    results = []
+    for path in sorted(inputs_dir.glob("*.csv")):
+        account = infer_account(path.name, profiles)
+        if not account or resolve_account_code(account, aliases) is None:
+            results.append(
+                InputFileResult(path.name, account, error="aucun compte connu dans le nom du fichier")
+            )
+            continue
+        try:
+            profile, rows = parse_statement(path.read_bytes(), profiles)
+        except CsvValidationError as exc:
+            results.append(InputFileResult(path.name, account, error=str(exc)))
+            continue
+        for row in rows:
+            row["account"] = account
+        new = import_transactions(rows, db_path)
+        results.append(InputFileResult(path.name, account, len(rows), new, profile.name))
+    return results

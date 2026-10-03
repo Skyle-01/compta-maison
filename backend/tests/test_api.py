@@ -114,6 +114,58 @@ class TestImports:
             hashes = [h for (h,) in conn.execute("SELECT import_hash FROM transactions ORDER BY id")]
         assert hashes == GOLDEN_HASHES
 
+    def _drop_overlapping_statement(self, tmp_path) -> None:
+        """Statements dropped in _inputs/ by hand: one overlapping the uploaded SAMPLE_CSV (its last
+        two rows + two new ones), and one that names no account."""
+        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_12.csv").write_bytes(
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            b'"07/06/2026";"07/06/2026";"BAR ANGELUS";"12,00";""\n'
+            b'"08/06/2026";"08/06/2026";"MYSTERY SHOP";"10,00";""\n'
+            b'"10/06/2026";"10/06/2026";"CARTE SUPERMARCHE";"20,00";""\n'
+            b'"12/06/2026";"12/06/2026";"BAR ANGELUS";"8,00";""\n'
+        )
+        (tmp_path / "_inputs" / "export.csv").write_bytes(SAMPLE_CSV)
+
+    def test_import_inputs_adds_only_new_rows(self, seeded_db, client, tmp_path):
+        _upload(client)  # archived to tmp_path/_inputs
+        mystery = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
+        courses = _category_id(client, "courses")
+        client.patch(f"/api/transactions/{mystery['id']}", json={"category_id": courses, "note": "à garder"})
+        with connect(seeded_db) as conn:
+            before = conn.execute("SELECT id, import_hash FROM transactions ORDER BY id").fetchall()
+        self._drop_overlapping_statement(tmp_path)
+
+        resp = client.post("/api/imports/inputs")
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["rows_new"] == 2
+        by_name = {f["name"]: f for f in body["files"]}
+        assert by_name["RELEVE_COMPTE_JOINT_2026_06_08.csv"]["rows_new"] == 0
+        assert (
+            by_name["RELEVE_COMPTE_JOINT_2026_06_12.csv"]["rows_total"],
+            by_name["RELEVE_COMPTE_JOINT_2026_06_12.csv"]["rows_new"],
+        ) == (4, 2)
+        assert by_name["export.csv"]["error"] == "aucun compte connu dans le nom du fichier"
+
+        with connect(seeded_db) as conn:
+            after = conn.execute("SELECT id, import_hash FROM transactions ORDER BY id").fetchall()
+        assert after[: len(before)] == before and len(after) == len(before) + 2
+        kept = client.get("/api/transactions", params={"manual": True}).json()["items"]
+        assert [(t["id"], t["category"], t["note"]) for t in kept] == [(mystery["id"], "courses", "à garder")]
+        assert client.post("/api/imports/inputs").json()["rows_new"] == 0  # idempotent
+
+    def test_import_inputs_cli(self, seeded_db, client, tmp_path, monkeypatch):
+        import scripts.import_inputs as cli
+
+        monkeypatch.setattr(cli, "INPUTS_DIR", tmp_path / "_inputs")
+        monkeypatch.setattr(cli, "CONFIG_DIR", tmp_path / "_config")
+        _upload(client)
+        self._drop_overlapping_statement(tmp_path)
+        assert cli.import_inputs(seeded_db) == 2
+        assert cli.import_inputs(seeded_db) == 0
+        with pytest.raises(SystemExit):
+            cli.import_inputs(tmp_path / "absent.db")
+
     def test_invalid_profiles_file_rejected(self, client, tmp_path):
         config = tmp_path / "_config"
         config.mkdir()

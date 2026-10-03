@@ -10,6 +10,21 @@ export interface ImportResult {
   archived_as: string | null;
 }
 
+/** One _inputs/ statement of a bulk import (error: why it was skipped). */
+export interface InputFileResult {
+  name: string;
+  account: string | null;
+  rows_total: number;
+  rows_new: number;
+  profile: string | null;
+  error: string | null;
+}
+
+export interface InputsImportResult {
+  files: InputFileResult[];
+  rows_new: number;
+}
+
 export interface Transaction {
   id: number;
   date_operation: string;
@@ -251,6 +266,10 @@ export const api = {
     form.append("file", file);
     form.append("account", account);
     return request("/api/imports", { method: "POST", body: form });
+  },
+
+  importInputs(): Promise<InputsImportResult> {
+    return request("/api/imports/inputs", { method: "POST" });
   },
 
   listTransactions(params: TransactionFilters & { limit?: number; offset?: number }): Promise<TransactionPage> {
