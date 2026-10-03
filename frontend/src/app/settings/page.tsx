@@ -9,6 +9,7 @@ import {
   type Transaction,
   formatEuro,
   frenchDate,
+  notifyUncategorizedChanged,
   shortPath,
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
@@ -183,6 +184,8 @@ export default function SettingsPage() {
     setError(null);
     try {
       await action();
+      // Rule and category changes, and clearing a manual assignment, move the « À classer » count.
+      notifyUncategorizedChanged();
       load();
       return true;
     } catch (e) {
@@ -346,6 +349,7 @@ export default function SettingsPage() {
     try {
       const created = await api.createRule(ruleFormToPayload(newRule));
       setNewRule(emptyRuleForm());
+      notifyUncategorizedChanged();
       load();
       setFlashRuleId(created.id); // surface where the new rule landed in the sorted list
     } catch (e) {
@@ -940,6 +944,7 @@ function ManualTransfersSection() {
     setStatus(null);
     try {
       await api.setTransferMode(id, "auto");
+      notifyUncategorizedChanged();
       load();
     } catch (e) {
       setStatus(errorMessage(e));
@@ -1047,6 +1052,7 @@ function TransferMarkersSection() {
       setText(m.markers.join("\n"));
       setIsDefault(m.is_default);
       setSaved(true);
+      notifyUncategorizedChanged();
     } catch (e) {
       setError(errorMessage(e));
     }

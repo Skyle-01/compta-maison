@@ -9,6 +9,7 @@ import {
   type InputsImportResult,
   formatEuro,
   frenchMonth,
+  notifyUncategorizedChanged,
 } from "@/lib/api";
 
 export default function ImportPage() {
@@ -34,6 +35,7 @@ export default function ImportPage() {
     setResult(null);
     try {
       setResult(await api.uploadCsv(file, account));
+      notifyUncategorizedChanged();
     } catch (err) {
       setErrors(errorMessage(err).split("\n"));
     } finally {
@@ -47,6 +49,7 @@ export default function ImportPage() {
     setInputsResult(null);
     try {
       setInputsResult(await api.importInputs());
+      notifyUncategorizedChanged();
     } catch (err) {
       setInputsError(errorMessage(err));
     } finally {
