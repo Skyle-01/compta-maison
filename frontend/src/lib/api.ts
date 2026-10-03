@@ -88,6 +88,47 @@ export interface Rule {
   description: string | null;
 }
 
+/** What the already categorised operations suggest for an uncategorised group. */
+export interface CategorySuggestion {
+  category_id: number;
+  /** Categorised operations backing it. */
+  count: number;
+  /** The deciding word of the label; null when those operations share the whole label. */
+  token: string | null;
+}
+
+/** Uncategorised operations with similar labels (the « À classer » page). */
+export interface UncategorizedGroup {
+  key: string;
+  /** Default rule pattern: a substring of every member's label. */
+  pattern: string;
+  /** Too generic for a rule (bank vocabulary only): the group defaults to a manual assignment. */
+  pattern_generic: boolean;
+  count: number;
+  debit: number;
+  credit: number;
+  first_date: string;
+  last_date: string;
+  accounts: string[];
+  /** Newest first. */
+  transactions: Transaction[];
+  suggestion: CategorySuggestion | null;
+}
+
+/** Rows an existing rule would lose to a new one. */
+export interface RuleLoss {
+  rule_id: number;
+  pattern: string;
+  category_id: number;
+  count: number;
+}
+
+export interface RulePreview {
+  /** Uncategorised operations the new rule would classify. */
+  uncategorized: number;
+  reclassified: RuleLoss[];
+}
+
 export interface CategoryNode {
   id: number | null;
   name: string;
@@ -288,6 +329,20 @@ export const api = {
     return request(`/api/transactions/${id}`, json("PATCH", patch));
   },
 
+  /** Set (or clear, with null) the manual category and note of several operations at once. */
+  updateTransactions(ids: number[], categoryId: number | null, note: string | null): Promise<Transaction[]> {
+    return request("/api/transactions", json("PATCH", { ids, category_id: categoryId, note }));
+  },
+
+  uncategorizedGroups(month?: string): Promise<UncategorizedGroup[]> {
+    return request(`/api/transactions/uncategorized-groups${month ? `?month=${month}` : ""}`);
+  },
+
+  /** Number of uncategorised non-transfer operations (the nav's « À classer (N) »). */
+  async uncategorizedCount(): Promise<number> {
+    return (await api.listTransactions({ uncategorized: true, limit: 1 })).total;
+  },
+
   listAccounts: (): Promise<Account[]> => request("/api/accounts"),
 
   listCategories: (): Promise<Category[]> => request("/api/categories"),
@@ -302,6 +357,12 @@ export const api = {
     request(`/api/categories/${id}`, { method: "DELETE" }),
 
   listRules: (): Promise<Rule[]> => request("/api/rules"),
+  /** What a rule about to be created would classify, and the rows existing rules would lose. */
+  previewRule(pattern: string, priority: number, categoryId: number | null): Promise<RulePreview> {
+    const search = new URLSearchParams({ pattern, priority: String(priority) });
+    if (categoryId != null) search.set("category_id", String(categoryId));
+    return request(`/api/rules/preview?${search}`);
+  },
   pairTransfer(ids: [number, number]): Promise<Transaction[]> {
     return request("/api/transactions/transfer-pair", json("POST", { transaction_ids: ids }));
   },
@@ -323,6 +384,13 @@ export const api = {
     return request(`/api/dashboard${month ? `?month=${month}` : ""}`);
   },
 };
+
+/** Window event telling the nav to refresh its « À classer » count after a categorisation. */
+export const UNCATEGORIZED_CHANGED = "compta:uncategorized-changed";
+
+export function notifyUncategorizedChanged(): void {
+  window.dispatchEvent(new Event(UNCATEGORIZED_CHANGED));
+}
 
 export function formatEuro(amount: number): string {
   return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(amount);

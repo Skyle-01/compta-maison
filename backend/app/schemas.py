@@ -69,6 +69,34 @@ class TransactionPatch(BaseModel):
     note: str | None = None
 
 
+class TransactionsBulkPatch(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=1000)
+    category_id: int | None = Field(description="Leaf category set manually on every row; null clears it")
+    note: str | None = None
+
+
+class CategorySuggestion(BaseModel):
+    category_id: int
+    count: int = Field(description="Categorised operations backing the suggestion")
+    token: str | None = Field(
+        description="The deciding word; null when those operations share the whole label"
+    )
+
+
+class UncategorizedGroup(BaseModel):
+    key: str = Field(description="Normalised label shared by the group")
+    pattern: str = Field(description="Default rule pattern, a substring of every member's label")
+    pattern_generic: bool = Field(description="True when the pattern is too generic for a rule")
+    count: int
+    debit: float
+    credit: float
+    first_date: str
+    last_date: str
+    accounts: list[str]
+    transactions: list[Transaction] = Field(description="The group's operations, newest first")
+    suggestion: CategorySuggestion | None
+
+
 class TransferPairIn(BaseModel):
     transaction_ids: list[int] = Field(min_length=2, max_length=2, description="One debit and one credit")
 
@@ -126,6 +154,18 @@ class RuleIn(BaseModel):
 
 class RuleOut(RuleIn):
     id: int
+
+
+class RuleLoss(BaseModel):
+    rule_id: int
+    pattern: str
+    category_id: int
+    count: int = Field(description="Operations this existing rule would lose to the new one")
+
+
+class RulePreview(BaseModel):
+    uncategorized: int = Field(description="Uncategorised operations the new rule would classify")
+    reclassified: list[RuleLoss]
 
 
 class BudgetLeaf(BaseModel):

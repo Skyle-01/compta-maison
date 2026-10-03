@@ -15,6 +15,7 @@ FIELD_LABELS = {
     "category_id": "Catégorie",
     "description": "Description",
     "file": "Fichier",
+    "ids": "Opérations",
     "is_income_anchor": "Ancre de revenu",
     "markers": "Marqueurs",
     "mode": "Mode",

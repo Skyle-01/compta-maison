@@ -8,13 +8,17 @@ from app.api.categories import category_paths, csv_response, reject_group_target
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.transfers import pair_manually, set_transfer_mode
+from app.core.triage import uncategorized_groups
 from app.db import connect, euros, real_flow_clause
 from app.schemas import (
+    CategorySuggestion,
     Transaction,
     TransactionPage,
     TransactionPatch,
+    TransactionsBulkPatch,
     TransferModeIn,
     TransferPairIn,
+    UncategorizedGroup,
 )
 
 router = APIRouter(prefix="/api/transactions", tags=["transactions"])
@@ -171,6 +175,30 @@ def list_transactions(
     return TransactionPage(items=[_to_model(r) for r in rows], total=total)
 
 
+@router.get("/uncategorized-groups")
+def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list[UncategorizedGroup]:
+    """Uncategorised operations grouped by similar label, largest total first, each with a default
+    rule pattern and a category suggestion (the « À classer » page)."""
+    groups = uncategorized_groups(db_path, month)
+    by_id = {t.id: t for t in _load(db_path, [i for g in groups for i in g.transaction_ids])}
+    return [
+        UncategorizedGroup(
+            key=g.key,
+            pattern=g.pattern,
+            pattern_generic=g.pattern_generic,
+            count=len(g.transaction_ids),
+            debit=euros(g.debit_cents),
+            credit=euros(g.credit_cents),
+            first_date=g.first_date,
+            last_date=g.last_date,
+            accounts=g.accounts,
+            transactions=[by_id[i] for i in g.transaction_ids],
+            suggestion=CategorySuggestion(**vars(g.suggestion)) if g.suggestion else None,
+        )
+        for g in groups
+    ]
+
+
 # The spreadsheet export is for a person opening it in Excel (French locale), unlike the
 # import_csv.py-shaped Settings exports: French headers, dd/mm/yyyy dates, comma decimals.
 EXPORT_HEADER = [
@@ -257,6 +285,8 @@ def export_overrides(db_path: DbPath) -> Response:
 
 
 def _load(db_path: Path, ids: list[int]) -> list[Transaction]:
+    if not ids:
+        return []
     with connect(db_path) as conn:
         rows = conn.execute(
             f"{_SELECT} WHERE t.id IN ({','.join('?' * len(ids))}) ORDER BY t.date_valeur, t.id", ids
@@ -287,6 +317,35 @@ def set_transfer(transaction_id: int, body: TransferModeIn, db_path: DbPath) -> 
     return _load(db_path, touched)
 
 
+def _check_leaf(conn: sqlite3.Connection, category_id: int) -> None:
+    """422 unless `category_id` is an existing leaf category (manual assignment target)."""
+    if conn.execute("SELECT 1 FROM categories WHERE id = ?", (category_id,)).fetchone() is None:
+        raise HTTPException(422, detail=[f"Catégorie {category_id} introuvable"])
+    reject_group_target(conn, category_id)
+
+
+@router.patch("")
+def patch_transactions(patch: TransactionsBulkPatch, db_path: DbPath) -> list[Transaction]:
+    """Set (or clear) the manual category and note of several operations at once: a whole group
+    on the « À classer » page, and its undo. Clearing re-runs the rules, as for a single row."""
+    ids = sorted(set(patch.ids))
+    marks = ",".join("?" * len(ids))
+    with connect(db_path) as conn:
+        found = {row[0] for row in conn.execute(f"SELECT id FROM transactions WHERE id IN ({marks})", ids)}
+        if missing := [i for i in ids if i not in found]:
+            raise HTTPException(404, detail=[f"Opérations introuvables : {', '.join(map(str, missing))}"])
+        if patch.category_id is not None:
+            _check_leaf(conn, patch.category_id)
+        conn.execute(
+            f"UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL, note = ? "
+            f"WHERE id IN ({marks})",
+            (patch.category_id, int(patch.category_id is not None), patch.note, *ids),
+        )
+    if patch.category_id is None:
+        apply_rules(db_path)
+    return _load(db_path, ids)
+
+
 @router.patch("/{transaction_id}")
 def patch_transaction(
     transaction_id: int,
@@ -301,10 +360,7 @@ def patch_transaction(
             raise HTTPException(404, detail=[f"Opération {transaction_id} introuvable"])
         if "category_id" in fields:
             if patch.category_id is not None:
-                known = conn.execute("SELECT 1 FROM categories WHERE id = ?", (patch.category_id,)).fetchone()
-                if not known:
-                    raise HTTPException(422, detail=[f"Catégorie {patch.category_id} introuvable"])
-                reject_group_target(conn, patch.category_id)
+                _check_leaf(conn, patch.category_id)
             conn.execute(
                 "UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL WHERE id = ?",
                 (patch.category_id, int(patch.category_id is not None), transaction_id),

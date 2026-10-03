@@ -10,6 +10,7 @@ import {
   formatEuro,
   frenchDate,
   frenchMonth,
+  notifyUncategorizedChanged,
   signedAmount,
   suggestPattern,
   transactionsExportUrl,
@@ -146,6 +147,7 @@ export default function TransactionsPage() {
         );
       }
       setEditingTxId(null);
+      notifyUncategorizedChanged();
       load();
     } catch (e) {
       setError(errorMessage(e));
@@ -167,6 +169,7 @@ export default function TransactionsPage() {
       await action();
       setSelected(new Map());
       setFlash(message);
+      notifyUncategorizedChanged();
       load();
     } catch (e) {
       setError(errorMessage(e));

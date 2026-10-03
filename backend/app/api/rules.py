@@ -1,14 +1,16 @@
 import sqlite3
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.api.categories import category_paths, csv_response, reject_group_target
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.periods import recompute_budget_months
+from app.core.triage import rule_preview
 from app.db import connect
-from app.schemas import RuleIn, RuleOut
+from app.schemas import RuleIn, RuleLoss, RuleOut, RulePreview
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
@@ -63,6 +65,19 @@ def export_rules(db_path: DbPath) -> Response:
     with connect(db_path) as conn:
         rows = rule_rows(conn, category_paths(conn))
     return csv_response(rows, RULES_HEADER, "rules.csv")
+
+
+@router.get("/preview")
+def preview_rule(
+    db_path: DbPath,
+    pattern: Annotated[str, Query(min_length=1)],
+    priority: int = 100,
+    category_id: int | None = None,
+) -> RulePreview:
+    """What a rule about to be created would classify: uncategorised operations it matches, and
+    rows existing rules would lose to it (rules already on `category_id` left out)."""
+    uncategorized, lost = rule_preview(db_path, pattern, priority, category_id)
+    return RulePreview(uncategorized=uncategorized, reclassified=[RuleLoss(**vars(r)) for r in lost])
 
 
 @router.post("", status_code=201)

@@ -315,6 +315,113 @@ class TestTransactions:
         assert groceries["kind"] == "expense"
 
 
+TRIAGE_CSV = (
+    b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+    b'"01/06/2026";"01/06/2026";"CARTE 01/06 BOULANGERIE DUPONT";"4,20";""\n'
+    b'"08/06/2026";"08/06/2026";"CARTE 08/06 BOULANGERIE DUPONT";"5,80";""\n'
+    b'"09/06/2026";"09/06/2026";"CARTE 09/06 LIBRAIRIE";"30,00";""\n'
+    b'"10/06/2026";"10/06/2026";"CARTE LECLERC DRIVE";"40,00";""\n'
+)
+
+
+class TestTriage:
+    def test_uncategorized_groups(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        groups = client.get("/api/transactions/uncategorized-groups").json()
+        assert [(g["key"], g["count"]) for g in groups] == [
+            ("CARTE LIBRAIRIE", 1),
+            ("CARTE BOULANGERIE DUPONT", 2),
+        ]
+        bakery = groups[1]
+        assert bakery["pattern"] == "BOULANGERIE DUPONT" and bakery["pattern_generic"] is False
+        assert (bakery["debit"], bakery["credit"], bakery["accounts"]) == (10.0, 0.0, ["JOINT"])
+        assert [t["date_valeur"] for t in bakery["transactions"]] == ["2026-06-08", "2026-06-01"]
+        assert bakery["suggestion"] is None
+        assert client.get("/api/transactions/uncategorized-groups", params={"month": "2026-01"}).json() == []
+
+    def test_groups_carry_a_suggestion(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        courses = _category_id(client, "courses")
+        bakery = client.get("/api/transactions/uncategorized-groups").json()[1]
+        client.patch(f"/api/transactions/{bakery['transactions'][0]['id']}", json={"category_id": courses})
+        bakery = client.get("/api/transactions/uncategorized-groups").json()[1]
+        assert bakery["count"] == 1
+        assert bakery["suggestion"] == {"category_id": courses, "count": 1, "token": None}
+
+    def test_rule_preview_reports_rows_other_rules_lose(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        resp = client.get("/api/rules/preview", params={"pattern": "CARTE", "priority": 1})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["uncategorized"] == 3
+        courses = _category_id(client, "courses")
+        assert body["reclassified"] == [
+            {
+                "rule_id": body["reclassified"][0]["rule_id"],
+                "pattern": "LECLERC",
+                "category_id": courses,
+                "count": 1,
+            }
+        ]
+        same = client.get(
+            "/api/rules/preview", params={"pattern": "CARTE", "priority": 1, "category_id": courses}
+        )
+        assert same.json()["reclassified"] == []
+        assert client.get("/api/rules/preview", params={"pattern": "CARTE"}).json()["reclassified"] == []
+
+    def test_rule_preview_needs_a_pattern(self, client):
+        resp = client.get("/api/rules/preview", params={"pattern": ""})
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["msg"] == "Motif : ne peut pas être vide"
+
+    def test_bulk_manual_assignment_and_undo(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        ids = [
+            t["id"] for t in client.get("/api/transactions/uncategorized-groups").json()[1]["transactions"]
+        ]
+        courses = _category_id(client, "courses")
+        resp = client.patch("/api/transactions", json={"ids": ids, "category_id": courses, "note": "pain"})
+        assert resp.status_code == 200
+        assert [(t["category"], t["category_manual"], t["note"]) for t in resp.json()] == [
+            ("courses", True, "pain")
+        ] * 2
+        assert client.get("/api/transactions", params={"uncategorized": True}).json()["total"] == 1
+
+        undo = client.patch("/api/transactions", json={"ids": ids, "category_id": None, "note": None})
+        assert [(t["category_id"], t["category_manual"], t["note"]) for t in undo.json()] == [
+            (None, False, None)
+        ] * 2
+        assert client.get("/api/transactions", params={"uncategorized": True}).json()["total"] == 3
+
+    def test_bulk_clear_lets_rules_reclaim_rows(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        drive = client.get("/api/transactions", params={"libelle_contains": "LECLERC"}).json()["items"][0]
+        bar = _category_id(client, "bar")
+        client.patch("/api/transactions", json={"ids": [drive["id"]], "category_id": bar})
+        (cleared,) = client.patch(
+            "/api/transactions", json={"ids": [drive["id"]], "category_id": None}
+        ).json()
+        assert (cleared["category"], cleared["rule_pattern"]) == ("courses", "LECLERC")
+
+    def test_bulk_assignment_errors(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        tx = client.get("/api/transactions").json()["items"][0]
+        group = client.patch(
+            "/api/transactions", json={"ids": [tx["id"]], "category_id": _category_id(client, "variable")}
+        )
+        assert group.status_code == 422
+        unknown = client.patch("/api/transactions", json={"ids": [tx["id"]], "category_id": 9999})
+        assert unknown.json()["detail"] == ["Catégorie 9999 introuvable"]
+        missing = client.patch(
+            "/api/transactions",
+            json={"ids": [tx["id"], 9998, 9999], "category_id": _category_id(client, "bar")},
+        )
+        assert missing.status_code == 404
+        assert missing.json()["detail"] == ["Opérations introuvables : 9998, 9999"]
+        empty = client.patch("/api/transactions", json={"ids": [], "category_id": None})
+        assert empty.json()["detail"][0]["msg"] == "Opérations : 1 élément(s) au minimum"
+
+
 TRANSFER_PERSO = (
     b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
     b'"10/06/2026";"10/06/2026";"VIR vers COMPTE JOINT";"100,00";""\n'

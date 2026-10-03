@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Link from "next/link";
+import Nav from "@/components/Nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,13 +18,6 @@ export const metadata: Metadata = {
   description: "Household accounting",
 };
 
-const NAV = [
-  { href: "/", label: "Tableau de bord" },
-  { href: "/transactions", label: "Transactions" },
-  { href: "/import", label: "Importer" },
-  { href: "/settings", label: "Réglages" },
-];
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -37,18 +30,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <header className="border-b border-zinc-200 bg-white">
-          <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-3">
-            <span className="font-semibold tracking-tight">compta</span>
-            {NAV.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className="text-sm text-zinc-600 hover:text-zinc-900"
-              >
-                {label}
-              </Link>
-            ))}
-          </nav>
+          <Nav />
         </header>
         <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">{children}</main>
       </body>
