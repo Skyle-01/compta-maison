@@ -5,12 +5,15 @@ import pytest
 from app.core.categorize import income_and_expenses, transfers_summary, uncategorized_balance
 from app.core.transfers import (
     Leg,
+    account_refs,
+    agreement,
     effective_markers,
     pair_legs,
     pair_manually,
     recompute_transfers,
     set_transfer_mode,
 )
+from app.core.triage import label_key
 from app.db import connect, replace_transfer_markers
 from tests.conftest import import_rows
 
@@ -146,35 +149,135 @@ class TestTransferMarkers:
         assert recompute_transfers(db) == 1
 
 
-def _quadratic_reference(debits, credits, window=3):
-    """The pre-bisect pairing loop, kept to lock pair_legs' tie-breaking."""
-    used, pairs = set(), []
-    for debit in debits:
-        best = None
-        for credit in credits:
-            if credit.id in used or credit.account_id == debit.account_id or credit.cents != debit.cents:
+class TestPairingAmbiguity:
+    """A pair forms only when nothing else could be the other leg: a wrong pair silently hides an
+    income (the tenant's rent) or an expense, an unpaired leg merely waits for a manual decision."""
+
+    RENT = ("2026-09-03", "2026-09-03", "VIR INST LOCATAIRE DUPONT", 0, 570, "LOCATIF")
+
+    def test_label_naming_the_account_wins_over_same_day_rent(self, db):
+        # The rent is imported first: the old greedy pairing took it, as the lower id.
+        import_rows(
+            db,
+            self.RENT,
+            ("2026-09-03", "2026-09-03", "VIR de COMPTE PERSO - Septembre", 0, 570, "LOCATIF"),
+            ("2026-09-03", "2026-09-03", "VIR vers APPARTEMENT LOCATIF", 570, 0, "PERSO"),
+        )
+        assert recompute_transfers(db) == 2
+        assert _kinds(db) == {
+            "VIR INST LOCATAIRE DUPONT": "income",
+            "VIR de COMPTE PERSO - Septembre": "transfer",
+            "VIR vers APPARTEMENT LOCATIF": "transfer",
+        }
+
+    def test_competing_legs_nothing_tells_apart_stay_unpaired(self, db):
+        # No label names an account, and a closer date is no proof: left for a manual decision.
+        import_rows(
+            db,
+            self.RENT,
+            ("2026-09-04", "2026-09-04", "VIR de MOI MEME", 0, 570, "LOCATIF"),
+            ("2026-09-03", "2026-09-03", "VIR vers LOGEMENT", 570, 0, "PERSO"),
+        )
+        assert recompute_transfers(db) == 0
+        assert set(_kinds(db).values()) == {"income", "expense"}
+
+    def test_manual_pair_settles_an_ambiguity(self, db):
+        import_rows(
+            db,
+            self.RENT,
+            ("2026-09-04", "2026-09-04", "VIR de MOI MEME", 0, 570, "LOCATIF"),
+            ("2026-09-03", "2026-09-03", "VIR vers LOGEMENT", 570, 0, "PERSO"),
+        )
+        with connect(db) as conn:
+            ids = dict(conn.execute("SELECT libelle, id FROM transactions").fetchall())
+        pair_manually(db, ids["VIR vers LOGEMENT"], ids["VIR de MOI MEME"])
+        recompute_transfers(db)
+        assert _kinds(db)["VIR INST LOCATAIRE DUPONT"] == "income"
+        assert income_and_expenses(db, "2026-09") == (570.0, 0.0)
+
+    def test_label_naming_a_third_account_excludes_the_pair(self, db):
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 100, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE JOINT", 0, 100, "LOCATIF"),
+        )
+        assert recompute_transfers(db) == 0
+
+    def test_interchangeable_legs_pair_by_closest_date(self, db):
+        # Same account and same label on each side: the same transfer made twice, no ambiguity.
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers EPARGNE", 100, 0, "PERSO"),
+            ("2026-06-12", "2026-06-12", "VIR vers EPARGNE", 100, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 100, "LIVRET"),
+            ("2026-06-12", "2026-06-12", "VIR de COMPTE", 0, 100, "LIVRET"),
+        )
+        assert recompute_transfers(db) == 4
+        with connect(db) as conn:
+            days = conn.execute(
+                "SELECT GROUP_CONCAT(date_operation) FROM transactions GROUP BY transfer_group_id"
+            ).fetchall()
+        assert sorted(d for (d,) in days) == ["2026-06-10,2026-06-10", "2026-06-12,2026-06-12"]
+
+
+def _reference_pairs(debits, credits, window=3):
+    """A naive transcription of pair_legs' rule (no amount buckets, no bisect), to lock the
+    optimised candidate search."""
+
+    def options(leg, others, is_debit):
+        found = []
+        for other in others:
+            if other.cents != leg.cents or other.account_id == leg.account_id:
                 continue
-            distance = abs(credit.day - debit.day)
-            if distance > window:
+            if abs(other.day - leg.day) > window:
                 continue
-            if best is None or distance < best[0]:
-                best = (distance, credit.id)
-        if best is not None:
-            used.add(best[1])
-            pairs.append((debit.id, best[1]))
-    return pairs
+            score = agreement(leg, other) if is_debit else agreement(other, leg)
+            if score is not None:
+                found.append((score, other))
+        return found
+
+    def pick(leg, found, taken):
+        free = [(score, other) for score, other in found if other.id not in taken]
+        if not free:
+            return None
+        top = max(score for score, _ in free)
+        best = [other for score, other in free if score == top]
+        if len({(other.account_id, label_key(other.libelle)) for other in best}) > 1:
+            return None
+        return min(best, key=lambda other: (abs(other.day - leg.day), other.day, other.id))
+
+    paired, taken = {}, set()
+    formed = True
+    while formed:
+        formed = False
+        for debit in debits:
+            if debit.id in paired:
+                continue
+            credit = pick(debit, options(debit, credits, True), taken)
+            if credit is None:
+                continue
+            back = pick(credit, options(credit, debits, False), set(paired))
+            if back is not None and back.id == debit.id:
+                paired[debit.id] = credit.id
+                taken.add(credit.id)
+                formed = True
+    return [(debit.id, paired[debit.id]) for debit in debits if debit.id in paired]
 
 
 def test_pair_legs_matches_quadratic_reference():
     rng = random.Random(42)
-    accounts = ["A", "B", "C"]
-    legs = [
-        Leg(i, rng.choice(accounts), rng.choice([1000, 2500, 5000]), 738000 + rng.randrange(30), "VIR")
-        for i in range(400)
-    ]
+    labels = {"A": "Compte A", "B": "Compte B", "C": "Compte C"}
+    libelles = ["VIR", "VIR SEPA LOYER", "VIR de COMPTE A", "VIR vers COMPTE B", "VIR de COMPTE C"]
+    legs = []
+    for i in range(400):
+        account, libelle = rng.choice(list(labels)), rng.choice(libelles)
+        refs = account_refs(libelle, account, labels)
+        legs.append(
+            Leg(i, account, rng.choice([1000, 2500, 5000]), 738000 + rng.randrange(30), libelle, refs)
+        )
     debits = sorted(legs[:200], key=lambda leg: (leg.day, leg.id))
     credits = sorted(legs[200:], key=lambda leg: (leg.day, leg.id))
-    expected = _quadratic_reference(debits, credits)
+    expected = _reference_pairs(debits, credits)
     assert expected  # the fixture does exercise pairing
     assert pair_legs(debits, credits) == expected
 
@@ -262,8 +365,10 @@ class TestManualTransfers:
         assert transfers_summary(db, "2026-06") == {"count": 1, "total": 500.0}
 
     def test_manual_pair_releases_previous_partner(self, db):
-        import_rows(db, *self.LEGS, ("2026-06-10", "2026-06-10", "VIR de PERSO", 0, 500, "JOINT"))
+        # Out of the window, so the JOINT credit doesn't compete with LIVRET for the auto pair.
+        import_rows(db, *self.LEGS, ("2026-06-20", "2026-06-20", "VIR de PERSO", 0, 500, "JOINT"))
         recompute_transfers(db)
+        assert self._state(db)["VIR de COMPTE"] == ("transfer", 0, True)
         ids = self._ids(db)
         pair_manually(db, ids["VIR vers LIVRET"], ids["VIR de PERSO"])
         with connect(db) as conn:

@@ -53,7 +53,10 @@ your own `accounts.csv` their account names no longer resolve).
    - `transfer_markers.csv` (optional): one `marker` per line. A debit and a credit of the same
      amount on two of your accounts, at most 3 days apart, are paired as an internal transfer
      (left out of income and expenses) only if **both** labels start with one of these prefixes
-     (case-insensitive). The default is `VIR`; `*` accepts any label.
+     (case-insensitive). The default is `VIR`; `*` accepts any label. A label containing an
+     account's `label` from `accounts.csv` (`VIR de COMPTE PERSO`) steers the match; when several
+     legs could match and nothing tells them apart (a tenant's rent credited the same day as your
+     own transfer of the same amount), none is paired: pair them by hand on the Transactions page.
 3. Build the database: `python backend/scripts/reset_db.py --source defaults`.
 4. Run it: `./dev.ps1` (Windows), or in two terminals
    `cd backend && python -m uvicorn app.main:app --port 8000` and `npm run dev --prefix frontend`.

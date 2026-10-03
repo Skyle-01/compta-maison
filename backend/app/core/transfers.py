@@ -1,10 +1,12 @@
 import sqlite3
 from bisect import bisect_left, bisect_right
-from collections.abc import Sequence
+from collections import defaultdict
+from collections.abc import Collection, Mapping, Sequence
 from datetime import date
 from pathlib import Path
 from typing import Literal, NamedTuple
 
+from app.core.triage import label_key
 from app.db import DEFAULT_DB_PATH, connect, get_transfer_markers, savings_accounts
 
 TRANSFER_WINDOW_DAYS = 3
@@ -24,6 +26,17 @@ class Leg(NamedTuple):
     cents: int
     day: int  # date.toordinal() of date_operation
     libelle: str
+    refs: frozenset[str] = frozenset()  # the other accounts whose label the libellé names
+
+
+def account_refs(libelle: str, own_account: str, labels: Mapping[str, str]) -> frozenset[str]:
+    """Codes of the accounts (other than the leg's own) whose label appears in the libellé, ignoring
+    case: "VIR de COMPTE PERSO" names the account labelled "Compte perso". Codes and aliases are not
+    searched, a short code would turn up inside unrelated labels."""
+    text = libelle.casefold()
+    return frozenset(
+        code for code, label in labels.items() if code != own_account and label and label.casefold() in text
+    )
 
 
 def effective_markers(conn: sqlite3.Connection) -> list[str]:
@@ -51,23 +64,56 @@ def has_transfer_marker(libelle: str, markers: Sequence[str]) -> bool:
     return any(label.startswith(marker.casefold()) for marker in markers)
 
 
+def agreement(debit: Leg, credit: Leg) -> int | None:
+    """How many of the two labels name the other leg's account (0-2), or None when a label names
+    accounts that exclude the other leg's: "VIR de COMPTE JOINT" is no leg of a transfer from PERSO."""
+    if (debit.refs and credit.account_id not in debit.refs) or (
+        credit.refs and debit.account_id not in credit.refs
+    ):
+        return None
+    return (credit.account_id in debit.refs) + (debit.account_id in credit.refs)
+
+
+def _choice(
+    leg: Leg,
+    options: Sequence[tuple[int, Leg]],
+    taken: Collection[int],
+    classes: Mapping[int, tuple[str, str]],
+) -> Leg | None:
+    """`leg`'s pick among its options ((agreement, other leg)) not yet taken: the closest-dated of
+    those with the best agreement, or None when these span several (account, label_key) classes.
+    Same-class legs are interchangeable (the same transfer seen twice); different classes are an
+    ambiguity (the tenant's rent vs your own transfer, same day and amount) left to the user."""
+    free = [(score, other) for score, other in options if other.id not in taken]
+    if not free:
+        return None
+    top = max(score for score, _ in free)
+    best = [other for score, other in free if score == top]
+    if len({classes[other.id] for other in best}) > 1:
+        return None
+    return min(best, key=lambda other: (abs(other.day - leg.day), other.day, other.id))
+
+
 def pair_legs(
     debits: Sequence[Leg], credits: Sequence[Leg], window_days: int = TRANSFER_WINDOW_DAYS
 ) -> list[tuple[int, int]]:
-    """Greedy pairing: each debit, in the given order, claims the closest-dated unused credit of
-    the same amount on another account within the window (earliest credit wins a tie). Credits
-    must be sorted by (day, id). Returns (debit_id, credit_id) pairs.
+    """Pair each debit with a credit of the same amount on another account within the window, only
+    when the choice is unambiguous. A debit and a credit are paired when each is the other's pick
+    (see _choice: best `agreement`, then closest date); rounds repeat until no new pair forms, so
+    the result doesn't depend on import order. A leg whose candidates stay ambiguous is left unpaired
+    for a manual decision: a wrong pair would silently hide an income or an expense. Credits must be
+    sorted by (day, id). Returns (debit_id, credit_id) pairs in debit order.
 
-    Credits are bucketed by amount and bisected by day, so the cost is O((D + C) log C) plus the
-    candidates inside each window rather than D × C."""
+    Credits are bucketed by amount and bisected by day, so building the candidates costs
+    O((D + C) log C) plus the candidates inside each window rather than D × C."""
     buckets: dict[int, tuple[list[int], list[Leg]]] = {}
     for leg in credits:
         days, legs = buckets.setdefault(leg.cents, ([], []))
         days.append(leg.day)
         legs.append(leg)
 
-    used: set[int] = set()
-    pairs: list[tuple[int, int]] = []
+    debit_options: dict[int, list[tuple[int, Leg]]] = defaultdict(list)
+    credit_options: dict[int, list[tuple[int, Leg]]] = defaultdict(list)
     for debit in debits:
         bucket = buckets.get(debit.cents)
         if bucket is None:
@@ -75,30 +121,53 @@ def pair_legs(
         days, legs = bucket
         lo = bisect_left(days, debit.day - window_days)
         hi = bisect_right(days, debit.day + window_days)
-        best: tuple[int, int] | None = None  # (day distance, credit id)
         for credit in legs[lo:hi]:
-            if credit.id in used or credit.account_id == debit.account_id:
+            if credit.account_id == debit.account_id:
                 continue
-            distance = abs(credit.day - debit.day)
-            if best is None or distance < best[0]:
-                best = (distance, credit.id)
-        if best is not None:
-            used.add(best[1])
-            pairs.append((debit.id, best[1]))
-    return pairs
+            score = agreement(debit, credit)
+            if score is not None:
+                debit_options[debit.id].append((score, credit))
+                credit_options[credit.id].append((score, debit))
+
+    classes = {leg.id: (leg.account_id, label_key(leg.libelle)) for leg in (*debits, *credits)}
+    paired: dict[int, int] = {}  # debit id -> credit id
+    taken: set[int] = set()  # paired credit ids
+    while True:
+        formed = False
+        for debit in debits:
+            if debit.id in paired or not debit_options[debit.id]:
+                continue
+            credit = _choice(debit, debit_options[debit.id], taken, classes)
+            if credit is None:
+                continue
+            back = _choice(credit, credit_options[credit.id], paired, classes)
+            if back is not None and back.id == debit.id:
+                paired[debit.id] = credit.id
+                taken.add(credit.id)
+                formed = True
+        if not formed:
+            return [(debit.id, paired[debit.id]) for debit in debits if debit.id in paired]
 
 
 def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> list[Leg]:
     # External-savings deposits are single-legged by design (see recompute_transfers): pairing one
     # with an unrelated same-amount credit would hide that credit from income.
     patterns = _deposit_patterns(conn)
+    labels = dict(conn.execute("SELECT code, label FROM accounts").fetchall())
     rows = conn.execute(
         f"SELECT id, account_id, {amount_col}, date_operation, libelle FROM transactions "
         f"WHERE {amount_col} > 0 AND account_id IS NOT NULL AND kind_manual = 0 "
         "ORDER BY date_operation, id"
     ).fetchall()
     return [
-        Leg(id_, account_id, cents, date.fromisoformat(day).toordinal(), libelle)
+        Leg(
+            id_,
+            account_id,
+            cents,
+            date.fromisoformat(day).toordinal(),
+            libelle,
+            account_refs(libelle, account_id, labels),
+        )
         for id_, account_id, cents, day, libelle in rows
         if has_transfer_marker(libelle, markers) and not _is_external_deposit(libelle, patterns)
     ]
@@ -113,8 +182,10 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
 
     A transfer is a debit on one account matched to a credit on a *different* account with the
     same amount, within TRANSFER_WINDOW_DAYS, where BOTH labels start with a transfer marker
-    (see effective_markers / has_transfer_marker). Each leg is used at most once; earlier debits
-    claim the closest-dated eligible credit first. Both legs get a shared `transfer_group_id` and
+    (see effective_markers / has_transfer_marker). Each leg is used at most once, and only when the
+    match is unambiguous (see pair_legs): a label naming the other account wins over one that names
+    none, and competing legs that nothing tells apart stay unpaired, for the user to pair by hand
+    (pair_manually). Both legs get a shared `transfer_group_id` and
     `kind='transfer'` so they drop out of income/expense/balance.
 
     Only non-manual rows are touched (kind_manual=1 — a manual pair, unpair or single-row
