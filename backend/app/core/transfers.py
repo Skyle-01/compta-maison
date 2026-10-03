@@ -159,18 +159,13 @@ def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> 
         f"WHERE {amount_col} > 0 AND account_id IS NOT NULL AND kind_manual = 0 "
         "ORDER BY date_operation, id"
     ).fetchall()
-    return [
-        Leg(
-            id_,
-            account_id,
-            cents,
-            date.fromisoformat(day).toordinal(),
-            libelle,
-            account_refs(libelle, account_id, labels),
-        )
-        for id_, account_id, cents, day, libelle in rows
-        if has_transfer_marker(libelle, markers) and not _is_external_deposit(libelle, patterns)
-    ]
+    legs = []
+    for id_, account_id, cents, day, libelle in rows:
+        refs = account_refs(libelle, account_id, labels)
+        # Naming one of your accounts is as good a sign as a marker ("vers LIVRET A" has no VIR).
+        if (has_transfer_marker(libelle, markers) or refs) and not _is_external_deposit(libelle, patterns):
+            legs.append(Leg(id_, account_id, cents, date.fromisoformat(day).toordinal(), libelle, refs))
+    return legs
 
 
 def _next_group(conn: sqlite3.Connection) -> int:
@@ -182,11 +177,12 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
 
     A transfer is a debit on one account matched to a credit on a *different* account with the
     same amount, within TRANSFER_WINDOW_DAYS, where BOTH labels start with a transfer marker
-    (see effective_markers / has_transfer_marker). Each leg is used at most once, and only when the
-    match is unambiguous (see pair_legs): a label naming the other account wins over one that names
-    none, and competing legs that nothing tells apart stay unpaired, for the user to pair by hand
-    (pair_manually). Both legs get a shared `transfer_group_id` and
-    `kind='transfer'` so they drop out of income/expense/balance.
+    (see effective_markers / has_transfer_marker) or name another of the accounts (account_refs:
+    "vers LIVRET A" for the account labelled "Livret A"). Each leg is used at most once, and only
+    when the match is unambiguous (see pair_legs): a label naming the other account wins over one
+    that names none, and competing legs that nothing tells apart stay unpaired, for the user to
+    pair by hand (pair_manually). Both legs get a shared `transfer_group_id` and `kind='transfer'`
+    so they drop out of income/expense/balance.
 
     Only non-manual rows are touched (kind_manual=1 — a manual pair, unpair or single-row
     decision — is left as the user set it). Idempotent.

@@ -90,7 +90,8 @@ class TestRecomputeTransfers:
 
 
 class TestTransferMarkers:
-    """Both legs must start with a transfer marker (default 'VIR', case-insensitive)."""
+    """Both legs must start with a transfer marker (default 'VIR', case-insensitive) or name
+    another account."""
 
     def test_round_amount_false_positive_not_paired(self, db):
         # 50 € of groceries on the joint account and 50 € refunded by a friend the next day are
@@ -126,6 +127,22 @@ class TestTransferMarkers:
         with connect(db) as conn:
             replace_transfer_markers(conn, ["VIR", "VERSEMENT"])
         assert recompute_transfers(db) == 2
+
+    def test_label_naming_an_account_stands_for_a_marker(self, db):
+        import_rows(
+            db,
+            ("2026-06-06", "2026-06-06", "vers LIVRET A", 50, 0, "PERSO"),
+            ("2026-06-06", "2026-06-06", "VIR de COMPTE PERSO - Epargne", 0, 50, "LIVRET"),
+        )
+        assert recompute_transfers(db) == 2
+
+    def test_naming_an_account_does_not_make_the_other_leg_eligible(self, db):
+        import_rows(
+            db,
+            ("2026-06-06", "2026-06-06", "vers LIVRET A", 50, 0, "PERSO"),
+            ("2026-06-06", "2026-06-06", "VERSEMENT", 0, 50, "LIVRET"),
+        )
+        assert recompute_transfers(db) == 0
 
     def test_star_marker_restores_legacy_pairing(self, db):
         import_rows(
