@@ -1,4 +1,4 @@
-import type { RulePreview, UncategorizedGroup } from "./api";
+import type { RulePreview, Transaction, UncategorizedGroup } from "./api";
 
 /** Pure helpers of the « À classer » page: default mode, next active group, messages. */
 
@@ -26,6 +26,15 @@ export function operations(n: number): string {
 /** « 5 opérations classées en Variable / Sport ». */
 export function classedMessage(n: number, path: string): string {
   return `${operations(n)} classée${n > 1 ? "s" : ""} en ${path}`;
+}
+
+/** « Virement associé : VIR vers LOGEMENT (PERSO) ↔ VIR de MOI MEME (LOCATIF) ». */
+export function pairedMessage(
+  a: Pick<Transaction, "libelle" | "account_id">,
+  b: Pick<Transaction, "libelle" | "account_id">,
+): string {
+  const leg = (t: Pick<Transaction, "libelle" | "account_id">) => `${t.libelle} (${t.account_id ?? "?"})`;
+  return `Virement associé : ${leg(a)} ↔ ${leg(b)}`;
 }
 
 /** Why a category is suggested: « comme 4 opérations « BOULANGERIE » déjà classées ». */

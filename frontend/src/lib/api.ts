@@ -113,6 +113,14 @@ export interface UncategorizedGroup {
   /** Newest first. */
   transactions: Transaction[];
   suggestion: CategorySuggestion | null;
+  /** Possible other legs of the group's operations, likeliest first per operation. */
+  transfer_candidates: TransferCandidate[];
+}
+
+/** An operation that could be the other leg of a transfer with `transaction_id`. */
+export interface TransferCandidate {
+  transaction_id: number;
+  partner: Transaction;
 }
 
 /** Rows an existing rule would lose to a new one. */

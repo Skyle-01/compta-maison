@@ -83,6 +83,11 @@ class CategorySuggestion(BaseModel):
     )
 
 
+class TransferCandidate(BaseModel):
+    transaction_id: int = Field(description="The group's operation")
+    partner: Transaction = Field(description="An operation that could be its other transfer leg")
+
+
 class UncategorizedGroup(BaseModel):
     key: str = Field(description="Normalised label shared by the group")
     pattern: str = Field(description="Default rule pattern, a substring of every member's label")
@@ -95,6 +100,9 @@ class UncategorizedGroup(BaseModel):
     accounts: list[str]
     transactions: list[Transaction] = Field(description="The group's operations, newest first")
     suggestion: CategorySuggestion | None
+    transfer_candidates: list[TransferCandidate] = Field(
+        description="Possible other legs of the group's operations, likeliest first per operation"
+    )
 
 
 class TransferPairIn(BaseModel):

@@ -168,6 +168,41 @@ def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> 
     return legs
 
 
+def transfer_candidates(db_path: Path, ids: Collection[int]) -> dict[int, list[int]]:
+    """For each of `ids` that could be a transfer leg, the operations that could be its other leg,
+    likeliest first (best `agreement`, then closest date): the tests of automatic pairing (_legs,
+    window, agreement) without asking the match to be unique, since the user picks (the « À classer »
+    page). Rows already in a transfer, or carrying a manual transfer decision, take no part."""
+    wanted = set(ids)
+    if not wanted:
+        return {}
+    with connect(db_path) as conn:
+        markers = effective_markers(conn)
+        in_transfer = {id_ for (id_,) in conn.execute("SELECT id FROM transactions WHERE kind = 'transfer'")}
+        debits = [leg for leg in _legs(conn, "debit_cents", markers) if leg.id not in in_transfer]
+        credits = [leg for leg in _legs(conn, "credit_cents", markers) if leg.id not in in_transfer]
+
+    found: dict[int, list[int]] = {}
+    for legs, others, is_debit in ((debits, credits, True), (credits, debits, False)):
+        by_cents: dict[int, list[Leg]] = defaultdict(list)
+        for other in others:
+            by_cents[other.cents].append(other)
+        for leg in legs:
+            if leg.id not in wanted:
+                continue
+            ranked = []
+            for other in by_cents[leg.cents]:
+                distance = abs(other.day - leg.day)
+                if other.account_id == leg.account_id or distance > TRANSFER_WINDOW_DAYS:
+                    continue
+                score = agreement(leg, other) if is_debit else agreement(other, leg)
+                if score is not None:
+                    ranked.append((-score, distance, other.day, other.id))
+            if ranked:
+                found[leg.id] = [other_id for *_, other_id in sorted(ranked)]
+    return found
+
+
 def _next_group(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COALESCE(MAX(transfer_group_id), 0) FROM transactions").fetchone()[0] + 1
 

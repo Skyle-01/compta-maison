@@ -12,6 +12,7 @@ from app.core.transfers import (
     pair_manually,
     recompute_transfers,
     set_transfer_mode,
+    transfer_candidates,
 )
 from app.core.triage import label_key
 from app.db import connect, replace_transfer_markers
@@ -235,6 +236,69 @@ class TestPairingAmbiguity:
                 "SELECT GROUP_CONCAT(date_operation) FROM transactions GROUP BY transfer_group_id"
             ).fetchall()
         assert sorted(d for (d,) in days) == ["2026-06-10,2026-06-10", "2026-06-12,2026-06-12"]
+
+
+class TestTransferCandidates:
+    """The other legs « À classer » offers for an operation: no uniqueness required, user's pick."""
+
+    AMBIGUOUS = (
+        TestPairingAmbiguity.RENT,
+        ("2026-09-04", "2026-09-04", "VIR de MOI MEME", 0, 570, "LOCATIF"),
+        ("2026-09-03", "2026-09-03", "VIR vers LOGEMENT", 570, 0, "PERSO"),
+    )
+
+    @staticmethod
+    def _ids(db) -> dict[str, int]:
+        with connect(db) as conn:
+            return dict(conn.execute("SELECT libelle, id FROM transactions").fetchall())
+
+    def test_ambiguous_leg_gets_every_candidate_closest_first(self, db):
+        import_rows(db, *self.AMBIGUOUS)
+        recompute_transfers(db)
+        ids = self._ids(db)
+        found = transfer_candidates(db, ids.values())
+        assert found[ids["VIR vers LOGEMENT"]] == [ids["VIR INST LOCATAIRE DUPONT"], ids["VIR de MOI MEME"]]
+        assert found[ids["VIR de MOI MEME"]] == [ids["VIR vers LOGEMENT"]]
+
+    def test_label_naming_the_account_ranks_first(self, db):
+        import_rows(
+            db,
+            ("2026-09-03", "2026-09-03", "VIR INST LOCATAIRE DUPONT", 0, 570, "LOCATIF"),
+            ("2026-09-05", "2026-09-05", "VIR de COMPTE PERSO", 0, 570, "LOCATIF"),
+            ("2026-09-03", "2026-09-03", "VIR vers LOGEMENT", 570, 0, "PERSO"),
+        )
+        ids = self._ids(db)
+        found = transfer_candidates(db, [ids["VIR vers LOGEMENT"]])
+        assert found == {
+            ids["VIR vers LOGEMENT"]: [ids["VIR de COMPTE PERSO"], ids["VIR INST LOCATAIRE DUPONT"]]
+        }
+
+    def test_paired_rows_take_no_part(self, db):
+        import_rows(db, *self.AMBIGUOUS)
+        ids = self._ids(db)
+        pair_manually(db, ids["VIR vers LOGEMENT"], ids["VIR de MOI MEME"])
+        assert transfer_candidates(db, ids.values()) == {}
+
+    def test_a_row_the_user_said_is_no_transfer_takes_no_part(self, db):
+        # A third credit keeps the debit ambiguous once the rent is ruled out (else it auto-pairs).
+        import_rows(db, *self.AMBIGUOUS, ("2026-09-05", "2026-09-05", "VIR SEPA AMI", 0, 570, "JOINT"))
+        recompute_transfers(db)
+        ids = self._ids(db)
+        set_transfer_mode(db, ids["VIR INST LOCATAIRE DUPONT"], "none")
+        found = transfer_candidates(db, ids.values())
+        assert found[ids["VIR vers LOGEMENT"]] == [ids["VIR de MOI MEME"], ids["VIR SEPA AMI"]]
+        assert ids["VIR INST LOCATAIRE DUPONT"] not in found
+
+    def test_label_naming_a_third_account_is_no_candidate(self, db):
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 100, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE JOINT", 0, 100, "LOCATIF"),
+        )
+        assert transfer_candidates(db, self._ids(db).values()) == {}
+
+    def test_no_ids_no_query(self, db):
+        assert transfer_candidates(db, []) == {}
 
 
 def _reference_pairs(debits, credits, window=3):

@@ -11,6 +11,7 @@ import {
   notifyUncategorizedChanged,
   type RulePreview,
   shortPath,
+  type Transaction,
   type UncategorizedGroup,
 } from "@/lib/api";
 import SignedAmount from "@/components/SignedAmount";
@@ -21,6 +22,7 @@ import {
   defaultMode,
   nextActiveIndex,
   operations,
+  pairedMessage,
   previewMessage,
   suggestionReason,
   type TriageMode,
@@ -147,47 +149,68 @@ export default function TriagePage() {
     return () => clearTimeout(timer);
   }, [toast]);
 
-  async function submit(category: Category | null) {
-    if (!groups || !current || !d || !category || busy) return;
-    if (d.mode === "rule" && !pattern) return;
-    const following = groups[active + 1]?.key ?? null;
-    const path = shortPath(category);
+  /** Run an action on the active group, show its toast, then activate `followingKey` (or the
+   *  group now at the same position). */
+  async function act(followingKey: string | null, perform: () => Promise<Toast>) {
     setBusy(true);
     setError(null);
     try {
-      if (d.mode === "manual") {
-        const ids = current.transactions.map((t) => t.id);
-        await api.updateTransactions(ids, category.id, d.description.trim() || null);
-        setToast({
-          message: classedMessage(ids.length, path),
-          key: current.key,
-          undo: () => api.updateTransactions(ids, null, null),
-        });
-      } else {
-        const before = await api.uncategorizedCount();
-        const rule = await api.createRule(
-          ruleFormToPayload({
-            category_id: category.id,
-            pattern,
-            priority: d.priority,
-            is_income_anchor: false,
-            description: d.description,
-          }),
-        );
-        const after = await api.uncategorizedCount();
-        setToast({
-          message: `Règle « ${pattern} » créée : ${classedMessage(before - after, path)}`,
-          key: current.key,
-          undo: () => api.deleteRule(rule.id),
-        });
-      }
+      setToast(await perform());
       notifyUncategorizedChanged();
-      await load(following, active);
+      await load(followingKey, active);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  function submit(category: Category | null) {
+    if (!groups || !current || !d || !category || busy) return;
+    if (d.mode === "rule" && !pattern) return;
+    const path = shortPath(category);
+    return act(groups[active + 1]?.key ?? null, async () => {
+      if (d.mode === "manual") {
+        const ids = current.transactions.map((t) => t.id);
+        await api.updateTransactions(ids, category.id, d.description.trim() || null);
+        return {
+          message: classedMessage(ids.length, path),
+          key: current.key,
+          undo: () => api.updateTransactions(ids, null, null),
+        };
+      }
+      const before = await api.uncategorizedCount();
+      const rule = await api.createRule(
+        ruleFormToPayload({
+          category_id: category.id,
+          pattern,
+          priority: d.priority,
+          is_income_anchor: false,
+          description: d.description,
+        }),
+      );
+      const after = await api.uncategorizedCount();
+      return {
+        message: `Règle « ${pattern} » créée : ${classedMessage(before - after, path)}`,
+        key: current.key,
+        undo: () => api.deleteRule(rule.id),
+      };
+    });
+  }
+
+  /** Pair one of the active group's operations with `partner` as a transfer. A group with other
+   *  operations stays active; « Annuler » hands both legs back to automatic detection. */
+  function pair(op: Transaction, partner: Transaction) {
+    if (!groups || !current || busy) return;
+    const following = current.count > 1 ? current.key : (groups[active + 1]?.key ?? null);
+    return act(following, async () => {
+      await api.pairTransfer([op.id, partner.id]);
+      return {
+        message: pairedMessage(op, partner),
+        key: current.key,
+        undo: () => api.setTransferMode(op.id, "auto"),
+      };
+    });
   }
 
   async function undo() {
@@ -456,6 +479,46 @@ export default function TriagePage() {
                         {expanded.has(g.key) ? "Masquer les opérations" : "Voir les opérations"}
                       </button>
                     </div>
+
+                    {g.transfer_candidates.length > 0 && (
+                      <div className="space-y-1 text-xs">
+                        <p className="text-zinc-500">Virement interne ? Autre opération possible :</p>
+                        <table className="w-full">
+                          <tbody>
+                            {g.transfer_candidates.map(({ transaction_id, partner }) => {
+                              const op = g.transactions.find((t) => t.id === transaction_id);
+                              if (!op) return null;
+                              return (
+                                <tr key={`${op.id}-${partner.id}`} className="border-t border-zinc-100">
+                                  {g.count > 1 && (
+                                    <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">
+                                      pour le {frenchDate(op.date_valeur)}
+                                    </td>
+                                  )}
+                                  <td className="whitespace-nowrap py-1 pr-3">{frenchDate(partner.date_valeur)}</td>
+                                  <td className="max-w-md truncate py-1 pr-3" title={partner.libelle}>
+                                    {partner.libelle}
+                                  </td>
+                                  <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">{partner.account_id}</td>
+                                  <td className="whitespace-nowrap py-1 pr-3 text-right">
+                                    <SignedAmount tx={partner} />
+                                  </td>
+                                  <td className="whitespace-nowrap py-1 text-right">
+                                    <button
+                                      onClick={() => pair(op, partner)}
+                                      disabled={busy}
+                                      className="font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-40"
+                                    >
+                                      Associer en virement
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
                     {expanded.has(g.key) && (
                       <table className="w-full text-xs">

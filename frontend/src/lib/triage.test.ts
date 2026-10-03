@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { classedMessage, defaultMode, nextActiveIndex, previewMessage, suggestionReason } from "./triage";
+import {
+  classedMessage,
+  defaultMode,
+  nextActiveIndex,
+  pairedMessage,
+  previewMessage,
+  suggestionReason,
+} from "./triage";
 
 describe("defaultMode", () => {
   it("is a rule for a group, manual for a lone operation or a generic pattern", () => {
@@ -41,5 +48,16 @@ describe("messages", () => {
         pathOf,
       ),
     ).toBe("3 sans catégorie + 2 déjà classées par la règle « LECLERC » (Variable / Courses) seraient reclassées");
+  });
+});
+
+describe("pairedMessage", () => {
+  it("names both legs with their account", () => {
+    expect(
+      pairedMessage(
+        { libelle: "VIR vers LOGEMENT", account_id: "PERSO" },
+        { libelle: "VIR de MOI MEME", account_id: "LOCATIF" },
+      ),
+    ).toBe("Virement associé : VIR vers LOGEMENT (PERSO) ↔ VIR de MOI MEME (LOCATIF)");
   });
 });

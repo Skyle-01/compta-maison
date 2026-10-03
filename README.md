@@ -57,7 +57,7 @@ your own `accounts.csv` their account names no longer resolve).
      (`vers LIVRET A`). The default is `VIR`; `*` accepts any label. A label containing an
      account's `label` (`VIR de COMPTE PERSO`) also steers the match; when several
      legs could match and nothing tells them apart (a tenant's rent credited the same day as your
-     own transfer of the same amount), none is paired: pair them by hand on the Transactions page.
+     own transfer of the same amount), none is paired: pair them by hand from « À classer » or the Transactions page.
 3. Build the database: `python backend/scripts/reset_db.py --source defaults`.
 4. Run it: `./dev.ps1` (Windows), or in two terminals
    `cd backend && python -m uvicorn app.main:app --port 8000` and `npm run dev --prefix frontend`.
@@ -67,7 +67,7 @@ After that, import new statements from the Import page: each upload is also copi
 (under its own name, or `RELEVE_<account>_<date>_<name>.csv` when you picked the account by hand),
 so a rebuild keeps it. To add several statements at once, drop them in `_inputs/` and click
 "Importer les nouveaux relevés" on the Import page, or run `./import_inputs.ps1`: only operations
-not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. Edit categories, rules and transfer markers from the app's Settings page. To classify what the rules missed, open « À classer »: similar operations are grouped, each with a category suggested from the ones already classified (computed locally), and a whole group goes to one rule or one manual assignment, from the keyboard. On the
+not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. Edit categories, rules and transfer markers from the app's Settings page. To classify what the rules missed, open « À classer »: similar operations are grouped, each with a category suggested from the ones already classified (computed locally), and a whole group goes to one rule or one manual assignment, from the keyboard; an operation that could be one leg of an internal transfer lists its possible other legs, each with an « Associer en virement » button. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
 pair; these manual decisions are listed in Settings and kept across rebuilds. To rebuild while
 keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current

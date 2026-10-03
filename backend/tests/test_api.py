@@ -369,6 +369,32 @@ class TestTriage:
         assert same.json()["reclassified"] == []
         assert client.get("/api/rules/preview", params={"pattern": "CARTE"}).json()["reclassified"] == []
 
+    def test_groups_carry_transfer_candidates(self, db, client):
+        import_rows(
+            db,
+            ("2026-09-03", "2026-09-03", "VIR INST LOCATAIRE DUPONT", 0, 570, "LOCATIF"),
+            ("2026-09-04", "2026-09-04", "VIR de MOI MEME", 0, 570, "LOCATIF"),
+            ("2026-09-03", "2026-09-03", "VIR vers LOGEMENT", 570, 0, "PERSO"),
+        )
+        groups = client.get("/api/transactions/uncategorized-groups").json()
+        debit = next(g for g in groups if g["transactions"][0]["libelle"] == "VIR vers LOGEMENT")
+        assert [(c["transaction_id"], c["partner"]["libelle"]) for c in debit["transfer_candidates"]] == [
+            (debit["transactions"][0]["id"], "VIR INST LOCATAIRE DUPONT"),
+            (debit["transactions"][0]["id"], "VIR de MOI MEME"),
+        ]
+        partner_id = debit["transfer_candidates"][1]["partner"]["id"]
+        assert (
+            client.post(
+                "/api/transactions/transfer-pair",
+                json={"transaction_ids": [debit["transactions"][0]["id"], partner_id]},
+            ).status_code
+            == 200
+        )
+        groups = client.get("/api/transactions/uncategorized-groups").json()
+        assert [(g["transactions"][0]["libelle"], g["transfer_candidates"]) for g in groups] == [
+            ("VIR INST LOCATAIRE DUPONT", [])
+        ]
+
     def test_rule_preview_needs_a_pattern(self, client):
         resp = client.get("/api/rules/preview", params={"pattern": ""})
         assert resp.status_code == 422

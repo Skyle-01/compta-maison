@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, Response
 from app.api.categories import category_paths, csv_response, reject_group_target
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
-from app.core.transfers import pair_manually, set_transfer_mode
+from app.core.transfers import pair_manually, set_transfer_mode, transfer_candidates
 from app.core.triage import uncategorized_groups
 from app.db import connect, euros, real_flow_clause
 from app.schemas import (
@@ -16,6 +16,7 @@ from app.schemas import (
     TransactionPage,
     TransactionPatch,
     TransactionsBulkPatch,
+    TransferCandidate,
     TransferModeIn,
     TransferPairIn,
     UncategorizedGroup,
@@ -178,9 +179,13 @@ def list_transactions(
 @router.get("/uncategorized-groups")
 def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list[UncategorizedGroup]:
     """Uncategorised operations grouped by similar label, largest total first, each with a default
-    rule pattern and a category suggestion (the « À classer » page)."""
+    rule pattern, a category suggestion and the operations that could pair with them as a transfer
+    (the « À classer » page)."""
     groups = uncategorized_groups(db_path, month)
-    by_id = {t.id: t for t in _load(db_path, [i for g in groups for i in g.transaction_ids])}
+    ids = [i for g in groups for i in g.transaction_ids]
+    candidates = transfer_candidates(db_path, ids)
+    partner_ids = {p for partners in candidates.values() for p in partners}
+    by_id = {t.id: t for t in _load(db_path, [*ids, *partner_ids])}
     return [
         UncategorizedGroup(
             key=g.key,
@@ -194,6 +199,11 @@ def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list
             accounts=g.accounts,
             transactions=[by_id[i] for i in g.transaction_ids],
             suggestion=CategorySuggestion(**vars(g.suggestion)) if g.suggestion else None,
+            transfer_candidates=[
+                TransferCandidate(transaction_id=i, partner=by_id[p])
+                for i in g.transaction_ids
+                for p in candidates.get(i, [])
+            ],
         )
         for g in groups
     ]
