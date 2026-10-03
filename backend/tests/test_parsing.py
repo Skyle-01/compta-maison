@@ -196,7 +196,9 @@ class TestBankProfiles:
         assert load_bank_profiles(tmp_path) == [DEFAULT_PROFILE]
 
     def test_user_profiles_before_default(self, tmp_path):
-        (tmp_path / "bank_profiles.toml").write_text(_toml(**SIGNED) + _toml(**{**SIGNED, "name": "autre"}))
+        (tmp_path / "bank_profiles.toml").write_text(
+            _toml(**SIGNED) + _toml(**{**SIGNED, "name": "autre"}), encoding="utf-8"
+        )
         assert [p.name for p in load_bank_profiles(tmp_path)] == ["signe", "autre", "default"]
 
     def test_example_file_in_data_is_valid(self):
