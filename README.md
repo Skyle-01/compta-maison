@@ -12,7 +12,7 @@ your machine; nothing is sent anywhere.
 | `data/` | a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles, a commented `settings.toml`) and six months of fictional statements in `data/demo/` | yes |
 | `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`, `bank_profiles.toml`, `settings.toml`) | no |
 | `_inputs/` | your bank statement CSVs | no |
-| `_backups/` | automatic snapshots taken before each rebuild | no |
+| `_backups/` | automatic snapshots taken before each rebuild or configuration save | no |
 | `compta.db` | the SQLite database | no |
 
 Every folder starting with `_` is gitignored.
@@ -77,7 +77,11 @@ Transactions page, tick two operations to pair them as a transfer, or use "Disso
 pair; these manual decisions are listed in Settings (« Virements manuels ») and kept across rebuilds. To rebuild while
 keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current
 setup to `_backups/<timestamp>/` (next to the database) first. `--source backup` restores the latest snapshot. Copy a
-snapshot's files into `_config/` to make it your new reference setup.
+snapshot's files into `_config/` to make it your new reference setup. Or let the app do it: Settings → « Sauvegarde » →
+« Enregistrer la configuration » writes your accounts, categories, rules, manual decisions and transfer markers from the
+database into `_config/` (after copying the files it replaces, and the database itself, to `_backups/<timestamp>/`; your
+`bank_profiles.toml` and `settings.toml` are never touched), so `reset_db.py --source defaults` rebuilds the same database
+if `compta.db` is ever lost.
 
 ## Other banks
 
