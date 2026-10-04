@@ -18,3 +18,44 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
+
+/* The printable report (/rapport): each .sheet is one A4 page, previewed on screen at its print
+   width (page width minus the 12 mm margins, kept as padding on screen). */
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@page landscape {
+  size: A4 landscape;
+}
+
+.sheet {
+  width: 210mm;
+  padding: 12mm;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.12);
+}
+
+.sheet-landscape {
+  width: 297mm;
+  page: landscape;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+    print-color-adjust: exact;
+  }
+
+  .sheet {
+    width: auto;
+    padding: 0;
+    box-shadow: none;
+    break-after: page;
+  }
+
+  .sheet:last-child {
+    break-after: auto;
+  }
+}

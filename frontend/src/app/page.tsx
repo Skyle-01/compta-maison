@@ -1,47 +1,31 @@
 "use client";
 
-import { type MouseEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  Line,
-  LineChart,
-  ReferenceArea,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import {
   ALL_MONTHS,
   api,
   errorMessage,
   type AverageNode,
   type AveragePeriod,
-  type BudgetSummary,
   type CategoryAverages,
   type CategoryNode,
   type Dashboard,
-  type MonthTotals,
   type Transaction,
   formatEuro,
   frenchDate,
   frenchMonth,
   frenchMonthShort,
 } from "@/lib/api";
+import BudgetSection, { TONE_TEXT } from "@/components/BudgetSection";
+import Gap from "@/components/Gap";
+import MoneyFlowChart from "@/components/MoneyFlowChart";
+import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
-import {
-  AVERAGE_PERIODS,
-  averageGap,
-  type GapTone,
-  gapTone,
-  periodSummary,
-  visibleAverageNodes,
-} from "@/lib/averages";
-import { barWidth, budgetLeft, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
-import { busiestColumn, flowLayout, type PlacedLink, type PlacedNode } from "@/lib/flowLayout";
-import { type FlowData, type FlowRole, moneyFlow } from "@/lib/moneyFlow";
-import { monthTick, trendTicks, trendValueLabels } from "@/lib/trend";
+import { AVERAGE_PERIODS, periodSummary, visibleAverageNodes } from "@/lib/averages";
+import { budgetRatio, budgetTone } from "@/lib/budget";
+import { moneyFlow } from "@/lib/moneyFlow";
+import { reportLink } from "@/lib/report";
 
 // The tree's structural node names come from the backend in English ("total", "uncategorised");
 // everything else is already French. Display them in French without renaming the data.
@@ -134,247 +118,6 @@ function HeroSummary({ data }: { data: Dashboard }) {
       )}
     </p>
   );
-}
-
-interface TrendDotProps {
-  cx?: number;
-  cy?: number;
-  index?: number;
-  payload?: MonthTotals;
-}
-
-const TREND_TEAL = "#0d9488";
-const TREND_RED = "#dc2626";
-
-/** A sparkline point: the current month is larger, deficit months are red, and the months picked by
- *  `trendValueLabels` print their amount (above, or below for a negative month; anchored inwards at
- *  either end so the text never leaves the chart). */
-function TrendDot({
-  cx,
-  cy,
-  index,
-  payload,
-  current,
-  labelled,
-  count,
-}: TrendDotProps & { current: string; labelled: Set<string>; count: number }) {
-  if (cx === undefined || cy === undefined || !payload) return null;
-  const isCurrent = payload.month === current;
-  const negative = payload.reste < 0;
-  const color = negative ? TREND_RED : TREND_TEAL;
-  const anchor = index === 0 ? "start" : index === count - 1 ? "end" : "middle";
-  return (
-    <g>
-      <circle
-        cx={cx}
-        cy={cy}
-        r={isCurrent ? 4 : 2.5}
-        fill={isCurrent || negative ? color : "#5eead4"}
-        stroke={isCurrent ? "#ffffff" : "none"}
-        strokeWidth={isCurrent ? 1.5 : 0}
-      />
-      {labelled.has(payload.month) && (
-        <text
-          x={cx}
-          y={negative ? cy + 15 : cy - 8}
-          textAnchor={anchor}
-          fontSize={11}
-          fontWeight={isCurrent ? 600 : 400}
-          fill={negative ? "#b91c1c" : "#0f766e"}
-          stroke="#ffffff"
-          strokeWidth={3}
-          paintOrder="stroke"
-        >
-          {formatEuro(payload.reste)}
-        </text>
-      )}
-    </g>
-  );
-}
-
-/** A compact reste-by-month sparkline so the current month reads in context: short month ticks,
- *  the current month's amount (the extremes in the "Tous les mois" view), a labelled zero line and
- *  a red tint below it so a deficit month stands out. */
-function ResteTrend({ history, current }: { history: MonthTotals[]; current: string }) {
-  if (history.length < 2) return null;
-  const values = history.map((h) => h.reste);
-  const min = Math.min(0, ...values);
-  const max = Math.max(0, ...values);
-  const range = max - min || 1;
-  // Headroom for the value labels: above the top point, and below a deficit (labelled underneath).
-  const domain = [min < 0 ? min - range * 0.3 : 0, max + range * 0.08];
-  const labelled = trendValueLabels(history, current);
-  return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4">
-      <div className="mb-1 text-sm text-zinc-500">Reste mois par mois</div>
-      <ResponsiveContainer width="100%" height={112}>
-        <LineChart data={history} margin={{ top: 18, right: 8, bottom: 0, left: 28 }}>
-          <XAxis
-            dataKey="month"
-            ticks={trendTicks(history, current)}
-            tickFormatter={monthTick}
-            interval={0}
-            axisLine={false}
-            tickLine={false}
-            tick={{ fontSize: 10, fill: "#71717a" }}
-            height={16}
-            padding={{ left: 12, right: 12 }}
-          />
-          <YAxis hide domain={domain} />
-          {min < 0 && <ReferenceArea y1={domain[0]} y2={0} fill={TREND_RED} fillOpacity={0.06} />}
-          <ReferenceLine
-            y={0}
-            stroke="#a1a1aa"
-            strokeDasharray="3 3"
-            label={{ value: "0 €", position: "left", fontSize: 10, fill: "#71717a" }}
-          />
-          <Tooltip
-            formatter={(v) => [formatEuro(Number(v)), "Reste"] as [string, string]}
-            labelFormatter={(m) => frenchMonth(String(m))}
-          />
-          <Line
-            type="monotone"
-            dataKey="reste"
-            stroke={TREND_TEAL}
-            strokeWidth={2}
-            isAnimationActive={false}
-            activeDot={{ r: 5 }}
-            dot={(props) => {
-              const p = props as unknown as TrendDotProps;
-              return (
-                <TrendDot
-                  key={p.payload?.month ?? p.cx}
-                  {...p}
-                  current={current}
-                  labelled={labelled}
-                  count={history.length}
-                />
-              );
-            }}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-const TONE_BAR: Record<BudgetTone, string> = {
-  ok: "bg-green-500",
-  warn: "bg-amber-500",
-  over: "bg-red-500",
-};
-const TONE_TEXT: Record<BudgetTone, string> = {
-  ok: "text-zinc-500",
-  warn: "text-amber-700",
-  over: "text-red-700",
-};
-
-/** One "spent / target" line with its progress bar (a group header when `strong`). */
-function BudgetLine({
-  label,
-  actual,
-  target,
-  strong,
-}: {
-  label: string;
-  actual: number;
-  target: number;
-  strong?: boolean;
-}) {
-  const ratio = budgetRatio(actual, target);
-  const tone = budgetTone(ratio);
-  const left = budgetLeft(actual, target);
-  return (
-    <div className="py-1.5">
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className={`min-w-0 truncate ${strong ? "font-medium" : "text-zinc-700"}`}>{label}</span>
-        <span className="shrink-0 tabular-nums">
-          {formatEuro(actual)} <span className="text-zinc-500">/ {formatEuro(target)}</span>
-        </span>
-      </div>
-      <div className={`mt-1 rounded-full bg-zinc-100 ${strong ? "h-2" : "h-1.5"}`}>
-        <div
-          className={`rounded-full ${TONE_BAR[tone]} ${strong ? "h-2" : "h-1.5"}`}
-          style={{ width: `${barWidth(ratio)}%` }}
-        />
-      </div>
-      <div className={`mt-0.5 text-xs ${TONE_TEXT[tone]}`}>
-        {left < 0 ? `${formatEuro(-left)} de dépassement` : `reste ${formatEuro(left)}`}
-      </div>
-    </div>
-  );
-}
-
-/** Spending vs the categories' monthly targets, one card per top-level group, overruns first
- *  (the backend already orders groups and leaves). Hidden when no category has a target. */
-function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean }) {
-  if (budget.groups.length === 0) return null;
-  return (
-    <section>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="font-medium">
-          Budget
-          {all && (
-            <span className="ml-2 text-sm font-normal text-zinc-500">
-              sur {budget.months} mois (objectifs mensuels × {budget.months})
-            </span>
-          )}
-        </h2>
-        <Link href="/categories" className="text-xs text-zinc-600 underline hover:text-zinc-900 hover:no-underline">
-          Modifier les objectifs
-        </Link>
-      </div>
-      <div className="rounded-lg border border-zinc-200 bg-white p-4">
-        <BudgetLine label="Total des objectifs" actual={budget.actual} target={budget.target} strong />
-        {/* Masonry-like flow (CSS columns) rather than a grid: grid rows stretch every card to the
-            tallest one, leaving short groups mostly empty. */}
-        <div className="mt-3 gap-4 md:columns-2">
-          {budget.groups.map((g) => (
-            <div key={g.id} className="mb-4 break-inside-avoid rounded-md border border-zinc-100 px-3 py-1 last:mb-0">
-              {g.leaves.length === 1 ? (
-                // A single targeted leaf carries the group's exact figures: one line, not two.
-                <BudgetLine
-                  label={`${g.name} · ${g.leaves[0].name}`}
-                  actual={g.actual}
-                  target={g.target}
-                  strong
-                />
-              ) : (
-                <>
-                  <BudgetLine label={g.name} actual={g.actual} target={g.target} strong />
-                  {g.leaves.length > 0 && (
-                    <div className="border-t border-zinc-100 pl-3">
-                      {g.leaves.map((l) => (
-                        <BudgetLine key={l.id} label={l.name} actual={l.actual} target={l.target} />
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-xs text-zinc-500">
-          Dépenses sans objectif : <span className="tabular-nums">{formatEuro(budget.untargeted)}</span>
-        </p>
-      </div>
-    </section>
-  );
-}
-
-const GAP_TEXT: Record<GapTone, string> = {
-  good: "text-green-700",
-  bad: "text-red-700",
-  flat: "text-zinc-500",
-};
-
-/** The displayed month minus the average ("+120,00 €"), green or red by `goodIsUp`; nothing when
- *  there is no month to compare with or no money either way. */
-function Gap({ month, average, goodIsUp }: { month: number | null; average: number; goodIsUp: boolean }) {
-  const gap = averageGap(month, average);
-  if (gap === null || (month === 0 && average === 0)) return null;
-  const sign = gap > 0.005 ? "+" : gap < -0.005 ? "−" : "";
-  return <span className={GAP_TEXT[gapTone(gap, goodIsUp)]}>{sign + formatEuro(Math.abs(gap))}</span>;
 }
 
 /** An average amount, blank when zero so a group's empty side reads as nothing rather than 0 €. */
@@ -805,166 +548,6 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
   );
 }
 
-// Sankey node colour per role (the graph comes from lib/moneyFlow.ts, its layout from lib/flowLayout.ts).
-const ROLE_COLORS: Record<FlowRole, string> = {
-  income: "#15803d", // green — money coming in
-  budget: "#0284c7", // sky — the central pool
-  savings: "#7c3aed", // violet — épargne set aside
-  expense: "#dc2626", // red — money going out
-  net: "#0d9488", // teal — the balancing surplus / deficit
-};
-
-// Pointer handlers shared by the chart's nodes and links: show `text` in the tooltip, hide it.
-interface FlowHover {
-  onHover: (e: MouseEvent, text: string) => void;
-  onLeave: () => void;
-}
-
-// Label length caps: a one-line label also carries the amount, so its name gets less room.
-const FLOW_LABEL_MAX = 26;
-const FLOW_LABEL_MAX_ONE_LINE = 18;
-const TWO_LINE_MIN_HEIGHT = 22;
-// White outline behind label text (drawn under the fill), readable over links.
-const HALO = { stroke: "#ffffff", strokeWidth: 3, strokeLinejoin: "round", paintOrder: "stroke" } as const;
-
-/** Sankey node: a coloured rectangle plus its label. Sources (no incoming links) label to the left
- *  into the left gutter, terminal nodes (no outgoing links, in the last column) to the right;
- *  middle-column nodes label to the left of their bar over a white halo so the links passing
- *  through don't cover the text. A node tall enough for two lines shows name over amount; a short
- *  one gets a single line (name + amount at the edges, name only in the middle — the tooltip
- *  still has the amount). */
-function FlowNode({ node, onHover, onLeave }: { node: PlacedNode } & FlowHover) {
-  const { x, y, width, height } = node;
-  const isMiddle = !node.isTerminal && !node.isSource;
-  const labelX = node.isTerminal ? x + width + 6 : x - 6;
-  const anchor = node.isTerminal ? "start" : "end";
-  const midY = y + height / 2;
-  const twoLines = height >= TWO_LINE_MIN_HEIGHT;
-  const max = twoLines || isMiddle ? FLOW_LABEL_MAX : FLOW_LABEL_MAX_ONE_LINE;
-  const name = node.name.length > max ? `${node.name.slice(0, max - 1)}…` : node.name;
-  const amount = formatEuro(node.value);
-  return (
-    <g onMouseMove={(e) => onHover(e, `${node.name} : ${amount}`)} onMouseLeave={onLeave}>
-      <rect x={x} y={y} width={width} height={height} fill={ROLE_COLORS[node.role]} fillOpacity={0.9} />
-      {twoLines ? (
-        <>
-          <text x={labelX} y={midY - 3} textAnchor={anchor} fontSize={11} fill="#3f3f46" {...HALO}>
-            {name}
-          </text>
-          <text x={labelX} y={midY + 10} textAnchor={anchor} fontSize={10} fill="#71717a" {...HALO}>
-            {amount}
-          </text>
-        </>
-      ) : (
-        <text x={labelX} y={midY + 4} textAnchor={anchor} fontSize={11} fill="#3f3f46" {...HALO}>
-          {name}
-          {!isMiddle && (
-            <tspan fontSize={10} fill="#71717a">
-              {"  "}
-              {amount}
-            </tspan>
-          )}
-        </text>
-      )}
-    </g>
-  );
-}
-
-/** Sankey link: a cubic band, tinted by what the flow carries (income green, expenses red,
- *  épargne violet, reste teal) so a flow can be followed from Budget to its leaf. */
-function FlowLinkPath({ link, label, onHover, onLeave }: { link: PlacedLink; label: string } & FlowHover) {
-  const { sourceX, sourceY, targetX, targetY } = link;
-  const midX = (sourceX + targetX) / 2;
-  return (
-    <path
-      d={`M${sourceX},${sourceY} C${midX},${sourceY} ${midX},${targetY} ${targetX},${targetY}`}
-      fill="none"
-      stroke={ROLE_COLORS[link.role]}
-      strokeOpacity={0.2}
-      strokeWidth={Math.max(1, link.width)}
-      onMouseMove={(e) => onHover(e, label)}
-      onMouseLeave={onLeave}
-    />
-  );
-}
-
-// Room around the bars: the first and last columns carry their labels outside them.
-const FLOW_MARGIN = { left: 180, right: 180, top: 12, bottom: 12 };
-
-/** Width of an element, kept current by a ResizeObserver (0 until it is mounted). */
-function useElementWidth(el: HTMLElement | null): number {
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [el]);
-  return width;
-}
-
-/** The money-flow Sankey as plain SVG, laid out by lib/flowLayout.ts (recharts' <Sankey> can't
- *  centre its short columns), with a tooltip that follows the pointer. The height follows the
- *  busiest column. */
-function MoneyFlowChart({ flow }: { flow: FlowData }) {
-  const [box, setBox] = useState<HTMLDivElement | null>(null);
-  const width = useElementWidth(box);
-  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
-  const height = Math.max(360, busiestColumn(flow) * 40);
-  const layout = useMemo(
-    () =>
-      width > 0
-        ? flowLayout(flow, {
-            width: width - FLOW_MARGIN.left - FLOW_MARGIN.right,
-            height: height - FLOW_MARGIN.top - FLOW_MARGIN.bottom,
-            nodeWidth: 12,
-            nodePadding: 24,
-          })
-        : null,
-    [flow, width, height],
-  );
-  const hover: FlowHover = {
-    onHover: (e, text) => {
-      const r = box?.getBoundingClientRect();
-      if (r) setTip({ x: e.clientX - r.left, y: e.clientY - r.top, text });
-    },
-    onLeave: () => setTip(null),
-  };
-  return (
-    <div ref={setBox} className="relative" style={{ height }}>
-      {layout && (
-        <svg width={width} height={height}>
-          <g transform={`translate(${FLOW_MARGIN.left},${FLOW_MARGIN.top})`}>
-            {layout.links.map((l, i) => (
-              <FlowLinkPath
-                key={i}
-                link={l}
-                label={`${flow.nodes[l.source].name} → ${flow.nodes[l.target].name} : ${formatEuro(l.value)}`}
-                {...hover}
-              />
-            ))}
-            {layout.nodes.map((n, i) => (
-              <FlowNode key={i} node={n} {...hover} />
-            ))}
-          </g>
-        </svg>
-      )}
-      {tip && (
-        // Opens away from the nearest edges so it never spills out of the card.
-        <div
-          className="pointer-events-none absolute whitespace-nowrap rounded border border-zinc-300 bg-white px-2.5 py-1.5 text-sm text-zinc-800 shadow-sm"
-          style={{
-            ...(tip.x < width / 2 ? { left: tip.x + 12 } : { right: width - tip.x + 12 }),
-            ...(tip.y < height / 2 ? { top: tip.y + 12 } : { bottom: height - tip.y + 12 }),
-          }}
-        >
-          {tip.text}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1006,18 +589,26 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tableau de bord</h1>
-        <select
-          className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
-          value={data.month}
-          onChange={(e) => load(e.target.value)}
-        >
-          <option value={ALL_MONTHS}>Tous les mois</option>
-          {data.months_available.map((m) => (
-            <option key={m} value={m}>
-              {frenchMonth(m)}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <Link
+            href={reportLink(data.month, data.months_available)}
+            className="text-sm text-zinc-600 underline hover:text-zinc-900 hover:no-underline"
+          >
+            Rapport PDF
+          </Link>
+          <select
+            className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+            value={data.month}
+            onChange={(e) => load(e.target.value)}
+          >
+            <option value={ALL_MONTHS}>Tous les mois</option>
+            {data.months_available.map((m) => (
+              <option key={m} value={m}>
+                {frenchMonth(m)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <HeroSummary data={data} />
