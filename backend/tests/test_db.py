@@ -1,4 +1,7 @@
-from app.db import connect, init_db, upsert_accounts
+import pytest
+
+from app.db import connect, init_db, load_account_aliases, resolve_account_code, upsert_accounts
+from scripts.import_csv import import_accounts
 from tests.conftest import import_rows
 
 
@@ -84,6 +87,28 @@ class TestFreshSchema:
         init_db(path)  # second call must not touch existing accounts or error
         with connect(path) as conn:
             assert conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0] == 1
+
+
+class TestAccountNames:
+    def test_label_is_one_of_the_names(self, db):
+        with connect(db) as conn:
+            names = load_account_aliases(conn)
+        assert names["LIVRET ENFANT"] == "ENFANT"  # its label, though no alias says so
+        # The exact label wins over the code LIVRET it contains.
+        assert resolve_account_code("Livret enfant", names) == "ENFANT"
+
+    @pytest.mark.parametrize("aliases", ["COMPTE CHEQUES 2", "Compte perso", "perso"])
+    def test_a_name_designates_one_account(self, tmp_path, aliases):
+        init_db(tmp_path / "fresh.db")
+        rows = [
+            {"code": "PERSO", "label": "Compte perso", "type": "checking", "aliases": "COMPTE CHEQUES 2"},
+            {"code": "JOINT", "label": "Compte joint", "type": "checking", "aliases": aliases},
+        ]
+        with (
+            connect(tmp_path / "fresh.db") as conn,
+            pytest.raises(ValueError, match="line 3: .* already names account"),
+        ):
+            import_accounts(conn, rows)
 
 
 class TestUpsertAccounts:

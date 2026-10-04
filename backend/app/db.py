@@ -152,9 +152,19 @@ def replace_transfer_markers(conn: sqlite3.Connection, markers: list[str]) -> li
     return cleaned
 
 
+def account_names(conn: sqlite3.Connection) -> list[tuple[str, str]]:
+    """(name, code), uppercased, for every name an account goes by: its code (an identifier, always
+    an alias), its label (the name shown, one name among others) and its other aliases (a filename's
+    account part, a former bank name). Filenames resolve on all of them (load_account_aliases),
+    transfer labels on all but the code (core/transfers.py::account_refs)."""
+    rows = conn.execute("SELECT alias, code FROM account_aliases").fetchall()
+    rows += conn.execute("SELECT label, code FROM accounts").fetchall()
+    return [(name.strip().upper(), code) for name, code in rows if name.strip()]
+
+
 def load_account_aliases(conn: sqlite3.Connection) -> dict[str, str]:
-    """alias (uppercased) -> canonical account code."""
-    return {alias.upper(): code for alias, code in conn.execute("SELECT alias, code FROM account_aliases")}
+    """name (uppercased: code, label or alias) -> canonical account code."""
+    return dict(account_names(conn))
 
 
 def resolve_account_code(raw: str, aliases: dict[str, str]) -> str | None:

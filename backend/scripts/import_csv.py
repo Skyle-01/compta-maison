@@ -30,10 +30,12 @@ def import_accounts(conn, rows: list[dict]) -> int:
 
     Columns: code;label;type;sort_order;deposit_pattern;aliases (other columns are ignored).
     `type` is checking|savings; `deposit_pattern` (optional) marks an external savings account;
-    `aliases` is a `|`-separated list of import strings (e.g. the account part of a statement
-    filename) mapped to this code. The code itself is always an alias."""
+    `aliases` is a `|`-separated list of the account's other names, besides its label: the account
+    part of a statement filename, a former bank name seen in transfer labels (see db.account_names).
+    The code itself is always an alias. A name may designate one account only."""
     accounts: list[tuple] = []
     aliases: list[tuple[str, str]] = []
+    owner: dict[str, str] = {}  # every name (code, label, alias), uppercased -> its account
     for line_no, row in enumerate(rows, start=2):
         code = row["code"].upper()
         if not code:
@@ -52,6 +54,9 @@ def import_accounts(conn, rows: list[dict]) -> int:
             )
         )
         names = [code] + [a.strip() for a in (row.get("aliases") or "").split(ALIAS_SEP)]
+        for name in {n.upper() for n in [*names, row["label"]] if n}:
+            if owner.setdefault(name, code) != code:
+                raise ValueError(f"accounts.csv line {line_no}: {name!r} already names account {owner[name]}")
         aliases.extend((name, code) for name in names if name)
     upsert_accounts(conn, accounts, aliases)
     return len(accounts)

@@ -15,7 +15,7 @@ from app.core.transfers import (
     transfer_candidates,
 )
 from app.core.triage import label_key
-from app.db import connect, replace_transfer_markers
+from app.db import connect, replace_transfer_markers, upsert_accounts
 from tests.conftest import import_rows
 
 
@@ -193,6 +193,19 @@ class TestPairingAmbiguity:
             "VIR vers APPARTEMENT LOCATIF": "transfer",
         }
 
+    def test_alias_naming_the_account_wins_over_same_day_rent(self, db):
+        # Former bank names, kept as aliases, settle the ambiguity like a label would.
+        with connect(db) as conn:
+            upsert_accounts(conn, [], [("COMPTE CHEQUES 2", "PERSO"), ("COMPTE CHEQUES 3", "LOCATIF")])
+        import_rows(
+            db,
+            self.RENT,
+            ("2026-09-03", "2026-09-03", "VIR de COMPTE CHEQUES 2 - Septembre", 0, 570, "LOCATIF"),
+            ("2026-09-03", "2026-09-03", "VIR vers COMPTE CHEQUES 3", 570, 0, "PERSO"),
+        )
+        assert recompute_transfers(db) == 2
+        assert _kinds(db)["VIR INST LOCATAIRE DUPONT"] == "income"
+
     def test_competing_legs_nothing_tells_apart_stay_unpaired(self, db):
         # No label names an account, and a closer date is no proof: left for a manual decision.
         import_rows(
@@ -350,14 +363,22 @@ def _reference_pairs(debits, credits, window=3):
     return [(debit.id, paired[debit.id]) for debit in debits if debit.id in paired]
 
 
+def test_account_refs_searches_names_not_codes():
+    names = {"PERSO": ["Compte perso", "COMPTE CHEQUES 2"], "LOCATIF": ["Appartement locatif"]}
+    assert account_refs("VIR de COMPTE CHEQUES 2", "LOCATIF", names) == {"PERSO"}
+    assert account_refs("VIR vers compte perso", "LOCATIF", names) == {"PERSO"}
+    assert account_refs("VIR vers LOCATIF", "PERSO", names) == frozenset()  # a code is no name
+    assert account_refs("VIR de COMPTE PERSO", "PERSO", names) == frozenset()  # its own account
+
+
 def test_pair_legs_matches_quadratic_reference():
     rng = random.Random(42)
-    labels = {"A": "Compte A", "B": "Compte B", "C": "Compte C"}
+    names = {"A": ["Compte A"], "B": ["Compte B"], "C": ["Compte C"]}
     libelles = ["VIR", "VIR SEPA LOYER", "VIR de COMPTE A", "VIR vers COMPTE B", "VIR de COMPTE C"]
     legs = []
     for i in range(400):
-        account, libelle = rng.choice(list(labels)), rng.choice(libelles)
-        refs = account_refs(libelle, account, labels)
+        account, libelle = rng.choice(list(names)), rng.choice(libelles)
+        refs = account_refs(libelle, account, names)
         legs.append(
             Leg(i, account, rng.choice([1000, 2500, 5000]), 738000 + rng.randrange(30), libelle, refs)
         )

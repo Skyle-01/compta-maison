@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal, NamedTuple
 
 from app.core.triage import label_key
-from app.db import DEFAULT_DB_PATH, connect, get_transfer_markers, savings_accounts
+from app.db import DEFAULT_DB_PATH, account_names, connect, get_transfer_markers, savings_accounts
 
 TRANSFER_WINDOW_DAYS = 3
 # Label prefixes that mark a bank line as a virement. French banks start transfer labels with
@@ -26,17 +26,30 @@ class Leg(NamedTuple):
     cents: int
     day: int  # date.toordinal() of date_operation
     libelle: str
-    refs: frozenset[str] = frozenset()  # the other accounts whose label the libellé names
+    refs: frozenset[str] = frozenset()  # the other accounts the libellé names (label or alias)
 
 
-def account_refs(libelle: str, own_account: str, labels: Mapping[str, str]) -> frozenset[str]:
-    """Codes of the accounts (other than the leg's own) whose label appears in the libellé, ignoring
-    case: "VIR de COMPTE PERSO" names the account labelled "Compte perso". Codes and aliases are not
-    searched, a short code would turn up inside unrelated labels."""
+def account_refs(libelle: str, own_account: str, names: Mapping[str, Collection[str]]) -> frozenset[str]:
+    """Codes of the accounts (other than the leg's own) one of whose names appears in the libellé,
+    ignoring case: "VIR de COMPTE PERSO" names the account labelled "Compte perso", "VIR de COMPTE
+    CHEQUES 2" the one with that former bank name as an alias. `names`: code -> its label and
+    aliases, never the code itself (_libelle_names): a short code would turn up inside unrelated
+    labels."""
     text = libelle.casefold()
     return frozenset(
-        code for code, label in labels.items() if code != own_account and label and label.casefold() in text
+        code
+        for code, aliases in names.items()
+        if code != own_account and any(alias.casefold() in text for alias in aliases)
     )
+
+
+def _libelle_names(conn: sqlite3.Connection) -> dict[str, set[str]]:
+    """code -> the names account_refs looks for in a libellé: the label and aliases, not the code."""
+    names: dict[str, set[str]] = defaultdict(set)
+    for name, code in account_names(conn):
+        if name != code:
+            names[code].add(name)
+    return names
 
 
 def effective_markers(conn: sqlite3.Connection) -> list[str]:
@@ -155,7 +168,7 @@ def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> 
     # External-savings deposits are single-legged by design (see recompute_transfers): pairing one
     # with an unrelated same-amount credit would hide that credit from income.
     patterns = _deposit_patterns(conn)
-    labels = dict(conn.execute("SELECT code, label FROM accounts").fetchall())
+    names = _libelle_names(conn)
     rows = conn.execute(
         f"SELECT id, account_id, {amount_col}, date_operation, libelle FROM transactions "
         f"WHERE {amount_col} > 0 AND account_id IS NOT NULL AND kind_manual = 0 "
@@ -163,7 +176,7 @@ def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> 
     ).fetchall()
     legs = []
     for id_, account_id, cents, day, libelle in rows:
-        refs = account_refs(libelle, account_id, labels)
+        refs = account_refs(libelle, account_id, names)
         # Naming one of your accounts is as good a sign as a marker ("vers LIVRET A" has no VIR).
         if (has_transfer_marker(libelle, markers) or refs) and not _is_external_deposit(libelle, patterns):
             legs.append(Leg(id_, account_id, cents, date.fromisoformat(day).toordinal(), libelle, refs))
@@ -215,7 +228,7 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
     A transfer is a debit on one account matched to a credit on a *different* account with the
     same amount, within TRANSFER_WINDOW_DAYS, where BOTH labels start with a transfer marker
     (see effective_markers / has_transfer_marker) or name another of the accounts (account_refs:
-    "vers LIVRET A" for the account labelled "Livret A"). Each leg is used at most once, and only
+    "vers LIVRET A" for the account labelled "Livret A", or one of its aliases). Each leg is used at most once, and only
     when the match is unambiguous (see pair_legs): a label naming the other account wins over one
     that names none, and competing legs that nothing tells apart stay unpaired, for the user to
     pair by hand (pair_manually). Both legs get a shared `transfer_group_id` and `kind='transfer'`
