@@ -84,7 +84,7 @@ def _import_inputs(db_path: Path, profiles: list[BankProfile]) -> int:
 
 
 def _write_csv(path: Path, header: list[str], rows: list[list]) -> None:
-    """The same bytes as the Settings "Export CSV" downloads (api.categories.csv_response)."""
+    """The same bytes as the Catégories page "Exporter CSV" downloads (api.categories.csv_response)."""
     path.write_text(csv_text(header, rows), encoding="utf-8-sig", newline="")
 
 
@@ -119,7 +119,7 @@ def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
             for code, label, type_, order, pattern in account_rows
         ],
     )
-    # Sorted paths (parents precede children) + targets, as in the Settings export.
+    # Sorted paths (parents precede children) + targets, as in the Catégories page export.
     _write_csv(cat_csv, CATEGORIES_HEADER, cat_rows)
     _write_csv(rules_csv, RULES_HEADER, rules)
     _write_csv(overrides_csv, OVERRIDES_HEADER, overrides)

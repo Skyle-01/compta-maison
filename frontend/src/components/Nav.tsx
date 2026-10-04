@@ -9,6 +9,7 @@ const NAV = [
   { href: "/", label: "Tableau de bord" },
   { href: "/transactions", label: "Transactions" },
   { href: "/a-classer", label: "À classer" },
+  { href: "/categories", label: "Catégories" },
   { href: "/import", label: "Importer" },
   { href: "/settings", label: "Réglages" },
 ];

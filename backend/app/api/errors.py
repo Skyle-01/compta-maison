@@ -25,6 +25,7 @@ FIELD_LABELS = {
     "parent_id": "Catégorie parente",
     "pattern": "Motif",
     "priority": "Priorité",
+    "rule_ids": "Règles",
     "transaction_ids": "Opérations",
 }
 

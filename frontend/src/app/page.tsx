@@ -309,7 +309,7 @@ function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean })
             </span>
           )}
         </h2>
-        <Link href="/settings" className="text-xs text-zinc-600 underline hover:text-zinc-900 hover:no-underline">
+        <Link href="/categories" className="text-xs text-zinc-600 underline hover:text-zinc-900 hover:no-underline">
           Modifier les objectifs
         </Link>
       </div>

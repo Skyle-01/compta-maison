@@ -617,6 +617,69 @@ class TestCategories:
         uncategorized = client.get("/api/transactions", params={"uncategorized": True}).json()
         assert any("SUPERMARCHE" in t["libelle"] for t in uncategorized["items"])
 
+    def test_move_rules_and_manual_assignments(self, seeded_db, client):
+        _upload(client)
+        courses = _category_id(client, "courses")
+        marche = client.post(
+            "/api/categories", json={"name": "marché", "parent_id": _category_id(client, "variable")}
+        )
+        marche_id = marche.json()["id"]
+        mystery = client.get("/api/transactions", params={"libelle_contains": "MYSTERY"}).json()["items"][0]
+        client.patch(f"/api/transactions/{mystery['id']}", json={"category_id": courses, "note": "fleurs"})
+        supermarche = next(r for r in client.get("/api/rules").json() if r["pattern"] == "SUPERMARCHE")
+
+        resp = client.post(
+            f"/api/categories/{marche_id}/move",
+            json={"rule_ids": [supermarche["id"]], "transaction_ids": [mystery["id"]]},
+        )
+        assert resp.status_code == 204, resp.text
+
+        items = {t["libelle"]: t for t in client.get("/api/transactions").json()["items"]}
+        # The rule took its operation along; the manual row kept its note and stays manual.
+        assert (items["CARTE SUPERMARCHE"]["category"], items["CARTE SUPERMARCHE"]["rule_pattern"]) == (
+            "marché",
+            "SUPERMARCHE",
+        )
+        moved = items["MYSTERY SHOP"]
+        assert (moved["category"], moved["category_manual"], moved["note"]) == ("marché", True, "fleurs")
+        cats = {c["name"]: c for c in client.get("/api/categories").json()}
+        assert (cats["courses"]["rule_count"], cats["marché"]["rule_count"]) == (1, 1)
+
+        # Undo = the same call back to the original leaf.
+        back = client.post(
+            f"/api/categories/{courses}/move",
+            json={"rule_ids": [supermarche["id"]], "transaction_ids": [mystery["id"]]},
+        )
+        assert back.status_code == 204
+        items = {t["libelle"]: t for t in client.get("/api/transactions").json()["items"]}
+        assert items["CARTE SUPERMARCHE"]["category"] == items["MYSTERY SHOP"]["category"] == "courses"
+
+    def test_move_errors_change_nothing(self, seeded_db, client):
+        _upload(client)
+        bar = _category_id(client, "bar")
+        rule = client.get("/api/rules").json()[0]
+        auto = client.get("/api/transactions", params={"libelle_contains": "SUPERMARCHE"}).json()["items"][0]
+
+        def move(category_id: int, **body):
+            return client.post(f"/api/categories/{category_id}/move", json=body)
+
+        group = move(_category_id(client, "variable"), rule_ids=[rule["id"]])
+        assert (group.status_code, group.json()["detail"]) == (
+            422,
+            ["« variable » est un groupe : choisissez une de ses sous-catégories"],
+        )
+        assert move(9999, rule_ids=[rule["id"]]).status_code == 404
+        assert move(bar).json()["detail"] == ["Rien à déplacer : cochez au moins une règle ou une opération"]
+        missing = move(bar, rule_ids=[rule["id"], 9999])
+        assert (missing.status_code, missing.json()["detail"]) == (404, ["Règles introuvables : 9999"])
+        # An operation classified by a rule follows it: it is not movable on its own.
+        automatic = move(bar, rule_ids=[rule["id"]], transaction_ids=[auto["id"]])
+        assert automatic.status_code == 422
+        assert automatic.json()["detail"] == [
+            f"Seules les opérations classées à la main se déplacent : {auto['id']} suivent leur règle"
+        ]
+        assert client.get("/api/rules").json()[0]["category_id"] == rule["category_id"]  # nothing moved
+
     def test_duplicate_name_same_parent_rejected(self, seeded_db, client):
         variable = _category_id(client, "variable")
         resp = client.post("/api/categories", json={"name": "courses", "parent_id": variable})
@@ -653,6 +716,31 @@ class TestRules:
         items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]
         groceries = next(t for t in items if "SUPERMARCHE" in t["libelle"])
         assert groceries["category"] == "bar"
+
+    def test_rules_carry_what_they_classify(self, seeded_db, client):
+        _upload(client)
+        rules = {r["pattern"]: r for r in client.get("/api/rules").json()}
+        assert (rules["SUPERMARCHE"]["operation_count"], rules["SUPERMARCHE"]["debit"]) == (1, 63.82)
+        assert (rules["EMPLOYEUR"]["operation_count"], rules["EMPLOYEUR"]["credit"]) == (1, 2500.0)
+        assert rules["LECLERC"]["operation_count"] == 0
+        listed = client.get("/api/transactions", params={"rule_id": rules["SUPERMARCHE"]["id"]}).json()
+        assert [t["libelle"] for t in listed["items"]] == ["CARTE SUPERMARCHE"]
+
+        # A manual assignment leaves its rule's count; a created rule reports its own.
+        supermarche = listed["items"][0]
+        client.patch(
+            f"/api/transactions/{supermarche['id']}", json={"category_id": _category_id(client, "bar")}
+        )
+        assert (
+            next(r for r in client.get("/api/rules").json() if r["pattern"] == "SUPERMARCHE")[
+                "operation_count"
+            ]
+            == 0
+        )
+        created = client.post(
+            "/api/rules", json={"category_id": _category_id(client, "bar"), "pattern": "MYSTERY"}
+        )
+        assert (created.json()["operation_count"], created.json()["debit"]) == (1, 10.0)
 
     def test_rule_rejects_unknown_category(self, client):
         resp = client.post("/api/rules", json={"category_id": 9999, "pattern": "X"})

@@ -16,7 +16,7 @@ Relevant code:
 - **Periods**: 3, 6 and 12 last months, and the whole history (selector).
 - **The current (latest) budget month is excluded**: « 6 derniers mois » = the 6 complete budget months before it; « Tout l’historique » = every budget month except it.
 - **Placement**: a dashboard section « Moyennes mensuelles » with its period selector: one row per top-level category, expandable to its sub-categories and leaves, plus the gap between the displayed month and the average (hidden in « Tous les mois »).
-- **Extra rows**: « Non classé » (gross, both sides, so the totals match Revenus/Dépenses); the averages of the four cards (Revenus, Dépenses, Épargne, Reste, from the same data as `history`); for a leaf with a budget target, the target next to its average (a group shows the Σ of its leaves' targets, as in Settings).
+- **Extra rows**: « Non classé » (gross, both sides, so the totals match Revenus/Dépenses); the averages of the four cards (Revenus, Dépenses, Épargne, Reste, from the same data as `history`); for a leaf with a budget target, the target next to its average (a group shows the Σ of its leaves' targets, as on the Catégories page).
 
 ## To do / to investigate
 

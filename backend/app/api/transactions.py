@@ -71,7 +71,7 @@ OVERRIDES_HEADER = [
 
 
 def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
-    """Every manual category/kind/note override as overrides.csv rows (shared by the Settings
+    """Every manual category/kind/note override as overrides.csv rows (shared by the Catégories page
     export and reset_db.py's snapshot). Keyed by the stable import_hash; `transfer_pair` holds the
     partner leg's import_hash for a manual transfer pair, so the pair is re-linked on restore.
     The trailing identity columns (account, date, libellé, amounts) let a restore find a row whose
@@ -123,6 +123,7 @@ def _filter_clause(
     manual: bool,
     manual_transfer: bool,
     deposit_pattern: str | None = None,
+    rule_id: int | None = None,
 ) -> tuple[str, list]:
     """The WHERE clause (over `transactions t`) and params shared by the list and the export."""
     where = ["1=1"]
@@ -145,6 +146,9 @@ def _filter_clause(
         # recompute_transfers and the derived Épargne leaves (the dashboard drill-down).
         where.append("instr(casefold(t.libelle), casefold(?)) > 0")
         params.append(deposit_pattern)
+    if rule_id is not None:
+        where.append("t.rule_id = ?")
+        params.append(rule_id)
     if uncategorized:
         # Transfers (incl. single-legged savings deposits) have no spending category by design.
         where.append(f"t.category_id IS NULL AND {real_flow_clause('t.kind')}")
@@ -168,11 +172,20 @@ def list_transactions(
     manual: bool = False,
     manual_transfer: bool = False,
     deposit_pattern: str | None = None,
+    rule_id: int | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TransactionPage:
     clause, params = _filter_clause(
-        month, account, category_id, libelle_contains, uncategorized, manual, manual_transfer, deposit_pattern
+        month,
+        account,
+        category_id,
+        libelle_contains,
+        uncategorized,
+        manual,
+        manual_transfer,
+        deposit_pattern,
+        rule_id,
     )
     with connect(db_path) as conn:
         total = conn.execute(f"SELECT COUNT(*) FROM transactions t WHERE {clause}", params).fetchone()[0]
@@ -217,7 +230,7 @@ def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list
 
 
 # The spreadsheet export is for a person opening it in Excel (French locale), unlike the
-# import_csv.py-shaped Settings exports: French headers, dd/mm/yyyy dates, comma decimals.
+# import_csv.py-shaped Catégories page exports: French headers, dd/mm/yyyy dates, comma decimals.
 EXPORT_HEADER = [
     "Date opération",
     "Date valeur",

@@ -86,7 +86,14 @@ export interface Rule {
   priority: number;
   is_income_anchor: boolean;
   description: string | null;
+  /** Operations this rule classifies (manual assignments excluded), and their totals. */
+  operation_count: number;
+  debit: number;
+  credit: number;
 }
+
+/** A rule as created or updated (the counts are the server's). */
+export type RuleInput = Omit<Rule, "id" | "operation_count" | "debit" | "credit">;
 
 /** What the already categorised operations suggest for an uncategorised group. */
 export interface CategorySuggestion {
@@ -289,6 +296,8 @@ export interface TransactionFilters {
   uncategorized?: boolean;
   manual?: boolean;
   manualTransfer?: boolean;
+  /** Operations classified by this rule. */
+  ruleId?: number;
 }
 
 function transactionSearch(params: TransactionFilters): URLSearchParams {
@@ -301,13 +310,14 @@ function transactionSearch(params: TransactionFilters): URLSearchParams {
   if (params.uncategorized) search.set("uncategorized", "true");
   if (params.manual) search.set("manual", "true");
   if (params.manualTransfer) search.set("manual_transfer", "true");
+  if (params.ruleId != null) search.set("rule_id", String(params.ruleId));
   return search;
 }
 
 /** Download link for the spreadsheet CSV of the transactions matching the list filters (every
- *  row, no pagination; the export ignores the Settings-only manual filters). */
+ *  row, no pagination; the export ignores the Catégories and Settings list filters). */
 export function transactionsExportUrl(
-  params: Omit<TransactionFilters, "manual" | "manualTransfer">,
+  params: Omit<TransactionFilters, "manual" | "manualTransfer" | "ruleId">,
 ): string {
   const search = transactionSearch(params).toString();
   return `/api/transactions/export${search ? `?${search}` : ""}`;
@@ -367,6 +377,9 @@ export const api = {
     request(`/api/categories/${id}/target`, json("PUT", { budget_target: budgetTarget })),
   deleteCategory: (id: number): Promise<void> =>
     request(`/api/categories/${id}`, { method: "DELETE" }),
+  /** Move rules and manual assignments into the leaf `categoryId`; a rule takes its operations along. */
+  moveToCategory: (categoryId: number, move: { rule_ids: number[]; transaction_ids: number[] }): Promise<void> =>
+    request(`/api/categories/${categoryId}/move`, json("POST", move)),
 
   listRules: (): Promise<Rule[]> => request("/api/rules"),
   /** What a rule about to be created would classify, and the rows existing rules would lose. */
@@ -387,8 +400,8 @@ export const api = {
   setTransferMarkers: (markers: string[]): Promise<TransferMarkers> =>
     request("/api/transfer-markers", json("PUT", { markers })),
 
-  createRule: (r: Omit<Rule, "id">): Promise<Rule> => request("/api/rules", json("POST", r)),
-  updateRule: (id: number, r: Omit<Rule, "id">): Promise<Rule> =>
+  createRule: (r: RuleInput): Promise<Rule> => request("/api/rules", json("POST", r)),
+  updateRule: (id: number, r: RuleInput): Promise<Rule> =>
     request(`/api/rules/${id}`, json("PUT", r)),
   deleteRule: (id: number): Promise<void> => request(`/api/rules/${id}`, { method: "DELETE" }),
 

@@ -141,6 +141,11 @@ class CategoryOut(BaseModel):
     )
 
 
+class CategoryMoveIn(BaseModel):
+    rule_ids: list[int] = Field(default=[], max_length=1000)
+    transaction_ids: list[int] = Field(default=[], max_length=1000, description="Manual assignments only")
+
+
 class CategoryTargetIn(BaseModel):
     budget_target: float | None = Field(gt=0, description="Monthly spending cap in euros; null clears it")
 
@@ -162,6 +167,11 @@ class RuleIn(BaseModel):
 
 class RuleOut(RuleIn):
     id: int
+    operation_count: int = Field(
+        default=0, description="Operations this rule classifies (manual ones excluded)"
+    )
+    debit: float = Field(default=0, description="Sum of those operations' debits, in euros")
+    credit: float = Field(default=0, description="Sum of those operations' credits, in euros")
 
 
 class RuleLoss(BaseModel):

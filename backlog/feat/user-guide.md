@@ -19,7 +19,8 @@ There is no user documentation. The README (English) covers installation, `_conf
   - Import: upload with account inference, « Importer les nouveaux relevés », deduplication, archive in `_inputs/`.
   - Dashboard: hero, the four cards and how they reconcile (Revenus − Dépenses − Épargne = Reste), deltas and the Reste sparkline, Budget section, Money-flow Sankey, balance tree and drill-down, « Tous les mois », uncategorised warning.
   - Transactions: filters, categorising (manual vs rule, live count, description/note), ⚙/✎ badges, transfer pairing / « Marquer comme virement » / Dissocier / Auto, CSV export.
-  - Settings: categories (create, rename, re-parent, delete and what happens to rules/rows), budget targets (« ＋ objectif »), rules (priority, income anchor, search, edit), transfer markers, « Modifications manuelles », « Virements manuels », CSV exports.
+  - Catégories page: categories (create, rename, re-parent, delete and what happens to rules/rows), budget targets (« ＋ objectif »), rules (priority, income anchor, search, edit), manual assignments, moving rules and manual assignments between leaves, « Classer à part », CSV exports.
+  - Settings: transfer markers, « Virements manuels ».
   - Savings: épargne / désépargne and why an account can show both in « Tous les mois ».
   - Backups and rebuilds (`reset_db.py` sources, `_backups/`), as a short "how to" pointing to the README for details.
   - Later features: « À classer » (`feat/quick-categorisation.md`) and « Moyennes mensuelles » (`feat/category-averages.md`) if they have landed; otherwise the sync rule adds them when they do.

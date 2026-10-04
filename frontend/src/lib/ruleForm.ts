@@ -1,6 +1,6 @@
-import type { Rule } from "./api";
+import type { RuleInput } from "./api";
 
-/** Editable mirror of a Rule (numbers kept as strings while typing). Shared by the Settings rule
+/** Editable mirror of a Rule (numbers kept as strings while typing). Shared by the Catégories rule
  *  editor and the Transactions categorise editor, whose description doubles as the manual note. */
 export type RuleForm = {
   category_id: number | null;
@@ -20,7 +20,7 @@ export const emptyRuleForm = (): RuleForm => ({
   description: "",
 });
 
-export const ruleToForm = (r: Rule): RuleForm => ({
+export const ruleToForm = (r: RuleInput): RuleForm => ({
   category_id: r.category_id,
   pattern: r.pattern,
   priority: String(r.priority),
@@ -30,7 +30,7 @@ export const ruleToForm = (r: Rule): RuleForm => ({
 
 /** Trimmed pattern, priority falling back to the default, blank description -> null. The caller
  *  checks a category is set first. */
-export const ruleFormToPayload = (f: RuleForm): Omit<Rule, "id"> => ({
+export const ruleFormToPayload = (f: RuleForm): RuleInput => ({
   category_id: f.category_id as number,
   pattern: f.pattern.trim(),
   priority: Number(f.priority) || DEFAULT_RULE_PRIORITY,

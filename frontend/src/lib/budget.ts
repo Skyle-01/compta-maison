@@ -24,7 +24,7 @@ export function budgetLeft(actual: number, target: number): number {
   return Math.round((target - actual) * 100) / 100;
 }
 
-/** Parse a target typed in Settings ("300", "12,50", "1 200") into euros; null when empty.
+/** Parse a target typed on the Catégories page ("300", "12,50", "1 200") into euros; null when empty.
  *  Returns NaN for anything that is not a positive amount. */
 export function parseTarget(text: string): number | null {
   const cleaned = text.replace(/[\s  €]/g, "").replace(",", ".");

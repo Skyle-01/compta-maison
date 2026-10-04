@@ -1,5 +1,5 @@
 """Loaders for the self-contained config/taxonomy CSVs (accounts, transfer markers, categories,
-rules, manual overrides): the format of data/, _config/, the Settings exports and the
+rules, manual overrides): the format of data/, _config/, the Catégories page exports and the
 _backups/<ts>/ snapshots. Used by reset_db.py, the one rebuild CLI, on a database it has already
 initialised.
 """

@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Response
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.db import connect, euros, to_cents
-from app.schemas import CategoryIn, CategoryOut, CategoryTargetIn
+from app.schemas import CategoryIn, CategoryMoveIn, CategoryOut, CategoryTargetIn
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
@@ -17,7 +17,7 @@ PATH_SEP = " / "
 
 def csv_text(header: list[str], rows: list[list]) -> str:
     """Semicolon-delimited CSV, the format scripts/import_csv.py reads (written as UTF-8 with a BOM,
-    by csv_response for the Settings exports and by reset_db.py for the _backups/ snapshots)."""
+    by csv_response for the Catégories page exports and by reset_db.py for the _backups/ snapshots)."""
     buf = io.StringIO()
     writer = csv.writer(buf, delimiter=";", lineterminator="\n")
     writer.writerow(header)
@@ -79,7 +79,7 @@ def category_paths(conn) -> dict[int, str]:
     return _path_map(conn)
 
 
-# categories.csv columns (Settings export, _backups/ snapshots, data/ and _config/).
+# categories.csv columns (Catégories page export, _backups/ snapshots, data/ and _config/).
 CATEGORIES_HEADER = ["path", "budget_target"]
 
 
@@ -225,6 +225,57 @@ def update_category(category_id: int, category: CategoryIn, db_path: DbPath) -> 
         if cur.rowcount == 0:
             raise HTTPException(404, detail=[f"Catégorie {category_id} introuvable"])
         return _get_one(conn, category_id)
+
+
+def _missing(conn, table: str, ids: list[int]) -> list[int]:
+    marks = ",".join("?" * len(ids))
+    found = {row[0] for row in conn.execute(f"SELECT id FROM {table} WHERE id IN ({marks})", ids)}
+    return [i for i in ids if i not in found]
+
+
+@router.post("/{category_id}/move", status_code=204)
+def move_to_category(category_id: int, move: CategoryMoveIn, db_path: DbPath) -> None:
+    """Move rules and manual assignments into the leaf `category_id` (the Catégories page, and its
+    undo). A rule takes every operation it classifies along; a manual operation keeps its note.
+    Everything is checked before anything moves."""
+    rule_ids = sorted(set(move.rule_ids))
+    tx_ids = sorted(set(move.transaction_ids))
+    if not rule_ids and not tx_ids:
+        raise HTTPException(422, detail=["Rien à déplacer : cochez au moins une règle ou une opération"])
+    with connect(db_path) as conn:
+        _get_one(conn, category_id)  # 404 first
+        reject_group_target(conn, category_id)
+        if rule_ids and (missing := _missing(conn, "label_rules", rule_ids)):
+            raise HTTPException(404, detail=[f"Règles introuvables : {', '.join(map(str, missing))}"])
+        if tx_ids:
+            if missing := _missing(conn, "transactions", tx_ids):
+                raise HTTPException(404, detail=[f"Opérations introuvables : {', '.join(map(str, missing))}"])
+            marks = ",".join("?" * len(tx_ids))
+            automatic = [
+                row[0]
+                for row in conn.execute(
+                    f"SELECT id FROM transactions WHERE id IN ({marks}) AND category_manual = 0", tx_ids
+                )
+            ]
+            if automatic:
+                raise HTTPException(
+                    422,
+                    detail=[
+                        "Seules les opérations classées à la main se déplacent : "
+                        f"{', '.join(map(str, automatic))} suivent leur règle"
+                    ],
+                )
+            conn.execute(
+                f"UPDATE transactions SET category_id = ? WHERE id IN ({marks})", (category_id, *tx_ids)
+            )
+        if rule_ids:
+            marks = ",".join("?" * len(rule_ids))
+            conn.execute(
+                f"UPDATE label_rules SET category_id = ? WHERE id IN ({marks})", (category_id, *rule_ids)
+            )
+    if rule_ids:
+        # The income-anchor test ignores the category, so budget months don't move.
+        apply_rules(db_path)
 
 
 @router.put("/{category_id}/target")
