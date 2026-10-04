@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, errorMessage, type Transaction, frenchDate, notifyUncategorizedChanged } from "@/lib/api";
+import {
+  api,
+  errorMessage,
+  type ConfigExportResult,
+  type Transaction,
+  frenchDate,
+  notifyUncategorizedChanged,
+} from "@/lib/api";
 import SignedAmount from "@/components/SignedAmount";
 import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
 
@@ -10,6 +17,7 @@ import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers
 const SECTIONS = [
   { id: "virements-internes", label: "Virements internes" },
   { id: "virements-manuels", label: "Virements manuels" },
+  { id: "sauvegarde", label: "Sauvegarde" },
 ] as const;
 
 // scroll-mt keeps a section title clear of the sticky table of contents when jumping to it.
@@ -58,6 +66,7 @@ export default function SettingsPage() {
 
       <TransferMarkersSection />
       <ManualTransfersSection />
+      <BackupSection />
     </div>
   );
 }
@@ -102,8 +111,8 @@ function ManualTransfersSection() {
       <p className="text-sm text-zinc-500">
         Les décisions prises sur la page Transactions : deux opérations associées en virement, une
         opération marquée comme virement seule, ou un virement détecté que vous avez dissocié. « Auto »
-        rend l’opération (et son éventuel partenaire) à la détection automatique. Elles font partie
-        de l’export des modifications manuelles (page Catégories).
+        rend l’opération (et son éventuel partenaire) à la détection automatique. Elles sont
+        enregistrées avec la configuration (section Sauvegarde).
       </p>
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
@@ -223,6 +232,65 @@ function TransferMarkersSection() {
         </button>
         {isDefault && <span className="text-xs text-zinc-500">(par défaut)</span>}
         {saved && <span className="text-xs text-zinc-500">Enregistré — virements recalculés.</span>}
+      </div>
+    </section>
+  );
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
+
+function savedMessage(r: ConfigExportResult): string {
+  const counts = [
+    plural(r.accounts, "compte", "comptes"),
+    plural(r.categories, "catégorie", "catégories"),
+    plural(r.rules, "règle", "règles"),
+    plural(r.overrides, "modification manuelle", "modifications manuelles"),
+    plural(r.transfer_markers, "marqueur de virement", "marqueurs de virement"),
+  ].join(", ");
+  return `Configuration enregistrée dans ${r.config_dir} : ${counts}. L’ancienne version et la base sont copiées dans ${r.backup_dir}.`;
+}
+
+/** Writes the DB's accounts, taxonomy, manual decisions and transfer markers to the config dir, so
+ *  reset_db.py --source defaults rebuilds the same DB if compta.db is lost. */
+function BackupSection() {
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setSaving(true);
+    setSaved(null);
+    setError(null);
+    try {
+      setSaved(savedMessage(await api.exportConfig()));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section id="sauvegarde" className={SECTION_CLASS}>
+      <h2 className="text-xl font-semibold">Sauvegarde</h2>
+      <SectionError message={error} onClose={() => setError(null)} />
+      <p className="text-sm text-zinc-500">
+        Enregistre les comptes, catégories, règles, modifications manuelles et marqueurs de virement
+        dans le dossier de configuration, pour reconstruire la base sans rien reclasser avec
+        <code className="mx-1 rounded bg-zinc-100 px-1 text-zinc-700">reset_db.py --source defaults</code>
+        si elle est perdue ou abîmée. Les fichiers remplacés sont d’abord copiés, avec la base, dans
+        un dossier daté de <code className="rounded bg-zinc-100 px-1 text-zinc-700">_backups/</code>.
+        Les profils de banque et la date de début ne sont jamais modifiés.
+      </p>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-50"
+        >
+          {saving ? "Enregistrement…" : "Enregistrer la configuration"}
+        </button>
+        {saved && <p className="flex-1 text-zinc-600">{saved}</p>}
       </div>
     </section>
   );

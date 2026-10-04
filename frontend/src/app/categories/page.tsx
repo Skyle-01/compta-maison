@@ -897,19 +897,7 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-auto text-2xl font-semibold">Catégories</h1>
-        <span className="text-sm text-zinc-500">Exporter CSV :</span>
-        {[
-          { href: "/api/categories/export", label: "catégories" },
-          { href: "/api/rules/export", label: "règles" },
-          { href: "/api/transactions/export-overrides", label: "modifications manuelles" },
-        ].map(({ href, label }) => (
-          <a key={href} href={href} download className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50">
-            {label}
-          </a>
-        ))}
-      </div>
+      <h1 className="text-2xl font-semibold">Catégories</h1>
 
       <div className="space-y-1 text-sm text-zinc-500">
         <p>

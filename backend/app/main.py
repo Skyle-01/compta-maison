@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
-from app.api import accounts, categories, dashboard, imports, rules, transactions, transfer_markers
+from app.api import accounts, categories, config, dashboard, imports, rules, transactions, transfer_markers
 from app.api.errors import french_validation_errors
 from app.db import DEFAULT_CONFIG_DIR, DEFAULT_DB_PATH, DEFAULT_INPUTS_DIR, init_db
 
@@ -32,6 +32,7 @@ def create_app(
     app.include_router(dashboard.router)
     app.include_router(accounts.router)
     app.include_router(transfer_markers.router)
+    app.include_router(config.router)
     return app
 
 

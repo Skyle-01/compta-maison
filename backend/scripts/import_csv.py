@@ -8,8 +8,8 @@ import csv
 import sqlite3
 from pathlib import Path
 
-from app.api.categories import PATH_SEP
 from app.core.categorize import apply_rules
+from app.core.config_export import PATH_SEP
 from app.core.periods import recompute_budget_months
 from app.core.transfers import recompute_transfers
 from app.db import connect, replace_transfer_markers, to_cents, upsert_accounts

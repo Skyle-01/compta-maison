@@ -2,9 +2,9 @@ import sqlite3
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query
 
-from app.api.categories import category_paths, csv_response, reject_group_target
+from app.api.categories import reject_group_target
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.periods import recompute_budget_months
@@ -15,7 +15,6 @@ from app.schemas import RuleIn, RuleLoss, RuleOut, RulePreview
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
 _COLUMNS = "id, category_id, pattern, priority, is_income_anchor, description"
-RULES_HEADER = ["category_path", "pattern", "priority", "is_income_anchor", "description"]
 
 # Each rule with the operations it classifies (apply_rules sets rule_id on non-manual rows only).
 _SELECT_WITH_COUNTS = (
@@ -46,16 +45,6 @@ def _get_one(db_path: Path, rule_id: int) -> RuleOut:
     return _to_model(row)
 
 
-def rule_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
-    """Every rule as rules.csv rows, keyed by category path (shared by the Catégories page export and
-    reset_db.py's snapshot)."""
-    rows = conn.execute(f"SELECT {_COLUMNS} FROM label_rules ORDER BY priority, id").fetchall()
-    return [
-        [path_by_id.get(category_id, ""), pattern, priority, is_income_anchor, description or ""]
-        for _id, category_id, pattern, priority, is_income_anchor, description in rows
-    ]
-
-
 def _refresh(db_path: Path) -> None:
     """Rule changes can move both category assignments and (for anchors) period boundaries."""
     apply_rules(db_path)
@@ -72,15 +61,6 @@ def list_rules(db_path: DbPath, category_id: int | None = None) -> list[RuleOut]
     with connect(db_path) as conn:
         rows = conn.execute(query + " GROUP BY r.id ORDER BY r.priority, r.id", params).fetchall()
     return [_to_model(row) for row in rows]
-
-
-@router.get("/export")
-def export_rules(db_path: DbPath) -> Response:
-    """Download every rule as CSV, keyed by category path (drop it in a config dir and rebuild
-    with reset_db.py --source defaults --from DIR)."""
-    with connect(db_path) as conn:
-        rows = rule_rows(conn, category_paths(conn))
-    return csv_response(rows, RULES_HEADER, "rules.csv")
 
 
 @router.get("/preview")

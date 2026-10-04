@@ -28,6 +28,18 @@ export interface InputsImportResult {
   rows_new: number;
 }
 
+/** What « Enregistrer la configuration » wrote to the config dir, and where the files it replaced
+ *  (plus the DB) were backed up first. */
+export interface ConfigExportResult {
+  config_dir: string;
+  backup_dir: string;
+  accounts: number;
+  categories: number;
+  rules: number;
+  overrides: number;
+  transfer_markers: number;
+}
+
 export interface Transaction {
   id: number;
   date_operation: string;
@@ -407,6 +419,9 @@ export const api = {
   updateRule: (id: number, r: RuleInput): Promise<Rule> =>
     request(`/api/rules/${id}`, json("PUT", r)),
   deleteRule: (id: number): Promise<void> => request(`/api/rules/${id}`, { method: "DELETE" }),
+
+  /** Regenerate the config dir's CSVs from the DB (after backing up the old ones and the DB). */
+  exportConfig: (): Promise<ConfigExportResult> => request("/api/config/export", { method: "POST" }),
 
   dashboard(month?: string): Promise<Dashboard> {
     return request(`/api/dashboard${month ? `?month=${month}` : ""}`);

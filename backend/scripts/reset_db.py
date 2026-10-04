@@ -31,24 +31,20 @@ config dir.
 
 import argparse
 import sys
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
-from app.api.categories import CATEGORIES_HEADER, category_paths, category_rows, csv_text  # noqa: E402
-from app.api.rules import RULES_HEADER, rule_rows  # noqa: E402
-from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
 from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_profiles  # noqa: E402
+from app.core.config_export import backups_dir, export_config, new_backup_dir  # noqa: E402
 from app.core.inputs import import_inputs_dir  # noqa: E402
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date  # noqa: E402
 from app.db import (  # noqa: E402
     DEFAULT_CONFIG_DIR,
     DEFAULT_DB_PATH,
     DEFAULT_INPUTS_DIR,
-    connect,
-    get_transfer_markers,
     init_db,
 )
 from scripts.import_csv import import_csv, load_accounts_csv, load_transfer_markers_csv  # noqa: E402
@@ -97,65 +93,23 @@ def _import_inputs(db_path: Path, profiles: list[BankProfile], start_date: date 
     return sum(r.rows_new for r in results)
 
 
-def _write_csv(path: Path, header: list[str], rows: list[list]) -> None:
-    """The same bytes as the Catégories page "Exporter CSV" downloads (api.categories.csv_response)."""
-    path.write_text(csv_text(header, rows), encoding="utf-8-sig", newline="")
-
-
-def export_current(db_path: Path, out_dir: Path) -> tuple[Path, Path, Path]:
-    """Dump accounts, categories, rules and manual overrides of the live DB to CSV.
-    Returns the (categories, rules, overrides) paths; accounts.csv sits next to them."""
-    out_dir.mkdir(parents=True, exist_ok=True)
-    accounts_csv = out_dir / "accounts.csv"
-    cat_csv = out_dir / "categories.csv"
-    rules_csv = out_dir / "rules.csv"
-    overrides_csv = out_dir / "overrides.csv"
-
-    with connect(db_path) as conn:
-        account_rows = conn.execute(
-            "SELECT code, label, type, sort_order, deposit_pattern FROM accounts ORDER BY sort_order, code"
-        ).fetchall()
-        aliases_by_code: dict[str, list[str]] = {}
-        for alias, code in conn.execute("SELECT alias, code FROM account_aliases ORDER BY alias"):
-            if alias != code:  # the code is always an alias; keep the CSV tidy
-                aliases_by_code.setdefault(code, []).append(alias)
-        path_by_id = category_paths(conn)
-        cat_rows = category_rows(conn)
-        rules = rule_rows(conn, path_by_id)
-        overrides = override_rows(conn, path_by_id)
-        markers = get_transfer_markers(conn)
-
-    _write_csv(
-        accounts_csv,
-        ["code", "label", "type", "sort_order", "deposit_pattern", "aliases"],
-        [
-            [code, label, type_, order, pattern or "", "|".join(aliases_by_code.get(code, []))]
-            for code, label, type_, order, pattern in account_rows
-        ],
-    )
-    # Sorted paths (parents precede children) + targets, as in the Catégories page export.
-    _write_csv(cat_csv, CATEGORIES_HEADER, cat_rows)
-    _write_csv(rules_csv, RULES_HEADER, rules)
-    _write_csv(overrides_csv, OVERRIDES_HEADER, overrides)
-    # Written even when empty, so a live rebuild keeps "default" as-is.
-    _write_csv(out_dir / "transfer_markers.csv", ["marker"], [[m] for m in markers])
+def snapshot(db_path: Path) -> Path:
+    """Dump the live DB's accounts, taxonomy, overrides and transfer markers to a new
+    _backups/<ts>/ (core.config_export), the restore point taken before every rebuild."""
+    out_dir = new_backup_dir(db_path)
+    c = export_config(db_path, out_dir)
     print(
-        f"Exported {len(account_rows)} accounts, {len(path_by_id)} categories, {len(rules)} rules, {len(overrides)} overrides, "
-        f"{len(markers)} transfer markers "
-        f"to {out_dir}"
+        f"Exported {c.accounts} accounts, {c.categories} categories, {c.rules} rules, {c.overrides} overrides, "
+        f"{c.transfer_markers} transfer markers to {out_dir}"
     )
-    return cat_csv, rules_csv, overrides_csv
-
-
-def backups_dir(db_path: Path) -> Path:
-    """Where a DB's snapshots go: `_backups/` next to it (the repo root for the default compta.db),
-    so rebuilding a throwaway DB (a demo, a test) never adds a snapshot to the real restore points."""
-    return db_path.parent / "_backups"
+    return out_dir
 
 
 def _latest_backup(root: Path) -> Path:
-    """Most recent _backups/<ts>/ snapshot directory. Exits if there are none."""
-    snaps = sorted((p for p in root.glob("*") if p.is_dir()), reverse=True) if root.exists() else []
+    """Most recent _backups/<ts>/ snapshot directory. Exits if there are none. A backup without a
+    categories.csv (the Réglages save taken while the config dir was empty holds only compta.db)
+    is no taxonomy source, so it is skipped."""
+    snaps = sorted((p for p in root.glob("*") if (p / "categories.csv").exists()), reverse=True)
     if not snaps:
         sys.exit(f"No snapshots under {root} to restore from. Run with --source defaults instead.")
     return snaps[0]
@@ -197,8 +151,7 @@ def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
     # Safety snapshot of the existing DB (also the source for --source live).
     snapshot_dir: Path | None = None
     if db_path.exists():
-        snapshot_dir = backups / datetime.now().strftime("%Y%m%d_%H%M%S")
-        export_current(db_path, snapshot_dir)
+        snapshot_dir = snapshot(db_path)
 
     if source == "live":
         if snapshot_dir is None:

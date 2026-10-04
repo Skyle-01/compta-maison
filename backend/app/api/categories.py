@@ -1,32 +1,18 @@
-import csv
-import io
 import sqlite3
 
 from fastapi import APIRouter, HTTPException, Response
 
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
+from app.core.config_export import category_paths, csv_text
 from app.db import connect, euros, to_cents
 from app.schemas import CategoryIn, CategoryMoveIn, CategoryOut, CategoryTargetIn
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
-# Full category paths use this separator (matches CategoryOut.path); the CLI importer splits on it.
-PATH_SEP = " / "
-
-
-def csv_text(header: list[str], rows: list[list]) -> str:
-    """Semicolon-delimited CSV, the format scripts/import_csv.py reads (written as UTF-8 with a BOM,
-    by csv_response for the Catégories page exports and by reset_db.py for the _backups/ snapshots)."""
-    buf = io.StringIO()
-    writer = csv.writer(buf, delimiter=";", lineterminator="\n")
-    writer.writerow(header)
-    writer.writerows(rows)
-    return buf.getvalue()
-
 
 def csv_response(rows: list[list], header: list[str], filename: str) -> Response:
-    """A CSV download (see csv_text)."""
+    """A CSV download (see core.config_export.csv_text)."""
     return Response(
         content=csv_text(header, rows).encode("utf-8-sig"),
         media_type="text/csv; charset=utf-8",
@@ -34,26 +20,8 @@ def csv_response(rows: list[list], header: list[str], filename: str) -> Response
     )
 
 
-def _path_map(conn) -> dict[int, str]:
-    """Map each category id to its full ` / `-joined path."""
-    by_id = {
-        cid: (name, parent_id)
-        for cid, name, parent_id in conn.execute("SELECT id, name, parent_id FROM categories")
-    }
-
-    def path(category_id: int) -> str:
-        chain = []
-        current: int | None = category_id
-        while current is not None:
-            name, current = by_id[current]
-            chain.append(name)
-        return PATH_SEP.join(reversed(chain))  # root first
-
-    return {cid: path(cid) for cid in by_id}
-
-
 def _load_all(conn) -> list[CategoryOut]:
-    paths = _path_map(conn)
+    paths = category_paths(conn)
     rows = conn.execute(
         "SELECT c.id, c.name, c.parent_id, c.budget_target_cents, COUNT(r.id) "
         "FROM categories c LEFT JOIN label_rules r ON r.category_id = c.id "
@@ -72,27 +40,6 @@ def _load_all(conn) -> list[CategoryOut]:
         for category_id, name, parent_id, target_cents, rule_count in rows
     ]
     return sorted(out, key=lambda c: c.path)
-
-
-def category_paths(conn) -> dict[int, str]:
-    """Map each category id to its full ` / `-joined path (shared by the export endpoints)."""
-    return _path_map(conn)
-
-
-# categories.csv columns (Catégories page export, _backups/ snapshots, data/ and _config/).
-CATEGORIES_HEADER = ["path", "budget_target"]
-
-
-def category_rows(conn) -> list[list[str]]:
-    """categories.csv rows `[path, budget_target]`, sorted by path so parents precede children.
-    The target is in euros (`300.00`), empty when unset."""
-    targets: dict[int, int] = dict(
-        conn.execute("SELECT id, budget_target_cents FROM categories WHERE budget_target_cents IS NOT NULL")
-    )
-    paths = _path_map(conn)
-    return sorted(
-        [path, f"{euros(targets[cid]):.2f}" if cid in targets else ""] for cid, path in paths.items()
-    )
 
 
 def _name(conn, category_id: int) -> str:
@@ -142,15 +89,6 @@ def _get_one(conn, category_id: int) -> CategoryOut:
 def list_categories(db_path: DbPath) -> list[CategoryOut]:
     with connect(db_path) as conn:
         return _load_all(conn)
-
-
-@router.get("/export")
-def export_categories(db_path: DbPath) -> Response:
-    """Download every category as a CSV of full paths (drop it in a config dir and rebuild with
-    reset_db.py --source defaults --from DIR)."""
-    with connect(db_path) as conn:
-        rows = category_rows(conn)
-    return csv_response(rows, CATEGORIES_HEADER, "categories.csv")
 
 
 @router.post("", status_code=201)

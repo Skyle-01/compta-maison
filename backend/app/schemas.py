@@ -38,6 +38,19 @@ class InputsImportResult(BaseModel):
     rows_new: int
 
 
+class ConfigExportResult(BaseModel):
+    """What « Enregistrer la configuration » wrote to the config dir, and where the files it
+    replaced (plus the DB) were backed up first."""
+
+    config_dir: str
+    backup_dir: str
+    accounts: int
+    categories: int
+    rules: int
+    overrides: int
+    transfer_markers: int
+
+
 class Transaction(BaseModel):
     id: int
     date_operation: str

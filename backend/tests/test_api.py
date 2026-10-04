@@ -4,13 +4,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.categories import _load_all, category_paths
+from app.api.categories import _load_all
 from app.api.errors import french_message
+from app.core.config_export import category_paths, export_config
 from app.core.parsing import parse_csv
 from app.db import connect, get_transfer_markers, import_transactions, init_db
 from app.main import create_app
 from scripts.import_csv import import_csv
-from scripts.reset_db import export_current
 from tests.conftest import import_rows, isolate_reset_db, make_db
 from tests.test_parsing import GOLDEN_HASHES, GOLDEN_ROWS, _csv
 
@@ -29,6 +29,13 @@ PROFILE_FILENAME = "export_COMPTE_PERSO_20260601.csv"
 PROFILE_CSV = (
     'Date,Libellé,Montant\n2026-06-01,CARTE BOULANGERIE,-4.20\n2026-06-02,VIR EMPLOYEUR SALAIRE,"2,500.00"\n'
 ).encode()
+
+
+def _export(db_path, tmp_path) -> Path:
+    """The config CSVs of `db_path` (core.config_export, as the Réglages save writes them)."""
+    out = tmp_path / "cfg"
+    export_config(db_path, out)
+    return out
 
 
 def _upload(client, filename="RELEVE_COMPTE_JOINT_2026_06_08.csv", account="", content=SAMPLE_CSV):
@@ -881,18 +888,14 @@ class TestDashboard:
 
 
 class TestExport:
-    def test_export_categories_csv(self, seeded_db, client):
-        resp = client.get("/api/categories/export")
-        assert resp.status_code == 200
-        assert resp.headers["content-type"].startswith("text/csv")
-        assert "categories.csv" in resp.headers["content-disposition"]
-        body = resp.content.decode("utf-8-sig")
+    def test_export_categories_csv(self, seeded_db, tmp_path):
+        body = (_export(seeded_db, tmp_path) / "categories.csv").read_text(encoding="utf-8-sig")
         assert body.splitlines()[0] == "path;budget_target"
         assert "fixe / salaire" in body
         assert "variable / sortie / bar" in body
 
-    def test_export_rules_csv(self, seeded_db, client):
-        body = client.get("/api/rules/export").content.decode("utf-8-sig")
+    def test_export_rules_csv(self, seeded_db, tmp_path):
+        body = (_export(seeded_db, tmp_path) / "rules.csv").read_text(encoding="utf-8-sig")
         assert body.splitlines()[0] == "category_path;pattern;priority;is_income_anchor;description"
         assert "fixe / salaire;EMPLOYEUR;1;1;" in body
         assert "variable / sortie / bar;ANGELUS;4;0;" in body
@@ -922,10 +925,8 @@ class TestExport:
             },
         )
 
-        cats_csv = tmp_path / "categories.csv"
-        rules_csv = tmp_path / "rules.csv"
-        cats_csv.write_bytes(client.get("/api/categories/export").content)
-        rules_csv.write_bytes(client.get("/api/rules/export").content)
+        cfg = _export(seeded_db, tmp_path)
+        cats_csv, rules_csv = cfg / "categories.csv", cfg / "rules.csv"
 
         before = snapshot(seeded_db)
 
@@ -935,13 +936,13 @@ class TestExport:
 
         assert snapshot(fresh) == before
 
-    def test_export_overrides_csv(self, seeded_db, client):
+    def test_export_overrides_csv(self, seeded_db, client, tmp_path):
         _upload(client)
         tx = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
         courses = _category_id(client, "courses")
         client.patch(f"/api/transactions/{tx['id']}", json={"category_id": courses})
 
-        body = client.get("/api/transactions/export-overrides").content.decode("utf-8-sig")
+        body = (_export(seeded_db, tmp_path) / "overrides.csv").read_text(encoding="utf-8-sig")
         assert body.splitlines()[0] == (
             "import_hash;category_path;kind;libelle;note;transfer_pair;"
             "account_id;date_operation;debit_cents;credit_cents"
@@ -990,12 +991,8 @@ class TestExport:
                 "UPDATE transactions SET kind = 'income', kind_manual = 1 WHERE libelle = 'BAR ANGELUS'"
             )
 
-        cats = tmp_path / "categories.csv"
-        rules = tmp_path / "rules.csv"
-        overrides = tmp_path / "overrides.csv"
-        cats.write_bytes(client.get("/api/categories/export").content)
-        rules.write_bytes(client.get("/api/rules/export").content)
-        overrides.write_bytes(client.get("/api/transactions/export-overrides").content)
+        cfg = _export(seeded_db, tmp_path)
+        cats, rules, overrides = cfg / "categories.csv", cfg / "rules.csv", cfg / "overrides.csv"
 
         # Fresh DB with the same transactions (same hashes), then restore everything.
         fresh = make_db(tmp_path / "fresh.db")
@@ -1014,25 +1011,6 @@ class TestExport:
             ).fetchone()
             assert bar == ("income", 1)
 
-    def test_refresh_export_matches_api(self, seeded_db, client, tmp_path):
-        # reset_db.py snapshots the DB to CSV directly; the bytes must match the API export
-        # endpoints exactly so the snapshot round-trips through import_csv.
-        _upload(client)
-        mystery = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
-        client.patch(
-            f"/api/transactions/{mystery['id']}",
-            json={"category_id": _category_id(client, "courses"), "note": "à vérifier"},
-        )
-        with connect(seeded_db) as conn:
-            conn.execute(
-                "UPDATE transactions SET kind = 'income', kind_manual = 1 WHERE libelle = 'BAR ANGELUS'"
-            )
-
-        cat_csv, rules_csv, overrides_csv = export_current(seeded_db, tmp_path / "snap")
-        assert cat_csv.read_bytes() == client.get("/api/categories/export").content
-        assert rules_csv.read_bytes() == client.get("/api/rules/export").content
-        assert overrides_csv.read_bytes() == client.get("/api/transactions/export-overrides").content
-
 
 class TestTransferOverrides:
     def test_manual_pair_and_unpair_round_trip(self, db, client, tmp_path):
@@ -1047,12 +1025,9 @@ class TestTransferOverrides:
             },
         )
         client.put(f"/api/transactions/{rows['VIR vers COMPTE JOINT']['id']}/transfer", json={"mode": "none"})
-        body = client.get("/api/transactions/export-overrides").content
-        assert body.decode("utf-8-sig").count(";") > 0
-        cats, rules, overrides = tmp_path / "c.csv", tmp_path / "r.csv", tmp_path / "o.csv"
-        cats.write_bytes(client.get("/api/categories/export").content)
-        rules.write_bytes(client.get("/api/rules/export").content)
-        overrides.write_bytes(body)
+        cfg = _export(db, tmp_path)
+        cats, rules, overrides = cfg / "categories.csv", cfg / "rules.csv", cfg / "overrides.csv"
+        assert overrides.read_text(encoding="utf-8-sig").count(";") > 0
 
         fresh = make_db(tmp_path / "fresh.db")
         with TestClient(create_app(fresh)) as fresh_client:
@@ -1077,9 +1052,8 @@ class TestTransferOverrides:
             hash_ = conn.execute(
                 "SELECT import_hash FROM transactions WHERE libelle = 'MYSTERY SHOP'"
             ).fetchone()[0]
-        cats, rules, overrides = tmp_path / "c.csv", tmp_path / "r.csv", tmp_path / "o.csv"
-        cats.write_bytes(client.get("/api/categories/export").content)
-        rules.write_bytes(client.get("/api/rules/export").content)
+        cfg = _export(seeded_db, tmp_path)
+        cats, rules, overrides = cfg / "categories.csv", cfg / "rules.csv", cfg / "overrides.csv"
         overrides.write_text(
             f"import_hash;category_path;kind;libelle;note\n{hash_};variable / courses;;MYSTERY SHOP;vieux\n",
             encoding="utf-8",
@@ -1238,7 +1212,7 @@ class TestResetDb:
             f"/api/transactions/{mystery['id']}",
             json={"category_id": _category_id(client, "courses"), "note": "cadeau"},
         )
-        reset_db.export_current(seeded_db, backups / "20260101_000000")
+        export_config(seeded_db, backups / "20260101_000000")
         seeded_db.unlink()  # simulate a lost DB
 
         reset_db.reset(seeded_db, "backup", None)  # restore from the latest snapshot + _inputs
@@ -1498,7 +1472,7 @@ class TestBudgetTargets:
 
     def test_export_and_round_trip(self, seeded_db, client, tmp_path):
         client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": 12.5})
-        body = client.get("/api/categories/export").content.decode("utf-8-sig")
+        body = (_export(seeded_db, tmp_path) / "categories.csv").read_text(encoding="utf-8-sig")
         assert body.splitlines()[0] == "path;budget_target"
         assert "variable / sortie / bar;12.50\n" in body
         assert "variable / sortie;\n" in body

@@ -4,9 +4,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
-from app.api.categories import category_paths, csv_response, reject_group_target
+from app.api.categories import csv_response, reject_group_target
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
+from app.core.config_export import category_paths
 from app.core.transfers import pair_manually, set_transfer_mode, transfer_candidates
 from app.core.triage import uncategorized_groups
 from app.db import connect, euros, real_flow_clause
@@ -54,64 +55,6 @@ def _to_model(row: tuple) -> Transaction:
         transfer_group_id=row[16],
         kind_manual=bool(row[17]),
     )
-
-
-OVERRIDES_HEADER = [
-    "import_hash",
-    "category_path",
-    "kind",
-    "libelle",
-    "note",
-    "transfer_pair",
-    "account_id",
-    "date_operation",
-    "debit_cents",
-    "credit_cents",
-]
-
-
-def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
-    """Every manual category/kind/note override as overrides.csv rows (shared by the Catégories page
-    export and reset_db.py's snapshot). Keyed by the stable import_hash; `transfer_pair` holds the
-    partner leg's import_hash for a manual transfer pair, so the pair is re-linked on restore.
-    The trailing identity columns (account, date, libellé, amounts) let a restore find a row whose
-    hash changed, e.g. one uploaded under the account code and rebuilt under the filename alias."""
-    rows = conn.execute(
-        "SELECT t.import_hash, t.category_id, t.category_manual, t.kind, t.kind_manual, t.libelle, "
-        "t.note, p.import_hash, t.account_id, t.date_operation, t.debit_cents, t.credit_cents "
-        "FROM transactions t "
-        "LEFT JOIN transactions p ON t.kind_manual = 1 AND p.kind_manual = 1 "
-        "AND p.transfer_group_id = t.transfer_group_id AND p.id != t.id "
-        "WHERE t.category_manual = 1 OR t.kind_manual = 1 ORDER BY t.date_valeur, t.id"
-    ).fetchall()
-    return [
-        [
-            import_hash,
-            path_by_id.get(category_id, "") if category_manual and category_id else "",
-            kind if kind_manual else "",
-            libelle,
-            note or "",
-            partner_hash or "",
-            account_id or "",
-            date_operation,
-            debit_cents,
-            credit_cents,
-        ]
-        for (
-            import_hash,
-            category_id,
-            category_manual,
-            kind,
-            kind_manual,
-            libelle,
-            note,
-            partner_hash,
-            account_id,
-            date_operation,
-            debit_cents,
-            credit_cents,
-        ) in rows
-    ]
 
 
 def _filter_clause(
@@ -303,15 +246,6 @@ def export_transactions(
         ) in rows
     ]
     return csv_response(out, EXPORT_HEADER, f"transactions_{month or 'tout'}.csv")
-
-
-@router.get("/export-overrides")
-def export_overrides(db_path: DbPath) -> Response:
-    """Download every manual override, keyed by the stable import_hash so it survives a
-    delete-and-rebuild (restored by reset_db.py from an overrides.csv next to the taxonomy)."""
-    with connect(db_path) as conn:
-        rows = override_rows(conn, category_paths(conn))
-    return csv_response(rows, OVERRIDES_HEADER, "overrides.csv")
 
 
 def _load(db_path: Path, ids: list[int]) -> list[Transaction]:
