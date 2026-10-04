@@ -30,5 +30,5 @@ def load_start_date(config_dir: Path) -> date | None:
     if value is None:
         return None
     if type(value) is not date:  # a TOML datetime is a date subclass: reject it too
-        raise SettingsError(f"start_date doit être une date (ex. 2024-12-24), pas « {value} »")
+        raise SettingsError(f"start_date doit être une date (ex. 2026-03-25), pas « {value} »")
     return value

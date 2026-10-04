@@ -9,8 +9,8 @@ your machine; nothing is sent anywhere.
 
 | Path | Holds | Tracked? |
 | --- | --- | --- |
-| `data/` | a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles) and six months of fictional statements in `data/demo/` | yes |
-| `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`, `bank_profiles.toml`) | no |
+| `data/` | a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles, a commented `settings.toml`) and six months of fictional statements in `data/demo/` | yes |
+| `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`, `bank_profiles.toml`, `settings.toml`) | no |
 | `_inputs/` | your bank statement CSVs | no |
 | `_backups/` | automatic snapshots taken before each rebuild | no |
 | `compta.db` | the SQLite database | no |
@@ -40,8 +40,9 @@ your own `accounts.csv` their account names no longer resolve).
    account name. If your bank uses another CSV layout or file name, see
    [Other banks](#other-banks).
 2. Copy `data/*.csv` to `_config/` and edit them:
-   - `accounts.csv`: one line per account. `aliases` (`|`-separated) must match the account
-     name taken from your statement filenames. `type` is `checking` or `savings`. Set
+   - `accounts.csv`: one line per account. `aliases` (`|`-separated) are the account's other
+     names besides its `label`: the account name taken from your statement filenames, or a former
+     name your bank used in transfer labels (not a holder's name, which several accounts share). `type` is `checking` or `savings`. Set
      `deposit_pattern` only for a savings account with no statement of its own: its deposits are
      the checking-account lines containing that text, whatever its case.
    - `categories.csv`: `path;budget_target` — one full category path per line
@@ -53,11 +54,15 @@ your own `accounts.csv` their account names no longer resolve).
    - `transfer_markers.csv` (optional): one `marker` per line. A debit and a credit of the same
      amount on two of your accounts, at most 3 days apart, are paired as an internal transfer
      (left out of income and expenses) only if **both** labels start with one of these prefixes
-     (case-insensitive) or contain the `label` of another of your accounts from `accounts.csv`
-     (`vers LIVRET A`). The default is `VIR`; `*` accepts any label. A label containing an
-     account's `label` (`VIR de COMPTE PERSO`) also steers the match; when several
+     (case-insensitive) or contain the `label` or an alias of another of your accounts from
+     `accounts.csv` (`vers LIVRET A`; never the code). The default is `VIR`; `*` accepts any label.
+     A label naming an account (`VIR de COMPTE PERSO`) also steers the match; when several
      legs could match and nothing tells them apart (a tenant's rent credited the same day as your
      own transfer of the same amount), none is paired: pair them by hand from « À classer » or the Transactions page.
+   - `settings.toml` (optional, copy `data/settings.toml`): `start_date`, the day your books
+     open. Statement lines valued earlier stay in `_inputs/` and are not imported, so years of
+     history you will never categorise stay out. Pick the date of the paycheck that opens your
+     first budget month; after changing it, rebuild with `reset_db.py`.
 3. Build the database: `python backend/scripts/reset_db.py --source defaults`.
 4. Run it: `./dev.ps1` (Windows), or in two terminals
    `cd backend && python -m uvicorn app.main:app --port 8000` and `npm run dev --prefix frontend`.

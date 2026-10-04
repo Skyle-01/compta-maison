@@ -184,11 +184,11 @@ class TestDefaultFormatFrozen:
 
 
 class TestStartDate:
-    ROWS = [{"Date valeur": d} for d in ("2024-12-23", "2024-12-24", "2025-01-02")]
+    ROWS = [{"Date valeur": d} for d in ("2026-03-24", "2026-03-25", "2026-04-02")]
 
     def test_rows_since_keeps_the_start_day(self):
-        kept, dropped = rows_since(self.ROWS, date(2024, 12, 24))
-        assert ([r["Date valeur"] for r in kept], dropped) == (["2024-12-24", "2025-01-02"], 1)
+        kept, dropped = rows_since(self.ROWS, date(2026, 3, 25))
+        assert ([r["Date valeur"] for r in kept], dropped) == (["2026-03-25", "2026-04-02"], 1)
 
     def test_rows_since_without_start_date_keeps_all(self):
         assert rows_since(self.ROWS, None) == (self.ROWS, 0)
@@ -199,14 +199,14 @@ class TestStartDate:
         assert load_start_date(tmp_path) is None
 
     def test_reads_a_toml_date(self, tmp_path):
-        (tmp_path / "settings.toml").write_text("start_date = 2024-12-24\n", encoding="utf-8")
-        assert load_start_date(tmp_path) == date(2024, 12, 24)
+        (tmp_path / "settings.toml").write_text("start_date = 2026-03-25\n", encoding="utf-8")
+        assert load_start_date(tmp_path) == date(2026, 3, 25)
 
     @pytest.mark.parametrize(
         ("text", "message"),
         [
-            ("start_date = '2024-12-24'\n", "doit être une date"),
-            ("start_date = 2024-12-24T08:00:00\n", "doit être une date"),
+            ("start_date = '2026-03-25'\n", "doit être une date"),
+            ("start_date = 2026-03-25T08:00:00\n", "doit être une date"),
             ("start_date = \n", "TOML illisible"),
         ],
     )
