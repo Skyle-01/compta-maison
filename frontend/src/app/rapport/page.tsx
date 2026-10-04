@@ -32,6 +32,9 @@ import { monthTick } from "@/lib/trend";
 
 /** Months of history in the page 1 Reste chart. */
 const TREND_MONTHS = 12;
+/** Sankey height that fits a landscape A4 page (186 mm of content, about 700 px) under the sheet
+ *  header and its note; a taller chart is scaled down rather than pushed to the next page. */
+const FLOW_MAX_HEIGHT = 600;
 
 interface ReportData {
   data: Dashboard;
@@ -382,7 +385,7 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
             De gauche à droite : d’où vient l’argent, puis où il va. L’épaisseur de chaque bande est
             proportionnelle au montant.
           </p>
-          <MoneyFlowChart flow={flow} />
+          <MoneyFlowChart flow={flow} maxHeight={FLOW_MAX_HEIGHT} />
         </Sheet>
       )}
     </div>

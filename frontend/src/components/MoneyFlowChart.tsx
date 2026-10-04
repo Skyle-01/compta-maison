@@ -105,23 +105,27 @@ function useElementWidth(el: HTMLElement | null): number {
 
 /** The money-flow Sankey as plain SVG, laid out by lib/flowLayout.ts (recharts' <Sankey> can't
  *  centre its short columns), with a tooltip that follows the pointer. The height follows the
- *  busiest column. */
-export default function MoneyFlowChart({ flow }: { flow: FlowData }) {
+ *  busiest column; above `maxHeight` (a printed page) the whole chart is scaled down to fit, laid
+ *  out wider so it still fills the width once shrunk. */
+export default function MoneyFlowChart({ flow, maxHeight }: { flow: FlowData; maxHeight?: number }) {
   const [box, setBox] = useState<HTMLDivElement | null>(null);
   const width = useElementWidth(box);
   const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
-  const height = Math.max(360, busiestColumn(flow) * 40);
+  const natural = Math.max(360, busiestColumn(flow) * 40);
+  const scale = maxHeight && natural > maxHeight ? maxHeight / natural : 1;
+  const height = natural * scale; // on screen
+  const layoutWidth = width / scale;
   const layout = useMemo(
     () =>
       width > 0
         ? flowLayout(flow, {
-            width: width - FLOW_MARGIN.left - FLOW_MARGIN.right,
-            height: height - FLOW_MARGIN.top - FLOW_MARGIN.bottom,
+            width: layoutWidth - FLOW_MARGIN.left - FLOW_MARGIN.right,
+            height: natural - FLOW_MARGIN.top - FLOW_MARGIN.bottom,
             nodeWidth: 12,
             nodePadding: 24,
           })
         : null,
-    [flow, width, height],
+    [flow, width, layoutWidth, natural],
   );
   const hover: FlowHover = {
     onHover: (e, text) => {
@@ -133,7 +137,7 @@ export default function MoneyFlowChart({ flow }: { flow: FlowData }) {
   return (
     <div ref={setBox} className="relative" style={{ height }}>
       {layout && (
-        <svg width={width} height={height}>
+        <svg width={width} height={height} viewBox={`0 0 ${layoutWidth} ${natural}`}>
           <g transform={`translate(${FLOW_MARGIN.left},${FLOW_MARGIN.top})`}>
             {layout.links.map((l, i) => (
               <FlowLinkPath
