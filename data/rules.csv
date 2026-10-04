@@ -1,48 +1,48 @@
 category_path;pattern;priority;is_income_anchor;description
-Fixe / Salaire;VIR EMPLOYEUR SA;1;1;Salaire (ouvre le mois budgétaire)
-Immobilier / Locatif / Loyer perçu;VIR LOCATAIRE;2;0;
-Variable / Remboursement reçu;VIR DGFIP FINANCES PUBLIQUES;3;0;Remboursement impôts
-Variable / Remboursement reçu;VIR CPAM;4;0;Assurance maladie
-Variable / Remboursement reçu;VIR MUTUELLE;5;0;
-Immobilier / Résidence principale / Prêt;ECH PRET HABITAT;10;0;
-Immobilier / Résidence principale / Charges;PRLV SYNDIC;11;0;
-Immobilier / Locatif / Prêt;ECH PRET LOCATIF;12;0;
-Immobilier / Locatif / Charges;PRLV GESTION LOCATIVE;13;0;
-Immobilier / Assurance habitation;PRLV ASSURANCE HABITATION;14;0;
-Fixe / Enfants / Périscolaire;MAIRIE;20;0;Garderie et cantine
-Fixe / Enfants / Garde;PRLV CENTRE PAJEMPLOI;21;0;Assistante maternelle
-Fixe / Internet & téléphone;PRLV SFR;22;0;
-Fixe / Internet & téléphone;PRLV Orange SA;23;0;
-Fixe / Internet & téléphone;FREE MOBILE;24;0;
-Fixe / Électricité;PRLV EDF clients particuliers;25;0;
-Fixe / Streaming;NETFLIX;26;0;
-Fixe / Streaming;SPOTIFY;27;0;
-Fixe / Impôt;DIRECTION GENERALE DES FINA;28;0;
-Variable / Frais bancaire;COTISATION;30;0;
-Variable / Frais bancaire;F COMMISSION;31;0;
-Variable / Courses;LECLERC;40;0;
-Variable / Courses;CARREFOUR;41;0;
-Variable / Courses;U EXPRESS;42;0;
-Variable / Courses;LIDL;43;0;
-Variable / Courses;BOULANGERIE;44;0;
-Variable / Courses;BOUCHERIE;45;0;
-Variable / Restauration;MC DONALD;50;0;
-Variable / Restauration;BURGER KING;51;0;
-Variable / Restauration;KFC;52;0;
-Variable / Restauration;PIZZA;53;0;
-Variable / Sortie / Bar;BRASSERIE;60;0;
-Variable / Sortie / Bar;IRISH PUB;61;0;
-Variable / Retrait;RET DAB;70;0;
-Variable / Sport;DECATHLON;71;0;
-Variable / Transport / Transports en commun;SNCF;72;0;
-Variable / Transport / Transports en commun;RATP;73;0;
-Variable / Transport / Carburant;TOTALENERGIES;74;0;
-Variable / Transport / Carburant;STATION SERVICE;75;0;
-Variable / Santé;PHARMACIE;80;0;
-Variable / Santé;DOCTOLIB;81;0;
-Variable / Coiffeur;COIFFURE;82;0;
-Variable / Maison;LEROY MERLIN;83;0;
-Variable / Maison;IKEA;84;0;
-Variable / Maison;CASTORAMA;85;0;
-Variable / Vêtements;KIABI;86;0;
-Variable / Cadeaux & dons;FNAC;87;0;
+Revenus / Salaire;VIR EMPLOYEUR SA;1;1;Salaire (ouvre le mois budgétaire)
+Locatif / Loyers;VIR LOCATAIRE;2;0;
+Impôts & banque / Impôts;VIR DGFIP FINANCES PUBLIQUES;3;0;Remboursement impôts
+Personnel / Santé;VIR CPAM;4;0;Assurance maladie
+Personnel / Santé;VIR MUTUELLE;5;0;
+Logement / Prêt;ECH PRET HABITAT;10;0;
+Logement / Charges;PRLV SYNDIC;11;0;
+Locatif / Prêt;ECH PRET LOCATIF;12;0;
+Locatif / Charges;PRLV GESTION LOCATIVE;13;0;
+Logement / Assurance habitation;PRLV ASSURANCE HABITATION;14;0;
+Enfants / Périscolaire & cantine;MAIRIE;20;0;Garderie et cantine
+Enfants / Garde;PRLV CENTRE PAJEMPLOI;21;0;Assistante maternelle
+Logement / Internet & téléphone;PRLV SFR;22;0;
+Logement / Internet & téléphone;PRLV Orange SA;23;0;
+Logement / Internet & téléphone;FREE MOBILE;24;0;
+Logement / Énergie;PRLV EDF clients particuliers;25;0;
+Loisirs / Abonnements;NETFLIX;26;0;
+Loisirs / Abonnements;SPOTIFY;27;0;
+Impôts & banque / Impôts;DIRECTION GENERALE DES FINA;28;0;
+Impôts & banque / Frais bancaires;COTISATION;30;0;
+Impôts & banque / Frais bancaires;F COMMISSION;31;0;
+Vie courante / Courses;LECLERC;40;0;
+Vie courante / Courses;CARREFOUR;41;0;
+Vie courante / Courses;U EXPRESS;42;0;
+Vie courante / Courses;LIDL;43;0;
+Vie courante / Courses;BOULANGERIE;44;0;
+Vie courante / Courses;BOUCHERIE;45;0;
+Vie courante / Restauration;MC DONALD;50;0;
+Vie courante / Restauration;BURGER KING;51;0;
+Vie courante / Restauration;KFC;52;0;
+Vie courante / Restauration;PIZZA;53;0;
+Loisirs / Bar;BRASSERIE;60;0;
+Loisirs / Bar;IRISH PUB;61;0;
+Divers / Espèces;RET DAB;70;0;
+Loisirs / Sport;DECATHLON;71;0;
+Transport / Déplacements;SNCF;72;0;
+Transport / Déplacements;RATP;73;0;
+Transport / Carburant;TOTALENERGIES;74;0;
+Transport / Carburant;STATION SERVICE;75;0;
+Personnel / Santé;PHARMACIE;80;0;
+Personnel / Santé;DOCTOLIB;81;0;
+Personnel / Coiffeur;COIFFURE;82;0;
+Logement / Travaux & équipement;LEROY MERLIN;83;0;
+Logement / Travaux & équipement;IKEA;84;0;
+Logement / Travaux & équipement;CASTORAMA;85;0;
+Personnel / Vêtements;KIABI;86;0;
+Divers / Cadeaux & dons;FNAC;87;0;

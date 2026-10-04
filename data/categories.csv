@@ -1,39 +1,48 @@
 path;budget_target
 Déficit;
 Déficit / Emprunt;
+Divers;
+Divers / Cadeaux & dons;
+Divers / Divers;
+Divers / Espèces;
+Divers / Remboursements entre proches;
+Enfants;
+Enfants / Garde;
+Enfants / Périscolaire & cantine;
+Enfants / Équipement & jouets;
+Impôts & banque;
+Impôts & banque / Frais bancaires;
+Impôts & banque / Impôts;
+Locatif;
+Locatif / Charges;
+Locatif / Loyers;
+Locatif / Prêt;
+Locatif / Taxe foncière;
+Logement;
+Logement / Assurance habitation;
+Logement / Charges;
+Logement / Internet & téléphone;
+Logement / Prêt;
+Logement / Travaux & équipement;
+Logement / Énergie;
+Loisirs;
+Loisirs / Abonnements;25.00
+Loisirs / Bar;60.00
+Loisirs / Sorties & activités;
+Loisirs / Sport;
+Personnel;
+Personnel / Coiffeur;
+Personnel / Santé;
+Personnel / Vêtements;80.00
+Revenus;
+Revenus / Autres revenus;
+Revenus / Intérêts;
+Revenus / Salaire;
+Transport;
+Transport / Carburant;150.00
+Transport / Déplacements;
+Transport / Entretien;
+Vie courante;
+Vie courante / Courses;450.00
+Vie courante / Restauration;120.00
 Épargne;
-Fixe;
-Fixe / Électricité;
-Fixe / Enfants;
-Fixe / Enfants / Garde;
-Fixe / Enfants / Périscolaire;
-Fixe / Impôt;
-Fixe / Internet & téléphone;
-Fixe / Salaire;
-Fixe / Streaming;25.00
-Immobilier;
-Immobilier / Assurance habitation;
-Immobilier / Locatif;
-Immobilier / Locatif / Charges;
-Immobilier / Locatif / Loyer perçu;
-Immobilier / Locatif / Prêt;
-Immobilier / Résidence principale;
-Immobilier / Résidence principale / Charges;
-Immobilier / Résidence principale / Prêt;
-Variable;
-Variable / Cadeaux & dons;
-Variable / Coiffeur;
-Variable / Courses;450.00
-Variable / Frais bancaire;
-Variable / Maison;
-Variable / Remboursement reçu;
-Variable / Restauration;120.00
-Variable / Retrait;
-Variable / Santé;
-Variable / Sortie;
-Variable / Sortie / Bar;60.00
-Variable / Sport;
-Variable / Transport;
-Variable / Transport / Carburant;150.00
-Variable / Transport / Transports en commun;
-Variable / Vêtements;80.00

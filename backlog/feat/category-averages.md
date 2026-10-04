@@ -2,17 +2,17 @@
 
 ## Context
 
-The dashboard shows one budget month (or « Tous les mois », a sum) but no average: the owner wants the average monthly value of every top-level category (`parent_id IS NULL`: Fixe, Variable, Immobilier, Épargne, Déficit… in their config) over a chosen period, to know what a "normal" month costs and to set realistic budget targets.
+The dashboard shows one budget month (or « Tous les mois », a sum) but no average: the owner wants the average monthly value of every top-level category (`parent_id IS NULL`: Revenus, Logement, Locatif, Vie courante, Épargne, Déficit… in their config) over a chosen period, to know what a "normal" month costs and to set realistic budget targets.
 
 Relevant code:
 - `backend/app/core/categorize.py`: `category_tree` (per-month tree, derived savings leaves via `_savings_net_cents`), `monthly_totals` (per-month income/expenses/epargne/desepargne/reste, already in the dashboard `history`), `budget_status` (targets, `months` multiplier for « Tous les mois »).
 - `backend/app/api/dashboard.py` (`ALL_MONTHS`, payload assembly), `frontend/src/app/page.tsx` (dashboard sections), `frontend/src/lib/moneyFlow.ts` (per-leaf gating of income vs expense: an income source is a leaf with net credit, an expense a leaf with net debit).
-- Income is mixed into expense groups (Salaire under Fixe), so a group's net is not its spending.
+- Income is mixed into expense groups (rents under Locatif), so a group's net is not its spending.
 - Budget months are paycheck-anchored (`core/periods.py`): the latest budget month in the data is always the one still filling (it closes only when the next income anchor is imported, which opens a newer month).
 
 ## Decisions (owner, 2026-10-03)
 
-- **Measure**: expenses and income **separated** per top-level category, like the Sankey: leaves with net debit feed the group's average spending, leaves with net credit its average income. The salary never lowers Fixe's spending.
+- **Measure**: expenses and income **separated** per top-level category, like the Sankey: leaves with net debit feed the group's average spending, leaves with net credit its average income. Rents never lower Locatif’s spending.
 - **Periods**: 3, 6 and 12 last months, and the whole history (selector).
 - **The current (latest) budget month is excluded**: « 6 derniers mois » = the 6 complete budget months before it; « Tout l’historique » = every budget month except it.
 - **Placement**: a dashboard section « Moyennes mensuelles » with its period selector: one row per top-level category, expandable to its sub-categories and leaves, plus the gap between the displayed month and the average (hidden in « Tous les mois »).
