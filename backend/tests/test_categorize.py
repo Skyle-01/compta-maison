@@ -1,6 +1,10 @@
+import pytest
+
 from app.core.categorize import (
     apply_rules,
+    averaging_window,
     budget_status,
+    category_averages,
     category_tree,
     income_and_expenses,
     monthly_totals,
@@ -392,3 +396,105 @@ class TestBudgetStatus:
         apply_rules(seeded_db)
         status = budget_status(seeded_db, "2026-06")
         assert (status["groups"], status["target"], status["untargeted"]) == ([], 0, 80)
+
+
+class TestCategoryAverages:
+    """Average month per category over the complete budget months (« Moyennes mensuelles »)."""
+
+    @staticmethod
+    def _seed(db) -> None:
+        _set_target(db, "courses", 10000)
+        _set_target(db, "bar", 1000)
+        import_rows(
+            db,
+            ("2026-03-05", "2026-03-05", "VIR EMPLOYEUR", 0, 2000, "PERSO"),
+            ("2026-03-06", "2026-03-06", "SUPERMARCHE", 300, 0, "JOINT"),
+            ("2026-03-07", "2026-03-07", "MYSTERY SHOP", 50, 0, "PERSO"),
+            ("2026-04-05", "2026-04-05", "VIR EMPLOYEUR", 0, 2000, "PERSO"),
+            # April's refund exceeds April's shopping: courses stays a spending leaf over the window.
+            ("2026-04-06", "2026-04-06", "SUPERMARCHE", 20, 0, "JOINT"),
+            ("2026-04-07", "2026-04-07", "SUPERMARCHE REMBOURSEMENT", 0, 30, "JOINT"),
+            ("2026-05-05", "2026-05-05", "VIR EMPLOYEUR", 0, 2100, "PERSO"),
+            ("2026-05-06", "2026-05-06", "SUPERMARCHE", 100, 0, "JOINT"),
+            ("2026-05-07", "2026-05-07", "BAR ANGELUS", 60, 0, "PERSO"),
+            ("2026-05-08", "2026-05-08", "MYSTERY REFUND", 0, 10, "PERSO"),
+            ("2026-05-09", "2026-05-09", "VIR vers LIVRET", 300, 0, "PERSO"),
+            ("2026-05-09", "2026-05-09", "VIR de COMPTE", 0, 300, "LIVRET"),
+            # June is the latest budget month, still filling: never averaged.
+            ("2026-06-05", "2026-06-05", "VIR EMPLOYEUR", 0, 2200, "PERSO"),
+            ("2026-06-06", "2026-06-06", "SUPERMARCHE", 500, 0, "JOINT"),
+            ("2026-06-07", "2026-06-07", "BAR ANGELUS", 400, 0, "PERSO"),
+        )
+        apply_rules(db)
+        recompute_transfers(db)
+
+    @staticmethod
+    def _group(averages: dict, name: str) -> dict:
+        return next(g for g in averages["groups"] if g["name"] == name)
+
+    def test_window_excludes_the_latest_month(self):
+        months = ["2026-03", "2026-04", "2026-05", "2026-06"]
+        assert averaging_window(months, None) == ["2026-03", "2026-04", "2026-05"]
+        assert averaging_window(months, 2) == ["2026-04", "2026-05"]
+        assert averaging_window(months, 12) == ["2026-03", "2026-04", "2026-05"]
+        assert averaging_window(["2026-06"], 3) == averaging_window([], None) == []
+
+    def test_sides_offset_and_reconciliation(self, seeded_db):
+        self._seed(seeded_db)
+        avg = category_averages(seeded_db, 3, "2026-06")
+        assert (avg["months"], avg["first_month"], avg["last_month"]) == (3, "2026-03", "2026-05")
+        assert avg["current_month"] == "2026-06"
+        groups = {g["name"]: g for g in avg["groups"]}
+        variable = groups["variable"]
+        courses = _find(variable, "courses")
+        # (300 + 20 + 100 − 30) / 3: the refund lowers courses, which stays on the spending side.
+        assert (courses["expenses"], courses["income"], courses["target"]) == (130, 0, 100)
+        assert (variable["expenses"], variable["target"]) == (150, 110)  # + bar 60 / 3; Σ targets
+        assert groups["fixe"]["income"] == round(6100 / 3, 2)
+        assert avg["uncategorized"]["expenses"] == round(50 / 3, 2)
+        assert avg["uncategorized"]["income"] == round(10 / 3, 2)
+        assert avg["offset"]["value"] == 10  # the 30 € refund, netted inside courses
+        totals = avg["totals"]
+        assert (totals["income"], totals["expenses"]) == (round(6140 / 3, 2), round(530 / 3, 2))
+        assert avg["savings"] == [
+            {
+                "account_id": "LIVRET",
+                "name": "Livret A",
+                "epargne": 100,
+                "desepargne": 0,
+                "month_epargne": 0,
+                "month_desepargne": 0,
+            }
+        ]
+        assert (totals["epargne"], totals["desepargne"], totals["reste"]) == (100, 0, 1770)
+        # The rows add up to the cards (up to a cent of rounding per row).
+        spent = sum(g["expenses"] for g in avg["groups"]) + avg["uncategorized"]["expenses"]
+        earned = sum(g["income"] for g in avg["groups"]) + avg["uncategorized"]["income"]
+        assert spent + avg["offset"]["value"] == pytest.approx(totals["expenses"], abs=0.02)
+        assert earned + avg["offset"]["value"] == pytest.approx(totals["income"], abs=0.02)
+
+    def test_displayed_month_values(self, seeded_db):
+        self._seed(seeded_db)
+        variable = self._group(category_averages(seeded_db, 3, "2026-06"), "variable")
+        assert (variable["month_expenses"], _find(variable, "bar")["month_expenses"]) == (900, 400)
+        april = category_averages(seeded_db, 3, "2026-04")
+        # April alone nets a credit on courses, but the window side holds: a negative spending.
+        assert _find(self._group(april, "variable"), "courses")["month_expenses"] == -10
+        assert april["offset"]["month_value"] == 30
+        every = category_averages(seeded_db, None, None)
+        assert every["months"] == 3
+        assert every["groups"][0]["month_expenses"] is None and every["offset"]["month_value"] is None
+
+    def test_shorter_window(self, seeded_db):
+        self._seed(seeded_db)
+        avg = category_averages(seeded_db, 1, None)
+        assert (avg["months"], avg["first_month"], avg["last_month"]) == (1, "2026-05", "2026-05")
+        variable = self._group(avg, "variable")
+        assert (_find(variable, "courses")["expenses"], _find(variable, "bar")["expenses"]) == (100, 60)
+
+    def test_no_complete_month(self, seeded_db):
+        import_rows(seeded_db, ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"))
+        apply_rules(seeded_db)
+        avg = category_averages(seeded_db, 6, "2026-06")
+        assert (avg["months"], avg["first_month"], avg["totals"]["expenses"]) == (0, None, 0)
+        assert _find(self._group(avg, "variable"), "courses")["month_expenses"] == 80

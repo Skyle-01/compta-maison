@@ -20,6 +20,7 @@ FIELD_LABELS = {
     "markers": "Marqueurs",
     "mode": "Mode",
     "month": "Mois",
+    "months": "Période",
     "name": "Nom",
     "note": "Note",
     "parent_id": "Catégorie parente",

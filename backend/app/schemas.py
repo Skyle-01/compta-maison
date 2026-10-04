@@ -223,6 +223,59 @@ class BudgetSummary(BaseModel):
     groups: list[BudgetGroup] = Field(description="Top-level groups with a target, overruns first")
 
 
+class AverageNode(BaseModel):
+    id: int
+    name: str
+    expenses: float = Field(description="Average monthly spending of its net-debit leaves")
+    income: float = Field(description="Average monthly income of its net-credit leaves")
+    month_expenses: float | None = Field(description="The displayed month's spending (None: all months)")
+    month_income: float | None
+    target: float | None = Field(description="Monthly target, a group's Σ of its leaves' targets")
+    children: list["AverageNode"]
+
+
+class AverageUncategorized(BaseModel):
+    expenses: float = Field(description="Average monthly uncategorised debits (gross)")
+    income: float = Field(description="Average monthly uncategorised credits (gross)")
+    month_expenses: float | None
+    month_income: float | None
+
+
+class AverageOffset(BaseModel):
+    value: float = Field(description="Average refunds on spending leaves + debits on income leaves")
+    month_value: float | None
+
+
+class AverageSavings(BaseModel):
+    account_id: str
+    name: str
+    epargne: float
+    desepargne: float
+    month_epargne: float | None
+    month_desepargne: float | None
+
+
+class AverageTotals(BaseModel):
+    income: float
+    expenses: float
+    epargne: float
+    desepargne: float
+    reste: float
+
+
+class CategoryAverages(BaseModel):
+    months: int = Field(description="Complete budget months averaged (the latest one is excluded)")
+    first_month: str | None
+    last_month: str | None
+    current_month: str | None = Field(description="The latest budget month, still filling, excluded")
+    month: str | None = Field(description="The month the month_* values belong to, None for all months")
+    totals: AverageTotals = Field(description="The four cards' averages (mean of the history entries)")
+    groups: list[AverageNode] = Field(description="Top-level categories, largest first")
+    uncategorized: AverageUncategorized
+    offset: AverageOffset
+    savings: list[AverageSavings]
+
+
 class Dashboard(BaseModel):
     month: str | None = Field(description="The budget month shown, 'all' for every month, None if no data")
     months_available: list[str]

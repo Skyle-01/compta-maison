@@ -1,6 +1,6 @@
 "use client";
 
-import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type MouseEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Line,
@@ -16,7 +16,10 @@ import {
   ALL_MONTHS,
   api,
   errorMessage,
+  type AverageNode,
+  type AveragePeriod,
   type BudgetSummary,
+  type CategoryAverages,
   type CategoryNode,
   type Dashboard,
   type MonthTotals,
@@ -27,6 +30,14 @@ import {
   frenchMonthShort,
 } from "@/lib/api";
 import SignedAmount from "@/components/SignedAmount";
+import {
+  AVERAGE_PERIODS,
+  averageGap,
+  type GapTone,
+  gapTone,
+  periodSummary,
+  visibleAverageNodes,
+} from "@/lib/averages";
 import { barWidth, budgetLeft, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
 import { busiestColumn, flowLayout, type PlacedLink, type PlacedNode } from "@/lib/flowLayout";
 import { type FlowData, type FlowRole, moneyFlow } from "@/lib/moneyFlow";
@@ -347,6 +358,361 @@ function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean })
           Dépenses sans objectif : <span className="tabular-nums">{formatEuro(budget.untargeted)}</span>
         </p>
       </div>
+    </section>
+  );
+}
+
+const GAP_TEXT: Record<GapTone, string> = {
+  good: "text-green-700",
+  bad: "text-red-700",
+  flat: "text-zinc-500",
+};
+
+/** The displayed month minus the average ("+120,00 €"), green or red by `goodIsUp`; nothing when
+ *  there is no month to compare with or no money either way. */
+function Gap({ month, average, goodIsUp }: { month: number | null; average: number; goodIsUp: boolean }) {
+  const gap = averageGap(month, average);
+  if (gap === null || (month === 0 && average === 0)) return null;
+  const sign = gap > 0.005 ? "+" : gap < -0.005 ? "−" : "";
+  return <span className={GAP_TEXT[gapTone(gap, goodIsUp)]}>{sign + formatEuro(Math.abs(gap))}</span>;
+}
+
+/** An average amount, blank when zero so a group's empty side reads as nothing rather than 0 €. */
+const amountCell = (value: number) => (Math.abs(value) < 0.005 ? "" : formatEuro(value));
+
+const NUM = "px-2 py-1 text-right tabular-nums";
+
+/** One table row of the averages: a label, spending and income with their gaps, and a last cell. */
+function AverageLine({
+  label,
+  expenses,
+  income,
+  monthExpenses,
+  monthIncome,
+  gaps,
+  last,
+  className = "border-b border-zinc-100",
+  labelClass = "font-medium",
+  indent = 0,
+  marker = "",
+  onClick,
+}: {
+  label: string;
+  expenses: number;
+  income: number;
+  monthExpenses: number | null;
+  monthIncome: number | null;
+  gaps: boolean;
+  last?: ReactNode;
+  className?: string;
+  labelClass?: string;
+  indent?: number;
+  marker?: string;
+  onClick?: () => void;
+}) {
+  return (
+    <tr className={className} onClick={onClick}>
+      <td className={`py-1 pr-2 ${labelClass}`} style={{ paddingLeft: indent }}>
+        <span className="mr-1 inline-block w-3 text-zinc-500">{marker}</span>
+        {label}
+      </td>
+      <td className={`${NUM} text-red-700`}>{amountCell(expenses)}</td>
+      {gaps && (
+        <td className={NUM}>
+          <Gap month={monthExpenses} average={expenses} goodIsUp={false} />
+        </td>
+      )}
+      <td className={`${NUM} text-green-700`}>{amountCell(income)}</td>
+      {gaps && (
+        <td className={NUM}>
+          <Gap month={monthIncome} average={income} goodIsUp />
+        </td>
+      )}
+      <td className={NUM}>{last}</td>
+    </tr>
+  );
+}
+
+/** A category row (indented by depth), expandable to its sub-categories. A leaf's target turns
+ *  amber or red as its average spending nears or passes it (the Budget section's bands). */
+function AverageRow({
+  node,
+  depth,
+  gaps,
+  open,
+  toggle,
+}: {
+  node: AverageNode;
+  depth: number;
+  gaps: boolean;
+  open: Set<number>;
+  toggle: (id: number) => void;
+}) {
+  const expandable = node.children.length > 0;
+  const isOpen = open.has(node.id);
+  return (
+    <>
+      <AverageLine
+        label={node.name}
+        expenses={node.expenses}
+        income={node.income}
+        monthExpenses={node.month_expenses}
+        monthIncome={node.month_income}
+        gaps={gaps}
+        indent={depth * 20}
+        marker={expandable ? (isOpen ? "▾" : "▸") : ""}
+        labelClass={depth === 0 ? "font-medium" : "text-zinc-700"}
+        className={`border-b border-zinc-100 ${expandable ? "cursor-pointer hover:bg-zinc-50" : ""}`}
+        onClick={expandable ? () => toggle(node.id) : undefined}
+        last={
+          node.target !== null && (
+            // A group's spending also counts its untargeted leaves: only a leaf is comparable.
+            <span
+              className={
+                expandable ? "text-zinc-500" : TONE_TEXT[budgetTone(budgetRatio(node.expenses, node.target))]
+              }
+            >
+              {formatEuro(node.target)}
+            </span>
+          )
+        }
+      />
+      {isOpen &&
+        node.children.map((child) => (
+          <AverageRow key={child.id} node={child} depth={depth + 1} gaps={gaps} open={open} toggle={toggle} />
+        ))}
+    </>
+  );
+}
+
+/** A card average, with its gap to the displayed month when there is one. */
+function AverageStat({
+  label,
+  value,
+  month,
+  monthLabel,
+  goodIsUp,
+  valueClass,
+}: {
+  label: string;
+  value: number;
+  month: number | null;
+  monthLabel: string;
+  goodIsUp: boolean;
+  valueClass: string;
+}) {
+  return (
+    <div className="rounded-md border border-zinc-100 px-3 py-2">
+      <div className="text-xs text-zinc-500">{label}</div>
+      <div className={`text-lg font-semibold tabular-nums ${valueClass}`}>{formatEuro(value)}</div>
+      {month !== null && (
+        <div className="text-xs text-zinc-500">
+          écart {monthLabel} : <Gap month={month} average={value} goodIsUp={goodIsUp} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Average month per top-level category over the last 3/6/12 complete budget months (the latest,
+ *  still filling, never counts), each compared with the displayed month. The rows, Non classé and
+ *  the compensations add up to the Revenus / Dépenses averages; the savings accounts to Épargne. */
+function AveragesSection({ data }: { data: Dashboard }) {
+  const [period, setPeriod] = useState<AveragePeriod>("6");
+  const [avg, setAvg] = useState<CategoryAverages | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<Set<number>>(new Set());
+  const month = data.month ?? ALL_MONTHS;
+
+  useEffect(() => {
+    let stale = false; // a slower answer for a previous choice must not overwrite this one
+    api
+      .averages(period, month)
+      .then((a) => {
+        if (stale) return;
+        setAvg(a);
+        setError(null);
+      })
+      .catch((e) => {
+        if (!stale) setError(errorMessage(e));
+      });
+    return () => {
+      stale = true;
+    };
+  }, [period, month]);
+
+  const toggle = (id: number) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const summary = avg ? periodSummary(avg, period) : null;
+  const gaps = avg?.month != null;
+  const monthLabel = avg?.month ? frenchMonthShort(avg.month) : "";
+  // The cards' month values come from the dashboard payload (same definitions as the averages).
+  const cardMonth = (value: number) => (gaps ? value : null);
+
+  let body: ReactNode;
+  if (error) body = <p className="text-sm text-red-700">{error}</p>;
+  else if (!avg) body = <p className="text-sm text-zinc-500">Chargement…</p>;
+  else if (avg.months === 0) {
+    body = (
+      <p className="text-sm text-zinc-500">
+        Pas encore de mois complet : {frenchMonth(avg.current_month ?? "")} est en cours, les moyennes
+        commenceront après lui.
+      </p>
+    );
+  } else {
+    const { totals, uncategorized: unc, offset } = avg;
+    const showOffset = offset.value >= 0.005 || (offset.month_value ?? 0) >= 0.005;
+    body = (
+      <>
+        <div className="grid grid-cols-4 gap-3">
+          <AverageStat
+            label="Revenus / mois"
+            value={totals.income}
+            month={cardMonth(data.income)}
+            monthLabel={monthLabel}
+            goodIsUp
+            valueClass="text-green-700"
+          />
+          <AverageStat
+            label="Dépenses / mois"
+            value={totals.expenses}
+            month={cardMonth(data.expenses)}
+            monthLabel={monthLabel}
+            goodIsUp={false}
+            valueClass="text-red-700"
+          />
+          <AverageStat
+            label="Épargne / mois"
+            value={totals.epargne - totals.desepargne}
+            month={cardMonth(data.epargne - data.desepargne)}
+            monthLabel={monthLabel}
+            goodIsUp
+            valueClass={totals.epargne >= totals.desepargne ? "text-violet-700" : "text-amber-700"}
+          />
+          <AverageStat
+            label="Reste / mois"
+            value={totals.reste}
+            month={cardMonth(data.reste)}
+            monthLabel={monthLabel}
+            goodIsUp
+            valueClass={totals.reste >= 0 ? "text-green-700" : "text-red-700"}
+          />
+        </div>
+
+        <table className="mt-4 w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-200 text-xs text-zinc-500">
+              <th className="py-1 text-left font-normal">Catégorie</th>
+              <th className="px-2 py-1 text-right font-normal">Dépenses / mois</th>
+              {gaps && <th className="px-2 py-1 text-right font-normal">Écart {monthLabel}</th>}
+              <th className="px-2 py-1 text-right font-normal">Revenus / mois</th>
+              {gaps && <th className="px-2 py-1 text-right font-normal">Écart {monthLabel}</th>}
+              <th className="px-2 py-1 text-right font-normal">Objectif</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleAverageNodes(avg.groups).map((g) => (
+              <AverageRow key={g.id} node={g} depth={0} gaps={gaps} open={open} toggle={toggle} />
+            ))}
+            <AverageLine
+              label="Non classé"
+              expenses={unc.expenses}
+              income={unc.income}
+              monthExpenses={unc.month_expenses}
+              monthIncome={unc.month_income}
+              gaps={gaps}
+            />
+            {showOffset && (
+              // Shown on both sides without gaps: it explains the totals, it is not a category.
+              <AverageLine
+                label="Remboursements et compensations"
+                expenses={offset.value}
+                income={offset.value}
+                monthExpenses={null}
+                monthIncome={null}
+                gaps={gaps}
+                labelClass="text-zinc-500"
+              />
+            )}
+            <AverageLine
+              label="Total"
+              expenses={totals.expenses}
+              income={totals.income}
+              monthExpenses={gaps ? data.expenses : null}
+              monthIncome={gaps ? data.income : null}
+              gaps={gaps}
+              className="border-t-2 border-zinc-200 font-medium"
+            />
+            {avg.savings.length > 0 && (
+              <tr className="text-xs text-zinc-500">
+                <td className="pb-1 pt-4">Comptes d’épargne</td>
+                <td className="px-2 pb-1 pt-4 text-right">Mis de côté / mois</td>
+                {gaps && <td />}
+                <td className="px-2 pb-1 pt-4 text-right">Puisé / mois</td>
+                {gaps && <td />}
+                <td />
+              </tr>
+            )}
+            {avg.savings.map((s) => (
+              <tr key={s.account_id} className="border-t border-zinc-100">
+                <td className="py-1 pr-2 text-zinc-700">
+                  <span className="mr-1 inline-block w-3" />
+                  {s.name}
+                </td>
+                <td className={`${NUM} text-violet-700`}>{amountCell(s.epargne)}</td>
+                {gaps && (
+                  <td className={NUM}>
+                    <Gap month={s.month_epargne} average={s.epargne} goodIsUp />
+                  </td>
+                )}
+                <td className={`${NUM} text-amber-700`}>{amountCell(s.desepargne)}</td>
+                {gaps && (
+                  <td className={NUM}>
+                    <Gap month={s.month_desepargne} average={s.desepargne} goodIsUp={false} />
+                  </td>
+                )}
+                <td />
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-3 text-xs text-zinc-500">
+          Mois complets uniquement : {frenchMonth(avg.current_month ?? "")}, en cours, n’est pas compté.
+          Une catégorie compte en dépenses ou en revenus selon son solde sur la période ; ce qu’elle
+          reçoit ou paie à contre-sens (un remboursement de courses) passe en « Remboursements et
+          compensations », pour que les totaux égalent les moyennes de Revenus et Dépenses.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <section>
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 className="font-medium">
+          Moyennes mensuelles
+          {summary && <span className="ml-2 text-sm font-normal text-zinc-500">{summary}</span>}
+        </h2>
+        <select
+          className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+          value={period}
+          onChange={(e) => setPeriod(e.target.value as AveragePeriod)}
+          aria-label="Période des moyennes"
+        >
+          {AVERAGE_PERIODS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="rounded-lg border border-zinc-200 bg-white p-4">{body}</div>
     </section>
   );
 }
@@ -681,6 +1047,8 @@ export default function DashboardPage() {
       <ResteTrend history={hist} current={data.month} />
 
       <BudgetSection budget={data.budget} all={all} />
+
+      <AveragesSection data={data} />
 
       {data.transfers.count > 0 && (
         <p className="text-sm text-zinc-500">

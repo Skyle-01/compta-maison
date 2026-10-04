@@ -222,6 +222,51 @@ export interface BudgetSummary {
   groups: BudgetGroup[];
 }
 
+/** « Moyennes mensuelles » periods: the last 3, 6, 12 complete budget months, or all of them. */
+export type AveragePeriod = "3" | "6" | "12" | "all";
+
+/** A category's average month over the period. A leaf sits on one side, decided by its net over
+ *  the period (spending or income); a group sums its leaves. `month_*` are the displayed month's
+ *  values (null in « Tous les mois »). */
+export interface AverageNode {
+  id: number;
+  name: string;
+  expenses: number;
+  income: number;
+  month_expenses: number | null;
+  month_income: number | null;
+  /** Monthly target (a group: Σ of its leaves' targets); null = none. */
+  target: number | null;
+  children: AverageNode[];
+}
+
+export interface CategoryAverages {
+  /** Complete budget months averaged (the latest, still filling, is excluded). */
+  months: number;
+  first_month: string | null;
+  last_month: string | null;
+  /** The latest budget month, excluded from every period. */
+  current_month: string | null;
+  /** The month the `month_*` values belong to; null for every month. */
+  month: string | null;
+  /** The four cards' averages. */
+  totals: Omit<MonthTotals, "month">;
+  /** Top-level categories, largest first. */
+  groups: AverageNode[];
+  /** Gross on both sides. */
+  uncategorized: { expenses: number; income: number; month_expenses: number | null; month_income: number | null };
+  /** Refunds on spending categories + spending on income categories: in the cards, netted in the rows. */
+  offset: { value: number; month_value: number | null };
+  savings: {
+    account_id: string;
+    name: string;
+    epargne: number;
+    desepargne: number;
+    month_epargne: number | null;
+    month_desepargne: number | null;
+  }[];
+}
+
 /** Dashboard `month` value (and `?month=`) for every budget month at once. */
 export const ALL_MONTHS = "all";
 
@@ -425,6 +470,10 @@ export const api = {
 
   dashboard(month?: string): Promise<Dashboard> {
     return request(`/api/dashboard${month ? `?month=${month}` : ""}`);
+  },
+
+  averages(period: AveragePeriod, month: string): Promise<CategoryAverages> {
+    return request(`/api/dashboard/averages?${new URLSearchParams({ months: period, month })}`);
   },
 };
 

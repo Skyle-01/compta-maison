@@ -318,6 +318,165 @@ def budget_status(
     }
 
 
+def averaging_window(months: list[str], n_months: int | None) -> list[str]:
+    """The complete budget months to average, oldest first: the last `n_months` (all when None) of
+    `months` (sorted) before the latest one, which is still filling until the next paycheck opens
+    a newer month."""
+    complete = months[:-1]
+    if n_months is None:
+        return complete
+    return complete[-n_months:] if n_months > 0 else []
+
+
+def category_averages(
+    db_path: Path = DEFAULT_DB_PATH, n_months: int | None = None, month: str | None = None
+) -> dict[str, Any]:
+    """Average monthly spending and income (euros) per category over the complete budget months of
+    `averaging_window`, plus the values of the displayed `month` (None: no comparison) for the gaps.
+
+    Each real leaf takes one side from its net over the whole window (a one-off refund month never
+    turns a spending leaf into income): net debit -> `expenses` (debits − credits), net credit ->
+    `income` (credits − debits); a leaf without net over the window takes its side from `month`.
+    Its counter-side flows (refunds on a spending leaf, debits on an income leaf) go to `offset`,
+    so Σ group expenses + uncategorised debits + offset = the Dépenses card average, and likewise
+    for income. Groups sum their leaves (in cents, divided once); `target` is a leaf's monthly
+    target, a group's Σ of its leaves' targets. The uncategorised bucket is gross on both sides.
+    Savings are the derived per-account nets bucketed per month (see _savings_by_month), averaged
+    the same way, and `totals` the averages of monthly_totals over the window. Transfers excluded."""
+    with connect(db_path) as conn:
+        all_months = [
+            m for (m,) in conn.execute("SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month")
+        ]
+        window = set(averaging_window(all_months, n_months))
+        categories = conn.execute(
+            "SELECT id, name, parent_id, budget_target_cents FROM categories ORDER BY parent_id, id"
+        ).fetchall()
+        flows = conn.execute(
+            "SELECT category_id, budget_month, COALESCE(SUM(credit_cents), 0), COALESCE(SUM(debit_cents), 0) "
+            f"FROM transactions WHERE {real_flow_clause()} GROUP BY category_id, budget_month"
+        ).fetchall()
+        savings_rows = [
+            (code, label, _savings_month_nets(conn, code, pattern, None))
+            for code, label, pattern in savings_accounts(conn)
+        ]
+    count = len(window)
+
+    def avg(cents: int) -> float:
+        return round(cents / count / 100, 2) if count else 0.0
+
+    def shown(cents: int) -> float | None:
+        return euros(cents) if month else None
+
+    # category_id (None = uncategorised) -> [window credit, window debit, month credit, month debit]
+    sums: dict[int | None, list[int]] = {}
+    for category_id, bm, credit, debit in flows:
+        acc = sums.setdefault(category_id, [0, 0, 0, 0])
+        if bm in window:
+            acc[0] += credit
+            acc[1] += debit
+        if bm == month:
+            acc[2] += credit
+            acc[3] += debit
+
+    children: dict[int | None, list[int]] = {}
+    for category_id, _name, parent_id, _target in categories:
+        children.setdefault(parent_id, []).append(category_id)
+    info = {category_id: (name, target) for category_id, name, _parent, target in categories}
+    offset = [0, 0]  # window, month
+
+    def build(category_id: int) -> dict[str, Any]:
+        """Node in cents: [expenses, income, month expenses, month income], target, children."""
+        name, target = info[category_id]
+        kids = [build(child) for child in children.get(category_id, [])]
+        if kids:
+            values = [sum(kid["values"][i] for kid in kids) for i in range(4)]
+            targets = [kid["target"] for kid in kids if kid["target"] is not None]
+            target = sum(targets) if targets else None
+        else:
+            wc, wd, mc, md = sums.get(category_id, [0, 0, 0, 0])
+            income_side = wc > wd or (wc == wd and mc > md)
+            if income_side:
+                values = [0, wc - wd, 0, mc - md]
+                offset[0] += wd
+                offset[1] += md
+            else:
+                values = [wd - wc, 0, md - mc, 0]
+                offset[0] += wc
+                offset[1] += mc
+        return {"id": category_id, "name": name, "values": values, "target": target, "children": kids}
+
+    def to_euros(node: dict[str, Any]) -> dict[str, Any]:
+        expenses, income, month_expenses, month_income = node.pop("values")
+        node["children"] = sorted(
+            (to_euros(kid) for kid in node["children"]),
+            key=lambda kid: (-max(kid["expenses"], kid["income"]), kid["name"]),
+        )
+        target = node["target"]
+        return {
+            **node,
+            "expenses": avg(expenses),
+            "income": avg(income),
+            "month_expenses": shown(month_expenses),
+            "month_income": shown(month_income),
+            "target": euros(target) if target is not None else None,
+        }
+
+    root = to_euros(
+        {
+            "id": None,
+            "name": "",
+            "values": [0] * 4,
+            "target": None,
+            "children": [build(c) for c in children.get(None, [])],
+        }
+    )
+    unc_wc, unc_wd, unc_mc, unc_md = sums.get(None, [0, 0, 0, 0])
+
+    savings = []
+    for code, label, nets in savings_rows:
+        # [window saved, window withdrawn, month saved, month withdrawn], bucketed per month by sign
+        acc = [0, 0, 0, 0]
+        for bm, net in nets:
+            for base, included in ((0, bm in window), (2, bm == month)):
+                if included:
+                    acc[base if net > 0 else base + 1] += abs(net)
+        if any(acc):
+            savings.append(
+                {
+                    "account_id": code,
+                    "name": label,
+                    "epargne": avg(acc[0]),
+                    "desepargne": avg(acc[1]),
+                    "month_epargne": shown(acc[2]),
+                    "month_desepargne": shown(acc[3]),
+                }
+            )
+
+    history = [h for h in monthly_totals(db_path) if h["month"] in window]
+    totals = {
+        key: round(sum(h[key] for h in history) / count, 2) if count else 0.0
+        for key in ("income", "expenses", "epargne", "desepargne", "reste")
+    }
+    ordered = sorted(window)
+    return {
+        "months": count,
+        "first_month": ordered[0] if ordered else None,
+        "last_month": ordered[-1] if ordered else None,
+        "current_month": all_months[-1] if all_months else None,
+        "month": month,
+        "totals": totals,
+        "groups": root["children"],
+        "uncategorized": {
+            "expenses": avg(unc_wd),
+            "income": avg(unc_wc),
+            "month_expenses": shown(unc_md),
+            "month_income": shown(unc_mc),
+        },
+        "offset": {"value": avg(offset[0]), "month_value": shown(offset[1])},
+        "savings": savings,
+    }
+
+
 def transfers_summary(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> dict[str, Any]:
     """Count and total (euros) of auto-paired internal transfers for the month. Single-legged
     external-savings deposits (transfer_group_id IS NULL) are excluded — they aren't internal

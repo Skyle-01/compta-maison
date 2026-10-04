@@ -1,10 +1,11 @@
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
 
 from app.api.deps import DbPath
 from app.core.categorize import (
     budget_status,
+    category_averages,
     category_tree,
     income_and_expenses,
     monthly_totals,
@@ -12,7 +13,7 @@ from app.core.categorize import (
     uncategorized_balance,
 )
 from app.db import connect
-from app.schemas import Dashboard
+from app.schemas import CategoryAverages, Dashboard
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
@@ -71,3 +72,13 @@ def get_dashboard(db_path: DbPath, month: str | None = None) -> Dashboard:
         # With no data yet there is no month: count one so targets still show at face value.
         budget=budget_status(db_path, period, max(1, len(months)) if period is None else 1),
     )
+
+
+@router.get("/averages")
+def get_averages(
+    db_path: DbPath, months: Literal["3", "6", "12", "all"] = "6", month: str | None = None
+) -> CategoryAverages:
+    """Average month per category over the last `months` complete budget months (see
+    category_averages), compared with the dashboard's `month` (none for every month)."""
+    n_months = None if months == ALL_MONTHS else int(months)
+    return CategoryAverages(**category_averages(db_path, n_months, None if month == ALL_MONTHS else month))

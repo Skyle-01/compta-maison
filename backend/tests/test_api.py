@@ -886,6 +886,27 @@ class TestDashboard:
         assert body["expenses"] == pytest.approx(sum(h["expenses"] for h in body["history"]))
         assert body["reste"] == pytest.approx(body["by_category"]["balance"])
 
+    def test_averages(self, seeded_db, client):
+        _upload(client)
+        may = (
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            b'"04/05/2026";"04/05/2026";"CARTE SUPERMARCHE";"40,00";""\n'
+        )
+        _upload(client, filename="RELEVE_COMPTE_JOINT_2026_05_08.csv", content=may)
+        body = client.get("/api/dashboard/averages", params={"months": "3", "month": "2026-06"}).json()
+        # June is the latest budget month: May is the only complete one.
+        assert (body["months"], body["first_month"], body["current_month"]) == (1, "2026-05", "2026-06")
+        assert body["totals"]["expenses"] == 40
+        variable = next(g for g in body["groups"] if g["name"] == "variable")
+        assert (variable["expenses"], variable["month_expenses"]) == (40, 75.82)  # courses 63.82 + bar 12
+        every = client.get("/api/dashboard/averages", params={"months": "all", "month": "all"}).json()
+        assert every["month"] is None and every["uncategorized"]["month_expenses"] is None
+
+    def test_averages_rejects_an_unknown_period(self, client):
+        resp = client.get("/api/dashboard/averages", params={"months": "7"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["msg"] == "Période : valeur attendue : '3', '6', '12' ou 'all'"
+
 
 class TestExport:
     def test_export_categories_csv(self, seeded_db, tmp_path):
@@ -1131,6 +1152,37 @@ class TestResetDb:
         assert accounts == {"PERSO", "JOINT", "LIVRET"}
         assert kinds["transfer"] > 0 and kinds["income"] > 0 and kinds["expense"] > 0
         assert 0 < uncategorised < kinds["expense"] / 5  # a few rows left to classify, not most
+
+    def test_demo_averages_reconcile_with_the_history(self, tmp_path, monkeypatch):
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
+        shutil.copytree(EXAMPLE_PROFILES.parent / "demo", reset_db.INPUTS_DIR)
+        db_path = tmp_path / "demo.db"
+        reset_db.reset(db_path, "defaults", None)
+
+        with TestClient(create_app(db_path)) as client:
+            dashboard = client.get("/api/dashboard").json()
+            for period in ("3", "6", "12", "all"):
+                avg = client.get("/api/dashboard/averages", params={"months": period}).json()
+                # The latest budget month (still filling) is never averaged.
+                assert avg["current_month"] == dashboard["months_available"][0] == dashboard["month"]
+                window = [h for h in dashboard["history"] if h["month"] < avg["current_month"]]
+                if period != "all":
+                    window = window[-int(period) :]
+                assert avg["months"] == len(window) > 0
+                assert (avg["first_month"], avg["last_month"]) == (window[0]["month"], window[-1]["month"])
+                totals = avg["totals"]
+                for key in ("income", "expenses", "epargne", "desepargne", "reste"):
+                    assert totals[key] == pytest.approx(sum(h[key] for h in window) / len(window), abs=0.01)
+                # Category rows + Non classé + compensations add up to the cards (a cent per row).
+                rows = len(avg["groups"]) + 2
+                offset = avg["offset"]["value"]
+                spent = sum(g["expenses"] for g in avg["groups"]) + avg["uncategorized"]["expenses"]
+                earned = sum(g["income"] for g in avg["groups"]) + avg["uncategorized"]["income"]
+                assert spent + offset == pytest.approx(totals["expenses"], abs=0.01 * rows)
+                assert earned + offset == pytest.approx(totals["income"], abs=0.01 * rows)
+                saved = sum(s["epargne"] for s in avg["savings"])
+                dipped = sum(s["desepargne"] for s in avg["savings"])
+                assert (saved, dipped) == pytest.approx((totals["epargne"], totals["desepargne"]), abs=0.01)
 
     def test_defaults_prefers_private_config_dir(self, tmp_path, monkeypatch):
         reset_db, _backups = self._isolate(tmp_path, monkeypatch)

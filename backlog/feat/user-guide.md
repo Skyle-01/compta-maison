@@ -17,13 +17,13 @@ There is no user documentation. The README (English) covers installation, `_conf
 - Features to cover (check the UI and CLAUDE.md "Business rules" / "Current State" when writing, this list may be stale):
   - Concepts: accounts (checking / savings / external savings with `deposit_pattern`), budget months anchored on the salary, income / expense / transfer kinds, the leaf-only category tree.
   - Import: upload with account inference, « Importer les nouveaux relevés », deduplication, archive in `_inputs/`.
-  - Dashboard: hero, the four cards and how they reconcile (Revenus − Dépenses − Épargne = Reste), deltas and the Reste sparkline, Budget section, Money-flow Sankey, balance tree and drill-down, « Tous les mois », uncategorised warning.
+  - Dashboard: hero, the four cards and how they reconcile (Revenus − Dépenses − Épargne = Reste), deltas and the Reste sparkline, Budget section, « Moyennes mensuelles » (periods, the excluded current month, gaps, « Remboursements et compensations »), Money-flow Sankey, balance tree and drill-down, « Tous les mois », uncategorised warning.
   - Transactions: filters, categorising (manual vs rule, live count, description/note), ⚙/✎ badges, transfer pairing / « Marquer comme virement » / Dissocier / Auto, CSV export.
   - Catégories page: categories (create, rename, re-parent, delete and what happens to rules/rows), budget targets (« ＋ objectif »), rules (priority, income anchor, search, edit), manual assignments, moving rules and manual assignments between leaves, « Classer à part ».
   - Settings: transfer markers, « Virements manuels », « Sauvegarde » (« Enregistrer la configuration » into `_config/`).
   - Savings: épargne / désépargne and why an account can show both in « Tous les mois ».
   - Backups and rebuilds (« Enregistrer la configuration », `reset_db.py` sources, `_backups/`), as a short "how to" pointing to the README for details.
-  - Later features: « À classer » (`feat/quick-categorisation.md`) and « Moyennes mensuelles » (`feat/category-averages.md`) if they have landed; otherwise the sync rule adds them when they do.
+  - Later features: « À classer » (`feat/quick-categorisation.md`) if it has landed; otherwise the sync rule adds it when it does.
 - Rendering: the frontend has no Markdown dependency (`next`, `react`, `recharts` only). Options: add `react-markdown` (+ heading ids for anchors), or a build-time conversion; check Next 16 docs in `frontend/node_modules/next/dist/docs/` for reading a file outside `src/` from a server component (`docs/guide.md` lives at the repo root). Images under `docs/img/`, served to the app somehow (copy to `public/` or import); pick the simplest that keeps the GitHub view working.
 - How-to style: task-oriented sections (« Fixer un objectif de budget », « Créer une règle depuis une opération », « Associer deux opérations en virement »…), each with the exact French UI labels in « ».
 - Coverage test location: vitest in `frontend/src/lib/` (reads `docs/guide.md` and the anchor list); keep the anchor list in one exported constant used by the « ? » links.
