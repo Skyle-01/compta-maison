@@ -9,6 +9,9 @@ class ImportResult(BaseModel):
     account: str
     rows_total: int
     rows_new: int
+    rows_before_start: int = Field(
+        0, description="Rows valued before the configured start date, not imported"
+    )
     uncategorized_count: int
     balance_warnings: dict[str, float] = Field(
         default_factory=dict,
@@ -27,6 +30,7 @@ class InputFileResult(BaseModel):
     rows_new: int
     profile: str | None
     error: str | None = Field(None, description="Why the file was skipped (French)")
+    rows_before_start: int = 0
 
 
 class InputsImportResult(BaseModel):

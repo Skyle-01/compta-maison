@@ -60,6 +60,7 @@ export default function ImportPage() {
   // Files that brought new rows or were skipped; the already imported ones are only counted.
   const inputsNotable = inputsResult?.files.filter((f) => f.error || f.rows_new > 0) ?? [];
   const inputsUnchanged = (inputsResult?.files.length ?? 0) - inputsNotable.length;
+  const inputsBeforeStart = inputsResult?.files.reduce((n, f) => n + f.rows_before_start, 0) ?? 0;
 
   return (
     <div className="max-w-xl space-y-6">
@@ -106,6 +107,7 @@ export default function ImportPage() {
             {inputsUnchanged > 0 && (
               <p className="text-zinc-500">{inputsUnchanged} fichier(s) sans nouvelle opération.</p>
             )}
+            {inputsBeforeStart > 0 && <BeforeStart count={inputsBeforeStart} />}
           </div>
         )}
       </section>
@@ -164,8 +166,9 @@ export default function ImportPage() {
           <p>
             <strong>{result.rows_new}</strong> nouvelle(s) opération(s) importée(s) sur{" "}
             {result.rows_total} dans <strong>{result.account}</strong>
-            {result.rows_new === 0 && " (toutes en double — déjà importées)"}.
+            {result.rows_new === 0 && result.rows_total > 0 && " (toutes en double — déjà importées)"}.
           </p>
+          {result.rows_before_start > 0 && <BeforeStart count={result.rows_before_start} />}
           <p className="text-zinc-500">
             Format : {result.profile === "default" ? "par défaut" : result.profile}
           </p>
@@ -193,5 +196,15 @@ export default function ImportPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Rows the backend left out because they predate the books' start date (settings.toml). */
+function BeforeStart({ count }: { count: number }) {
+  return (
+    <p className="text-zinc-500">
+      {count} opération(s) antérieure(s) à la date de début (<code>start_date</code> de{" "}
+      <code>settings.toml</code>) non importée(s).
+    </p>
   );
 }

@@ -1,7 +1,7 @@
 import csv
 import io
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime
 
 from app.core.bank_profiles import DEFAULT_PROFILE, BankProfile
 
@@ -186,6 +186,15 @@ def parse_statement(content: bytes, profiles: Sequence[BankProfile]) -> tuple[Ba
 
     rows.sort(key=lambda r: r["Date valeur"])
     return profile, rows
+
+
+def rows_since(rows: list[dict], start_date: date | None) -> tuple[list[dict], int]:
+    """The parsed rows valued on or after `start_date` (the value date sets the budget month), and
+    how many were dropped. No start date keeps everything."""
+    if start_date is None:
+        return rows, 0
+    kept = [row for row in rows if row["Date valeur"] >= start_date.isoformat()]
+    return kept, len(rows) - len(kept)
 
 
 def parse_csv(content: bytes, profiles: Sequence[BankProfile] = (DEFAULT_PROFILE,)) -> list[dict]:

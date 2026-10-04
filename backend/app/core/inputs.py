@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from app.core.bank_profiles import BankProfile
-from app.core.parsing import CsvValidationError, infer_account, parse_statement
+from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
 from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
 
 
@@ -62,16 +62,17 @@ class InputFileResult:
     rows_new: int = 0
     profile: str | None = None
     error: str | None = None
+    rows_before_start: int = 0
 
 
 def import_inputs_dir(
-    db_path: Path, inputs_dir: Path, profiles: Sequence[BankProfile]
+    db_path: Path, inputs_dir: Path, profiles: Sequence[BankProfile], start_date: date | None = None
 ) -> list[InputFileResult]:
     """Import every bank CSV in `inputs_dir` into the existing DB, inferring the account from the
-    filename. Re-importing a file adds nothing (import_transactions dedupes), so the whole folder
-    can be rescanned after dropping new statements in. A file that maps to no known account or
-    fails to parse is reported with its error and skipped. The caller recomputes periods,
-    transfers and rules afterwards."""
+    filename, minus the rows valued before `start_date` (core.settings). Re-importing a file adds
+    nothing (import_transactions dedupes), so the whole folder can be rescanned after dropping new
+    statements in. A file that maps to no known account or fails to parse is reported with its
+    error and skipped. The caller recomputes periods, transfers and rules afterwards."""
     if not inputs_dir.exists():
         return []
     with connect(db_path) as conn:
@@ -90,8 +91,11 @@ def import_inputs_dir(
         except CsvValidationError as exc:
             results.append(InputFileResult(path.name, account, error=str(exc)))
             continue
+        rows, before_start = rows_since(rows, start_date)
         for row in rows:
             row["account"] = account
         new = import_transactions(rows, db_path)
-        results.append(InputFileResult(path.name, account, len(rows), new, profile.name))
+        results.append(
+            InputFileResult(path.name, account, len(rows), new, profile.name, rows_before_start=before_start)
+        )
     return results

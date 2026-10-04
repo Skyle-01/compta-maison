@@ -19,6 +19,7 @@ from app.core.bank_profiles import BankProfileError, load_bank_profiles  # noqa:
 from app.core.categorize import apply_rules  # noqa: E402
 from app.core.inputs import import_inputs_dir  # noqa: E402
 from app.core.periods import recompute_budget_months  # noqa: E402
+from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date  # noqa: E402
 from app.core.transfers import recompute_transfers  # noqa: E402
 from app.db import DEFAULT_CONFIG_DIR, DEFAULT_DB_PATH, DEFAULT_INPUTS_DIR  # noqa: E402
 
@@ -35,8 +36,12 @@ def import_inputs(db_path: Path) -> int:
         profiles = load_bank_profiles(CONFIG_DIR)
     except BankProfileError as exc:
         sys.exit(f"Invalid {CONFIG_DIR / 'bank_profiles.toml'}: {exc}")
+    try:
+        start_date = load_start_date(CONFIG_DIR)
+    except SettingsError as exc:
+        sys.exit(f"Invalid {CONFIG_DIR / SETTINGS_FILENAME}: {exc}")
 
-    results = import_inputs_dir(db_path, INPUTS_DIR, profiles)
+    results = import_inputs_dir(db_path, INPUTS_DIR, profiles, start_date)
     for r in results:
         if r.error:
             print(f"Skipping {r.name}: {r.error}")

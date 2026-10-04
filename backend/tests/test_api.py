@@ -47,6 +47,13 @@ def _write_profiles(tmp_path) -> Path:
     return config
 
 
+def _write_start_date(tmp_path, start_date: str) -> None:
+    """Open the books at `start_date` in the test's config dir (tmp_path/_config)."""
+    config = tmp_path / "_config"
+    config.mkdir(exist_ok=True)
+    (config / "settings.toml").write_text(f"start_date = {start_date}\n", encoding="utf-8")
+
+
 def _category_id(client, name: str) -> int:
     return next(c["id"] for c in client.get("/api/categories").json() if c["name"] == name)
 
@@ -165,6 +172,37 @@ class TestImports:
         assert cli.import_inputs(seeded_db) == 0
         with pytest.raises(SystemExit):
             cli.import_inputs(tmp_path / "absent.db")
+
+    def test_upload_skips_rows_before_start_date(self, seeded_db, client, tmp_path):
+        _write_start_date(tmp_path, "2026-06-07")
+        body = _upload(client).json()
+        assert (body["rows_total"], body["rows_new"], body["rows_before_start"]) == (2, 2, 2)
+        with connect(seeded_db) as conn:
+            labels = [lib for (lib,) in conn.execute("SELECT libelle FROM transactions ORDER BY date_valeur")]
+        assert labels == ["BAR ANGELUS", "MYSTERY SHOP"]
+
+    def test_upload_entirely_before_start_date(self, seeded_db, client, tmp_path):
+        _write_start_date(tmp_path, "2027-01-01")
+        resp = _upload(client)
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert (body["rows_total"], body["rows_new"], body["rows_before_start"]) == (0, 0, 4)
+        assert body["uncategorized_count"] == 0 and body["balance_warnings"] == {}
+
+    def test_import_inputs_skips_rows_before_start_date(self, seeded_db, client, tmp_path):
+        (tmp_path / "_inputs").mkdir()
+        self._drop_overlapping_statement(tmp_path)
+        _write_start_date(tmp_path, "2026-06-10")
+        body = client.post("/api/imports/inputs").json()
+        statement = next(f for f in body["files"] if f["name"] == "RELEVE_COMPTE_JOINT_2026_06_12.csv")
+        assert (statement["rows_total"], statement["rows_new"], statement["rows_before_start"]) == (2, 2, 2)
+        assert body["rows_new"] == 2
+
+    def test_invalid_settings_file_rejected(self, client, tmp_path):
+        _write_start_date(tmp_path, "'demain'")
+        resp = _upload(client)
+        assert resp.status_code == 500
+        assert resp.json()["detail"][0].startswith("settings.toml invalide : start_date doit être une date")
 
     def test_invalid_profiles_file_rejected(self, client, tmp_path):
         config = tmp_path / "_config"
@@ -1221,6 +1259,19 @@ class TestResetDb:
                 conn.execute("SELECT account_id, COUNT(*) FROM transactions GROUP BY account_id")
             )
         assert by_account == {"JOINT": 4, "PERSO": 2}
+
+    def test_rebuild_skips_rows_before_start_date(self, tmp_path, monkeypatch):
+        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        _write_start_date(tmp_path, "2026-06-07")
+        db_path = tmp_path / "new.db"
+
+        reset_db.reset(db_path, "defaults", None)
+
+        with connect(db_path) as conn:
+            assert conn.execute("SELECT MIN(date_valeur), COUNT(*) FROM transactions").fetchone() == (
+                "2026-06-07",
+                2,
+            )
 
     def test_live_rebuild_with_profiles_keeps_overrides(self, seeded_db, client, tmp_path, monkeypatch):
         # An upload and a rebuild parse the statement with the same profile, so the override made

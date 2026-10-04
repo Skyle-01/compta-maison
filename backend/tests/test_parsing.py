@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -8,7 +9,15 @@ from app.core.bank_profiles import (
     load_bank_profiles,
     parse_bank_profiles,
 )
-from app.core.parsing import REQUIRED_COLUMNS, CsvValidationError, infer_account, parse_csv, parse_statement
+from app.core.parsing import (
+    REQUIRED_COLUMNS,
+    CsvValidationError,
+    infer_account,
+    parse_csv,
+    parse_statement,
+    rows_since,
+)
+from app.core.settings import SettingsError, load_start_date
 from app.db import _row_hash
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -172,6 +181,42 @@ class TestDefaultFormatFrozen:
         content = _csv('"06/06/2026";"06/06/2026";"CAFÉ DU PORT";"3,50";""').decode().encode("cp1252")
         rows = parse_statement(content, load_bank_profiles(EXAMPLE_DIR))[1]
         assert rows == parse_csv(content) and rows[0]["Libelle"] == "CAFÉ DU PORT"
+
+
+class TestStartDate:
+    ROWS = [{"Date valeur": d} for d in ("2024-12-23", "2024-12-24", "2025-01-02")]
+
+    def test_rows_since_keeps_the_start_day(self):
+        kept, dropped = rows_since(self.ROWS, date(2024, 12, 24))
+        assert ([r["Date valeur"] for r in kept], dropped) == (["2024-12-24", "2025-01-02"], 1)
+
+    def test_rows_since_without_start_date_keeps_all(self):
+        assert rows_since(self.ROWS, None) == (self.ROWS, 0)
+
+    def test_missing_file_or_key_means_no_start_date(self, tmp_path):
+        assert load_start_date(tmp_path) is None
+        (tmp_path / "settings.toml").write_text("# rien\n", encoding="utf-8")
+        assert load_start_date(tmp_path) is None
+
+    def test_reads_a_toml_date(self, tmp_path):
+        (tmp_path / "settings.toml").write_text("start_date = 2024-12-24\n", encoding="utf-8")
+        assert load_start_date(tmp_path) == date(2024, 12, 24)
+
+    @pytest.mark.parametrize(
+        ("text", "message"),
+        [
+            ("start_date = '2024-12-24'\n", "doit être une date"),
+            ("start_date = 2024-12-24T08:00:00\n", "doit être une date"),
+            ("start_date = \n", "TOML illisible"),
+        ],
+    )
+    def test_rejects_invalid_value(self, tmp_path, text, message):
+        (tmp_path / "settings.toml").write_text(text, encoding="utf-8")
+        with pytest.raises(SettingsError, match=message):
+            load_start_date(tmp_path)
+
+    def test_example_file_in_data_sets_no_start_date(self):
+        assert load_start_date(EXAMPLE_DIR) is None
 
 
 def _toml(**keys: str) -> str:

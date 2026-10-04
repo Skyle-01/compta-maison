@@ -1,0 +1,9 @@
+# Optional settings. Copy this file to _config/settings.toml to use them.
+#
+# start_date: the day your books open. Statement rows whose value date is earlier are not imported
+# (they stay in the _inputs/ statements, out of the database), so years of history you will never
+# categorise don't fill « À classer ». Pick the value date of the paycheck that opens your first
+# budget month: a later day would leave that month without its income. After changing it, rebuild
+# the database (reset_db.py): rows already imported are not deleted.
+#
+# start_date = 2026-03-25

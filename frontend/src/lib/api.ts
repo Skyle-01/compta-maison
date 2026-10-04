@@ -2,6 +2,8 @@ export interface ImportResult {
   account: string;
   rows_total: number;
   rows_new: number;
+  /** Rows valued before the start date of settings.toml, not imported. */
+  rows_before_start: number;
   uncategorized_count: number;
   balance_warnings: Record<string, number>;
   /** Bank profile that parsed the file ("default" = the built-in format). */
@@ -18,6 +20,7 @@ export interface InputFileResult {
   rows_new: number;
   profile: string | null;
   error: string | null;
+  rows_before_start: number;
 }
 
 export interface InputsImportResult {

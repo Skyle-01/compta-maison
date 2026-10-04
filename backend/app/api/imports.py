@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -8,8 +9,9 @@ from app.api.deps import ConfigDir, DbPath, InputsDir
 from app.core.bank_profiles import PROFILES_FILENAME, BankProfile, BankProfileError, load_bank_profiles
 from app.core.categorize import apply_rules, uncategorized_balance
 from app.core.inputs import archive_statement, import_inputs_dir
-from app.core.parsing import CsvValidationError, infer_account, parse_statement
+from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
 from app.core.periods import recompute_budget_months
+from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date
 from app.core.transfers import recompute_transfers
 from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
 from app.schemas import ImportResult, InputFileResult, InputsImportResult
@@ -24,6 +26,13 @@ def _profiles(config_dir: Path) -> list[BankProfile]:
         raise HTTPException(500, detail=[f"{PROFILES_FILENAME} invalide : {exc}"]) from exc
 
 
+def _start_date(config_dir: Path) -> date | None:
+    try:
+        return load_start_date(config_dir)
+    except SettingsError as exc:
+        raise HTTPException(500, detail=[f"{SETTINGS_FILENAME} invalide : {exc}"]) from exc
+
+
 @router.post("", status_code=201)
 def upload_csv(
     file: UploadFile,
@@ -33,6 +42,7 @@ def upload_csv(
     account: Annotated[str, Form()] = "",
 ) -> ImportResult:
     profiles = _profiles(config_dir)
+    start_date = _start_date(config_dir)
     with connect(db_path) as conn:
         aliases = load_account_aliases(conn)
         known_codes = [code for (code,) in conn.execute("SELECT code FROM accounts ORDER BY sort_order")]
@@ -58,6 +68,7 @@ def upload_csv(
         profile, rows = parse_statement(content, profiles)
     except CsvValidationError as exc:
         raise HTTPException(422, detail=exc.errors) from exc
+    rows, rows_before_start = rows_since(rows, start_date)
     for row in rows:
         row["account"] = account
     archived_as = archive_statement(inputs_dir, file.filename or "", content, account, profiles)
@@ -68,16 +79,19 @@ def upload_csv(
     apply_rules(db_path)
 
     # Budget months the file spans (its account over its value dates), read back after the
-    # paycheck-period recompute; also right when every row was a duplicate.
-    with connect(db_path) as conn:
-        months = [
-            m
-            for (m,) in conn.execute(
-                "SELECT DISTINCT budget_month FROM transactions "
-                "WHERE account_id = ? AND date_valeur BETWEEN ? AND ? ORDER BY budget_month",
-                (resolve_account_code(account, aliases), rows[0]["Date valeur"], rows[-1]["Date valeur"]),
-            )
-        ]
+    # paycheck-period recompute; also right when every row was a duplicate. Empty when every row
+    # predates the start date.
+    months: list[str] = []
+    if rows:
+        with connect(db_path) as conn:
+            months = [
+                m
+                for (m,) in conn.execute(
+                    "SELECT DISTINCT budget_month FROM transactions "
+                    "WHERE account_id = ? AND date_valeur BETWEEN ? AND ? ORDER BY budget_month",
+                    (resolve_account_code(account, aliases), rows[0]["Date valeur"], rows[-1]["Date valeur"]),
+                )
+            ]
     warnings: dict[str, float] = {}
     uncategorized_count = 0
     for month in months:
@@ -90,6 +104,7 @@ def upload_csv(
         account=account,
         rows_total=len(rows),
         rows_new=rows_new,
+        rows_before_start=rows_before_start,
         uncategorized_count=uncategorized_count,
         balance_warnings=warnings,
         profile=profile.name,
@@ -101,7 +116,7 @@ def upload_csv(
 def import_inputs(db_path: DbPath, config_dir: ConfigDir, inputs_dir: InputsDir) -> InputsImportResult:
     """Import every statement dropped in _inputs/ into the existing DB (already imported rows are
     skipped), then recompute like an upload."""
-    results = import_inputs_dir(db_path, inputs_dir, _profiles(config_dir))
+    results = import_inputs_dir(db_path, inputs_dir, _profiles(config_dir), _start_date(config_dir))
     recompute_budget_months(db_path)
     recompute_transfers(db_path)
     apply_rules(db_path)

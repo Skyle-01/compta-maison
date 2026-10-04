@@ -21,16 +21,17 @@ _backups/<ts>/ before being deleted, so every rebuild leaves a recoverable resto
 _backups/ sits next to the DB (--db, else $COMPTA_DB, else the repo's compta.db).
 
 Personal data lives only in gitignored places: _inputs/ (statements), _config/ (your
-accounts.csv, categories.csv, rules.csv, optional overrides.csv, transfer_markers.csv and
-bank_profiles.toml), _backups/ and compta.db. Bank profiles are always read from the config dir,
-whatever --source is: they describe how to parse statements, not DB state.
+accounts.csv, categories.csv, rules.csv, optional overrides.csv, transfer_markers.csv,
+bank_profiles.toml and settings.toml), _backups/ and compta.db. Bank profiles and the start date
+(settings.toml) are always read from the config dir, whatever --source is: they describe which
+statement rows to import and how to parse them, not DB state.
 A source dir without accounts.csv (a snapshot older than accounts.csv) borrows the one from the
 config dir.
 """
 
 import argparse
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -41,6 +42,7 @@ from app.api.rules import RULES_HEADER, rule_rows  # noqa: E402
 from app.api.transactions import OVERRIDES_HEADER, override_rows  # noqa: E402
 from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_profiles  # noqa: E402
 from app.core.inputs import import_inputs_dir  # noqa: E402
+from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date  # noqa: E402
 from app.db import (  # noqa: E402
     DEFAULT_CONFIG_DIR,
     DEFAULT_DB_PATH,
@@ -71,15 +73,27 @@ def _load_profiles() -> list[BankProfile]:
         sys.exit(f"Invalid {CONFIG_DIR / 'bank_profiles.toml'}: {exc}")
 
 
-def _import_inputs(db_path: Path, profiles: list[BankProfile]) -> int:
+def _load_start_date() -> date | None:
+    """The books' start date from the config dir (core.settings), whatever --source is, like the
+    bank profiles: it says which statement rows to import, not DB state."""
+    try:
+        return load_start_date(CONFIG_DIR)
+    except SettingsError as exc:
+        sys.exit(f"Invalid {CONFIG_DIR / SETTINGS_FILENAME}: {exc}")
+
+
+def _import_inputs(db_path: Path, profiles: list[BankProfile], start_date: date | None) -> int:
     """Import every bank CSV in _inputs/ (see core.inputs.import_inputs_dir), printing a line per
     file. Returns the number of newly inserted transactions (re-runs are deduped by hash)."""
-    results = import_inputs_dir(db_path, INPUTS_DIR, profiles)
+    results = import_inputs_dir(db_path, INPUTS_DIR, profiles, start_date)
     for r in results:
         if r.error:
             print(f"Skipping {r.name}: {r.error}")
         else:
             print(f"Imported {r.rows_new}/{r.rows_total} new rows from {r.name} -> {r.account} [{r.profile}]")
+    before_start = sum(r.rows_before_start for r in results)
+    if before_start:
+        print(f"Left out {before_start} rows valued before {start_date}.")
     return sum(r.rows_new for r in results)
 
 
@@ -155,6 +169,7 @@ def _rebuild(
     overrides_csv: Path | None,
     markers_csv: Path | None,
     profiles: list[BankProfile],
+    start_date: date | None,
 ) -> None:
     """Fresh DB: load accounts, import _inputs, then load the taxonomy + overrides from the given
     CSVs. Accounts come first so statement filenames resolve; _inputs is imported *before* the
@@ -164,7 +179,7 @@ def _rebuild(
     init_db(db_path)
     load_accounts_csv(accounts_csv, db_path)
     load_transfer_markers_csv(markers_csv, db_path)
-    n_new = _import_inputs(db_path, profiles)
+    n_new = _import_inputs(db_path, profiles, start_date)
     # import_csv rebuilds cats/rules from the CSVs, reattaches overrides by import_hash, and
     # recomputes periods + transfers + rules over the freshly imported transactions.
     import_csv(cat_csv, rules_csv, db_path, overrides_csv)
@@ -172,8 +187,9 @@ def _rebuild(
 
 
 def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
-    # A broken bank_profiles.toml stops here, before the snapshot and the delete.
+    # A broken bank_profiles.toml or settings.toml stops here, before the snapshot and the delete.
     profiles = _load_profiles()
+    start_date = _load_start_date()
     # Resolve the backup target BEFORE the safety snapshot, so the snapshot can't shadow "latest".
     backups = backups_dir(db_path)
     backup_dir = (from_dir or _latest_backup(backups)) if source == "backup" else None
@@ -221,6 +237,7 @@ def reset(db_path: Path, source: str, from_dir: Path | None) -> None:
         overrides_csv if overrides_csv.exists() else None,
         markers_csv,
         profiles,
+        start_date,
     )
 
 
