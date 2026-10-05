@@ -42,3 +42,4 @@ Done when:
 
 - 2026-10-03: specified with the owner (decisions above). Not started.
 - 2026-10-05: the printable report landed; added to the coverage list.
+- 2026-10-05: report reworked: its Revenus/Dépenses are net of refunds (lower than the dashboard cards, same Reste: the guide must say why), income per category, bold red/green highlights instead of « Points d’attention », and a « Détail par catégorie » page listing each leaf's operations.
