@@ -5,28 +5,40 @@ import Link from "next/link";
 import {
   api,
   type CategoryAverages,
+  type CategoryNode,
   type Dashboard,
   errorMessage,
   formatEuro,
   frenchMonth,
+  leafFilters,
+  type Transaction,
+  treeLabel,
 } from "@/lib/api";
 import BudgetSection from "@/components/BudgetSection";
 import Gap from "@/components/Gap";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
+import SignedAmount from "@/components/SignedAmount";
 import { periodSummary } from "@/lib/averages";
 import { moneyFlow } from "@/lib/moneyFlow";
 import {
-  attentionPoints,
+  breakdown,
+  type BreakdownGroup,
   type BreakdownLine,
+  type BreakdownSide,
   buildStatement,
-  expenseBreakdown,
+  dayMonth,
+  NOTABLE_MIN,
+  NOTABLE_RATIO,
+  netOfRefunds,
+  notable,
   REPORT_AVERAGE,
   reportMonth,
   reportSummary,
   reportTitle,
   type StatementRow,
   statementMonths,
+  treeLeaves,
 } from "@/lib/report";
 import { monthTick } from "@/lib/trend";
 
@@ -40,6 +52,8 @@ interface ReportData {
   data: Dashboard;
   /** The averages payload of each statement month, oldest first; the last one is the report month. */
   columns: CategoryAverages[];
+  /** The operations of each leaf of `data.by_category` (see treeLeaves). */
+  operations: Map<CategoryNode, Transaction[]>;
 }
 
 /** One A4 page of the report (see .sheet in globals.css): previewed on screen at its print width. */
@@ -94,26 +108,39 @@ function ReportStat({
 
 const NUM = "px-1.5 py-1 text-right tabular-nums whitespace-nowrap";
 const cell = (value: number | null) => (value === null ? "" : Math.abs(value) < 0.005 ? "–" : formatEuro(value));
+/** The report month's column, a shade darker than the striped rows so it shows on them too. */
+const CURRENT_COLUMN = "bg-zinc-100/70";
+/** A notable amount (see lib/report.ts::notable), the same in every table of the report. */
+const HIGHLIGHT = { good: "font-semibold text-green-700", bad: "font-semibold text-red-700" };
+const highlight = (tone: "good" | "bad" | null) => (tone ? HIGHLIGHT[tone] : "");
 
-/** A statement line: the label, one amount per month (the report month highlighted), the average. */
+/** A statement line: the label, one amount per month (the report month shaded, and highlighted
+ *  when notable if `goodIsUp` is given), the average. */
 function StatementLine({
   row,
   current,
   className = "border-b border-zinc-100",
   labelClass = "pl-3",
   amountClass,
+  goodIsUp,
 }: {
   row: StatementRow;
   current: number;
   className?: string;
   labelClass?: string;
   amountClass?: (value: number) => string;
+  goodIsUp?: boolean;
 }) {
   return (
     <tr className={className}>
       <td className={`py-1 pr-2 ${row.muted ? "text-zinc-500" : ""} ${labelClass}`}>{row.label}</td>
       {row.values.map((v, i) => (
-        <td key={i} className={`${NUM} ${i === current ? "bg-zinc-50" : ""} ${amountClass?.(v) ?? ""}`}>
+        <td
+          key={i}
+          className={`${NUM} ${i === current ? CURRENT_COLUMN : ""} ${amountClass?.(v) ?? ""} ${
+            i === current && goodIsUp !== undefined ? highlight(notable(v, row.average, goodIsUp)) : ""
+          }`}
+        >
           {cell(v)}
         </td>
       ))}
@@ -125,7 +152,7 @@ function StatementLine({
 }
 
 /** Page 2: the last months side by side, a household income statement. */
-function StatementTable({ columns, data }: ReportData) {
+function StatementTable({ columns, data }: Pick<ReportData, "columns" | "data">) {
   const statement = buildStatement(columns, data.history);
   const current = statement.months.length - 1;
   const average = columns[current];
@@ -135,101 +162,132 @@ function StatementTable({ columns, data }: ReportData) {
     Dépenses: "text-red-700",
     Épargne: "text-violet-700",
   };
+  const goodIsUp: Record<string, boolean> = { Revenus: true, Dépenses: false, Épargne: true };
   return (
-    <>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-zinc-300 text-zinc-500">
-            <th className="py-1 text-left font-normal" />
-            {statement.months.map((m, i) => (
-              <th key={m} className={`${NUM} font-normal ${i === current ? "bg-zinc-50" : ""}`}>
-                {monthTick(m)}
-                <div className="text-[10px]">{m.slice(0, 4)}</div>
-              </th>
-            ))}
-            <th className={`${NUM} border-l border-zinc-200 font-normal`}>
-              Moyenne
-              <div className="text-[10px]">{average.months > 0 ? `${average.months} mois` : "aucun mois clos"}</div>
+    <table className="w-full text-xs">
+      <thead>
+        <tr className="border-b border-zinc-300 text-zinc-500">
+          <th className="py-1 text-left font-normal" />
+          {statement.months.map((m, i) => (
+            <th key={m} className={`${NUM} font-normal ${i === current ? CURRENT_COLUMN : ""}`}>
+              {monthTick(m)}
+              <div className="text-[10px]">{m.slice(0, 4)}</div>
             </th>
-          </tr>
-        </thead>
-        <tbody>
-          {statement.sections.map((section) => (
-            <Fragment key={section.title}>
-              <tr>
-                <td colSpan={span} className={`pb-1 pt-3 text-sm font-semibold ${sectionColor[section.title] ?? ""}`}>
-                  {section.title}
-                </td>
-              </tr>
-              {section.rows.map((row) => (
-                <StatementLine key={row.key} row={row} current={current} />
-              ))}
-              <StatementLine
-                row={section.total}
-                current={current}
-                className="border-b border-zinc-300 font-semibold"
-                labelClass=""
-              />
-            </Fragment>
           ))}
-          <tr>
-            <td colSpan={span} className="pt-3" />
-          </tr>
-          <StatementLine
-            row={statement.reste}
-            current={current}
-            className="border-y-2 border-zinc-300 text-sm font-semibold"
-            labelClass=""
-            amountClass={(v) => (v >= 0 ? "text-green-700" : "text-red-700")}
-          />
-        </tbody>
-      </table>
-      <p className="mt-3 text-xs text-zinc-500">
-        Chaque colonne retombe sur les chiffres du mois : total des revenus − total des dépenses − épargne
-        nette = reste. Les revenus sont détaillés par source, les dépenses par grande catégorie. Une
-        catégorie compte en dépenses ou en revenus selon son solde sur la période moyennée ; ce qu’elle reçoit
-        ou paie à contre-sens (un remboursement de courses) figure en « Remboursements et compensations », des
-        deux côtés. L’épargne nette d’un compte = ce qui y a été mis de côté − ce qui en a été retiré.
-      </p>
-    </>
+          <th className={`${NUM} border-l border-zinc-200 font-normal`}>
+            Moyenne
+            <div className="text-[10px]">{average.months > 0 ? `${average.months} mois` : "aucun mois clos"}</div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {statement.sections.map((section) => (
+          <Fragment key={section.title}>
+            <tr>
+              <td colSpan={span} className={`pb-1 pt-3 text-sm font-semibold ${sectionColor[section.title] ?? ""}`}>
+                {section.title}
+              </td>
+            </tr>
+            {section.rows.map((row, i) => (
+              <StatementLine
+                key={row.key}
+                row={row}
+                current={current}
+                className={`border-b border-zinc-100 ${i % 2 === 1 ? "bg-zinc-50" : ""}`}
+                goodIsUp={row.muted ? undefined : goodIsUp[section.title]}
+              />
+            ))}
+            <StatementLine
+              row={section.total}
+              current={current}
+              className="border-b border-zinc-300 font-semibold"
+              labelClass=""
+            />
+          </Fragment>
+        ))}
+        <tr>
+          <td colSpan={span} className="pt-3" />
+        </tr>
+        <StatementLine
+          row={statement.reste}
+          current={current}
+          className="border-y-2 border-zinc-300 text-sm font-semibold"
+          labelClass=""
+          amountClass={(v) => (v >= 0 ? "text-green-700" : "text-red-700")}
+        />
+      </tbody>
+    </table>
   );
 }
 
+const BAR_COLORS: Record<BreakdownSide, { strong: string; light: string }> = {
+  expenses: { strong: "bg-red-500", light: "bg-red-300" },
+  income: { strong: "bg-green-600", light: "bg-green-300" },
+};
 
-/** A spending bar, scaled to the largest category of the month. */
-function Bar({ value, max, strong }: { value: number; max: number; strong?: boolean }) {
+/** A bar scaled to the largest category of the month. */
+function Bar({ value, max, side, strong }: { value: number; max: number; side: BreakdownSide; strong?: boolean }) {
   const width = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
+  const colors = BAR_COLORS[side];
   return (
     <div className="h-2 w-full rounded-full bg-zinc-100">
-      <div className={`h-2 rounded-full ${strong ? "bg-red-500" : "bg-red-300"}`} style={{ width: `${width}%` }} />
+      <div className={`h-2 rounded-full ${strong ? colors.strong : colors.light}`} style={{ width: `${width}%` }} />
     </div>
   );
 }
 
-function BreakdownRow({ line, max, group }: { line: BreakdownLine; max: number; group?: boolean }) {
+function BreakdownRow({
+  line,
+  max,
+  side,
+  group,
+  target,
+}: {
+  line: BreakdownLine;
+  max: number;
+  side: BreakdownSide;
+  group?: boolean;
+  /** The target the month is held to: a group's sums only its targeted leaves, so it gets none. */
+  target: number | null;
+}) {
+  const goodIsUp = side === "income";
   return (
     <tr className={group ? "border-t border-zinc-200" : ""}>
       <td className={`py-1 pr-2 ${group ? "font-medium" : "pl-4 text-zinc-700"}`}>{line.name}</td>
-      <td className={`${NUM} ${group ? "font-medium" : ""}`}>{cell(line.month)}</td>
+      <td className={`${NUM} ${group ? "font-medium" : ""} ${highlight(notable(line.month, line.average, goodIsUp, target))}`}>
+        {cell(line.month)}
+      </td>
       <td className="w-1/4 px-2">
-        <Bar value={line.month} max={max} strong={group} />
+        <Bar value={line.month} max={max} side={side} strong={group} />
       </td>
       <td className={`${NUM} text-zinc-500`}>{cell(line.average)}</td>
-      <td className={NUM}>{line.average !== null && <Gap month={line.month} average={line.average} goodIsUp={false} />}</td>
-      <td className={`${NUM} text-zinc-500`}>{line.target === null ? "" : formatEuro(line.target)}</td>
+      <td className={NUM}>
+        {line.average !== null && <Gap month={line.month} average={line.average} goodIsUp={goodIsUp} />}
+      </td>
+      {side === "expenses" && (
+        <td className={`${NUM} text-zinc-500`}>{line.target === null ? "" : formatEuro(line.target)}</td>
+      )}
     </tr>
   );
 }
 
-/** Page 3: where the month's money went, its budget, and what stands out. */
-function MonthDetail({ data, avg }: { data: Dashboard; avg: CategoryAverages }) {
-  const breakdown = expenseBreakdown(avg);
-  const max = Math.max(0, ...breakdown.map((g) => g.month));
-  const points = attentionPoints(breakdown, data.budget, data.uncategorized);
+/** The month's spending or income per category and leaf, against the average (and the targets). */
+function BreakdownTable({
+  title,
+  groups,
+  side,
+  empty,
+}: {
+  title: string;
+  groups: BreakdownGroup[];
+  side: BreakdownSide;
+  empty: string;
+}) {
+  const max = Math.max(0, ...groups.map((g) => g.month));
   return (
-    <div className="space-y-6">
-      <section>
-        <h3 className="mb-2 font-medium">Dépenses par catégorie</h3>
+    <section>
+      <h3 className="mb-2 font-medium">{title}</h3>
+      {groups.length > 0 ? (
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-zinc-300 text-zinc-500">
@@ -238,47 +296,95 @@ function MonthDetail({ data, avg }: { data: Dashboard; avg: CategoryAverages }) 
               <th />
               <th className={`${NUM} font-normal`}>Moyenne</th>
               <th className={`${NUM} font-normal`}>Écart</th>
-              <th className={`${NUM} font-normal`}>Objectif</th>
+              {side === "expenses" && <th className={`${NUM} font-normal`}>Objectif</th>}
             </tr>
           </thead>
           <tbody>
-            {breakdown.map((g) => (
+            {groups.map((g) => (
               <Fragment key={g.id}>
-                <BreakdownRow line={g} max={max} group />
+                <BreakdownRow line={g} max={max} side={side} group target={g.leaves.length === 0 ? g.target : null} />
                 {g.leaves.map((l) => (
-                  <BreakdownRow key={l.id} line={l} max={max} />
+                  <BreakdownRow key={l.id} line={l} max={max} side={side} target={l.target} />
                 ))}
               </Fragment>
             ))}
           </tbody>
         </table>
-        {breakdown.length === 0 && <p className="text-sm text-zinc-500">Aucune dépense classée ce mois-ci.</p>}
-      </section>
+      ) : (
+        <p className="text-sm text-zinc-500">{empty}</p>
+      )}
+    </section>
+  );
+}
 
+/** Page 3: where the month's money went and came from, and its budget. */
+function MonthDetail({ data, avg }: { data: Dashboard; avg: CategoryAverages }) {
+  return (
+    <div className="space-y-6">
+      <BreakdownTable
+        title="Dépenses par catégorie"
+        groups={breakdown(avg, "expenses")}
+        side="expenses"
+        empty="Aucune dépense classée ce mois-ci."
+      />
+      <BreakdownTable
+        title="Revenus par catégorie"
+        groups={breakdown(avg, "income")}
+        side="income"
+        empty="Aucun revenu classé ce mois-ci."
+      />
       <div className="break-inside-avoid">
         <BudgetSection budget={data.budget} all={false} />
       </div>
-
-      <section className="break-inside-avoid">
-        <h3 className="mb-2 font-medium">Points d’attention</h3>
-        {points.length > 0 ? (
-          <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-700">
-            {points.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-zinc-500">Rien à signaler ce mois-ci.</p>
-        )}
-      </section>
     </div>
+  );
+}
+
+/** The dashboard's « Détail par catégorie » tree, fully open: paper has no drill-down. */
+function TreeRows({
+  node,
+  depth,
+  operations,
+}: {
+  node: CategoryNode;
+  depth: number;
+  operations: Map<CategoryNode, Transaction[]>;
+}) {
+  if (node.credit === 0 && node.debit === 0) return null;
+  return (
+    <>
+      <tr className="break-inside-avoid border-b border-zinc-100">
+        <td className={`py-0.5 pr-2 ${depth <= 1 ? "font-medium" : ""}`} style={{ paddingLeft: depth * 16 }}>
+          {treeLabel(node.name)}
+        </td>
+        <td className={`${NUM} ${node.balance >= 0 ? "text-green-700" : "text-red-700"}`}>
+          {formatEuro(node.balance)}
+        </td>
+      </tr>
+      {operations.get(node)?.map((t) => (
+        <tr key={t.id} className="break-inside-avoid text-[10px] leading-tight text-zinc-600">
+          <td className="pr-2" style={{ paddingLeft: (depth + 1) * 16 }}>
+            <span className="mr-2 tabular-nums text-zinc-500">{dayMonth(t.date_valeur)}</span>
+            {t.libelle}
+          </td>
+          <td className="px-1.5 text-right tabular-nums whitespace-nowrap">
+            <SignedAmount tx={t} />
+          </td>
+        </tr>
+      ))}
+      {node.children.map((child) => (
+        <TreeRows key={child.id ?? child.name} node={child} depth={depth + 1} operations={operations} />
+      ))}
+    </>
   );
 }
 
 function Report({ report, month, inProgress }: { report: ReportData; month: string; inProgress: boolean }) {
   const { data, columns } = report;
   const avg = columns[columns.length - 1];
-  const totals = avg.months > 0 ? avg.totals : null;
+  // Revenus and Dépenses net of refunds, as in the report's tables (lib/report.ts::netOfRefunds).
+  const net = netOfRefunds(data, avg.offset.month_value ?? 0);
+  const totals = avg.months > 0 ? netOfRefunds(avg.totals, avg.offset.value) : null;
   const summary = periodSummary(avg, REPORT_AVERAGE);
   const epargneNet = data.epargne - data.desepargne;
   const flow = moneyFlow(data);
@@ -301,20 +407,20 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
         </header>
 
         <p className="text-base leading-relaxed text-zinc-700">
-          {reportSummary(month, data, totals?.reste ?? null)}
+          {reportSummary(month, net, totals?.reste ?? null)}
         </p>
 
         <div className="mt-5 grid grid-cols-4 gap-3">
           <ReportStat
             label="Revenus"
-            value={data.income}
+            value={net.income}
             average={totals?.income ?? null}
             goodIsUp
             valueClass="text-green-700"
           />
           <ReportStat
             label="Dépenses"
-            value={data.expenses}
+            value={net.expenses}
             average={totals?.expenses ?? null}
             goodIsUp={false}
             valueClass="text-red-700"
@@ -358,6 +464,15 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
             </li>
             <li>L’épargne est nette : ce qui a été versé sur les livrets moins ce qui en a été retiré.</li>
             <li>
+              Les remboursements (Sécurité sociale, achat rendu…) sont déduits de la catégorie de la dépense
+              au lieu de compter comme un revenu : les revenus et les dépenses du rapport sont donc nets, et
+              peuvent être un peu plus bas que ceux de l’application. Le reste, lui, est le même.
+            </li>
+            <li>
+              Chaque catégorie est rangée côté revenus ou côté dépenses selon ce qu’elle rapporte ou coûte en
+              moyenne. « Non classé » regroupe les opérations pas encore rangées dans une catégorie.
+            </li>
+            <li>
               Les virements entre nos propres comptes ne sont ni des revenus ni des dépenses : ils sont exclus
               {data.transfers.count > 0 &&
                 ` (${data.transfers.count} ce mois-ci, ${formatEuro(data.transfers.total)})`}
@@ -366,6 +481,12 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
             <li>
               La moyenne porte sur les {TREND_MONTHS} derniers mois clos ; l’écart compare le mois à cette
               moyenne (en vert quand c’est favorable, en rouge sinon).
+            </li>
+            <li>
+              Dans les tableaux, un montant en gras signale un mois inhabituel : en{" "}
+              <span className={HIGHLIGHT.bad}>rouge</span> un objectif dépassé ou un écart défavorable d’au
+              moins {NOTABLE_MIN} € et {NOTABLE_RATIO * 100} % de la moyenne, en{" "}
+              <span className={HIGHLIGHT.good}>vert</span> un écart aussi net mais favorable.
             </li>
           </ul>
         </div>
@@ -377,6 +498,18 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
 
       <Sheet title="Le mois en détail" month={month}>
         <MonthDetail data={data} avg={avg} />
+      </Sheet>
+
+      <Sheet title="Détail par catégorie" month={month}>
+        <p className="mb-2 text-xs text-zinc-500">
+          Le solde de chaque catégorie ce mois-ci (entrées − sorties) et ses opérations, comme dans
+          l’application ; le total retombe sur le reste.
+        </p>
+        <table className="w-full text-xs">
+          <tbody>
+            <TreeRows node={data.by_category} depth={0} operations={report.operations} />
+          </tbody>
+        </table>
       </Sheet>
 
       {flow.links.length > 0 && (
@@ -413,13 +546,22 @@ export default function ReportPage() {
   useEffect(() => {
     if (!month || !available) return;
     let stale = false; // a slower answer for a previous month must not overwrite this one
-    Promise.all([
-      api.dashboard(month),
-      Promise.all(statementMonths(available, month).map((m) => api.averages(REPORT_AVERAGE, m))),
-    ])
-      .then(([data, columns]) => {
+    const load = async (): Promise<ReportData> => {
+      const [data, columns] = await Promise.all([
+        api.dashboard(month),
+        Promise.all(statementMonths(available, month).map((m) => api.averages(REPORT_AVERAGE, m))),
+      ]);
+      // One request per leaf, as the dashboard's drill-down does (1000: the API's page maximum).
+      const leaves = treeLeaves(data.by_category);
+      const pages = await Promise.all(
+        leaves.map((n) => api.listTransactions({ ...leafFilters(n, month), limit: 1000 })),
+      );
+      return { data, columns, operations: new Map(leaves.map((n, i) => [n, pages[i].items])) };
+    };
+    load()
+      .then((loaded) => {
         if (stale) return;
-        setReport({ data, columns });
+        setReport(loaded);
         setError(null);
       })
       .catch((e) => {

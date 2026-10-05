@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { AverageNode, BudgetSummary, CategoryAverages, MonthTotals, UncategorizedStats } from "./api";
+import type { AverageNode, CategoryAverages, CategoryNode, MonthTotals } from "./api";
 import {
-  attentionPoints,
+  breakdown,
   buildStatement,
-  expenseBreakdown,
+  dayMonth,
+  netOfRefunds,
+  notable,
   reportLink,
   reportMonth,
   reportSummary,
   reportTitle,
   statementMonths,
+  treeLeaves,
 } from "./report";
 
 const node = (id: number, name: string, over: Partial<AverageNode> = {}): AverageNode => ({
@@ -49,9 +52,6 @@ const totals = (month: string, over: Partial<MonthTotals> = {}): MonthTotals => 
 
 // Intl's fr-FR amounts use no-break spaces: compare them as plain spaces.
 const plain = (s: string) => s.replace(/[  ]/g, " ");
-
-const NO_UNCATEGORIZED: UncategorizedStats = { count: 0, credit: 0, debit: 0, difference: 0, balanced: true };
-const NO_BUDGET: BudgetSummary = { months: 1, target: 0, actual: 0, untargeted: 0, groups: [] };
 
 describe("report months", () => {
   const available = ["2026-09", "2026-08", "2026-07"]; // newest first, 2026-09 still filling
@@ -118,21 +118,20 @@ describe("buildStatement", () => {
     const [income, expenses, savings] = s.sections;
     expect(income.rows.map((r) => [r.label, r.values, r.average, Boolean(r.muted)])).toEqual([
       ["Salaire", [2000, 2100], 2000, false],
-      ["Remboursements et compensations", [5, 5], 10, true],
     ]);
-    expect(expenses.rows.map((r) => [r.label, r.values, r.average])).toEqual([
-      ["Fixe", [800, 800], 800],
-      ["Courses", [300, 350], 300],
-      ["Non classé", [0, 15], 0],
-      ["Remboursements et compensations", [5, 5], 10],
+    expect(expenses.rows.map((r) => [r.label, r.values, r.average, Boolean(r.muted)])).toEqual([
+      ["Fixe", [800, 800], 800, false],
+      ["Courses", [300, 350], 300, false],
+      ["Non classé", [0, 15], 0, true],
     ]);
     expect(savings.rows.map((r) => [r.label, r.values, r.average])).toEqual([["Livret", [200, 200], 200]]);
   });
 
-  it("takes the totals from the months' cards and the window's averages", () => {
+  it("takes the totals from the months' cards net of refunds, so the rows add up to them", () => {
     const s = buildStatement([column("2026-07", 2000, 800, 300), column("2026-08", 2100, 800, 350)], history);
-    expect(s.sections[0].total.values).toEqual([2005, 2105]);
-    expect(s.sections[1].total).toMatchObject({ values: [1105, 1170], average: 1100 });
+    // The cards less the month's offset (5), the averages less the window's (10).
+    expect(s.sections[0].total).toMatchObject({ values: [2000, 2100], average: 1990 });
+    expect(s.sections[1].total).toMatchObject({ values: [1100, 1165], average: 1090 });
     expect(s.sections[2].total).toMatchObject({ values: [200, 200], average: 200 });
     expect(s.reste).toMatchObject({ label: "Reste", values: [700, 735], average: 700 });
   });
@@ -146,7 +145,17 @@ describe("buildStatement", () => {
   });
 });
 
-describe("expenseBreakdown", () => {
+describe("netOfRefunds", () => {
+  it("takes the offset off both income and expenses, leaving the rest", () => {
+    expect(netOfRefunds({ income: 2000.1, expenses: 1500.2, reste: 500 }, 0.1)).toEqual({
+      income: 2000,
+      expenses: 1500.1,
+      reste: 500,
+    });
+  });
+});
+
+describe("breakdown", () => {
   it("lists the month's spending per group and leaf, largest first", () => {
     const avg = averages({
       groups: [
@@ -168,7 +177,7 @@ describe("expenseBreakdown", () => {
         node(3, "Vide", {}),
       ],
     });
-    const b = expenseBreakdown(avg);
+    const b = breakdown(avg, "expenses");
     expect(b.map((g) => [g.name, g.month, g.average, g.target])).toEqual([
       ["Variable", 500, 400, 450],
       ["Impôts", 0, 100, null],
@@ -179,53 +188,71 @@ describe("expenseBreakdown", () => {
     ]);
     expect(b[1].leaves).toEqual([]);
   });
-});
 
-describe("attentionPoints", () => {
-  const breakdown = expenseBreakdown(
-    averages({
+  it("lists the month's income the same way, without targets", () => {
+    const avg = averages({
       groups: [
-        node(1, "Variable", {
-          expenses: 1310,
-          month_expenses: 1545,
+        node(1, "Fixe", {
+          expenses: 800,
+          income: 2000,
+          month_expenses: 800,
+          month_income: 2100,
+          target: 900,
           children: [
-            node(11, "Courses", { expenses: 300, month_expenses: 420 }), // +120, 40 %: flagged
-            node(12, "Essence", { expenses: 1000, month_expenses: 1100 }), // +100, only 10 %
-            node(13, "Bar", { expenses: 10, month_expenses: 25 }), // +15 €: too small
+            node(11, "Salaire", { income: 2000, month_income: 2100 }),
+            node(12, "Loyer", { expenses: 800, month_expenses: 800, target: 900 }),
           ],
         }),
+        node(2, "Courses", { expenses: 300, month_expenses: 300 }),
       ],
-    }),
-  );
+    });
+    const b = breakdown(avg, "income");
+    expect(b.map((g) => [g.name, g.month, g.average, g.target])).toEqual([["Fixe", 2100, 2000, null]]);
+    expect(b[0].leaves.map((l) => [l.name, l.month, l.target])).toEqual([["Salaire", 2100, null]]);
+  });
+});
 
-  it("flags overrun targets, large rises and uncategorised operations", () => {
-    const budget: BudgetSummary = {
-      ...NO_BUDGET,
-      groups: [
-        {
-          id: 1,
-          name: "Variable",
-          target: 450,
-          actual: 470,
-          leaves: [
-            { id: 11, name: "Courses", target: 350, actual: 420 },
-            { id: 14, name: "Cadeaux", target: 100, actual: 50 },
-          ],
-        },
-        { id: 5, name: "Santé", target: 50, actual: 50, leaves: [] },
-      ],
-    };
-    expect(
-      attentionPoints(breakdown, budget, { ...NO_UNCATEGORIZED, count: 2, debit: 30, credit: 0 }).map(plain),
-    ).toEqual([
-      "Objectif dépassé, Variable / Courses : 420,00 € pour 350,00 € prévus (+70,00 €).",
-      "En hausse, Variable / Courses : 420,00 € contre 300,00 € en moyenne (+120,00 €).",
-      "2 opérations pas encore classées (30,00 € de dépenses, 0,00 € de revenus) : comptées sous « Non classé ».",
-    ]);
+describe("notable", () => {
+  it("flags spending over its target, whatever the average", () => {
+    expect(notable(460, 500, false, 450)).toBe("bad");
+    expect(notable(450, 500, false, 450)).toBeNull();
   });
 
-  it("has nothing to say about a quiet month", () => {
-    expect(attentionPoints([], NO_BUDGET, NO_UNCATEGORIZED)).toEqual([]);
+  it("flags a gap of at least 20 € and 20 % of the average, by its tone", () => {
+    expect(notable(130, 100, false)).toBe("bad");
+    expect(notable(70, 100, false)).toBe("good");
+    expect(notable(70, 100, true)).toBe("bad");
+    expect(notable(115, 100, false)).toBeNull(); // 15 €: too small
+    expect(notable(1100, 1000, false)).toBeNull(); // 10 %: too small
+    expect(notable(25, 0, false)).toBe("bad"); // a new category
+  });
+
+  it("has nothing to compare with without an average", () => {
+    expect(notable(500, null, false)).toBeNull();
+  });
+});
+
+describe("treeLeaves", () => {
+  const tree = (name: string, debit: number, children: CategoryNode[] = []): CategoryNode => ({
+    id: null,
+    name,
+    credit: 0,
+    debit,
+    balance: -debit,
+    children,
+  });
+
+  it("lists the leaves with money below the root, in display order", () => {
+    const root = tree("total", 130, [
+      tree("Logement", 100, [tree("Prêt", 90), tree("Charges", 10), tree("Énergie", 0)]),
+      tree("Vide", 0, [tree("Rien", 0)]),
+      tree("uncategorised", 30),
+    ]);
+    expect(treeLeaves(root).map((n) => n.name)).toEqual(["Prêt", "Charges", "uncategorised"]);
+  });
+
+  it("shortens an operation's date to its day and month", () => {
+    expect(dayMonth("2026-08-07")).toBe("07/08");
   });
 });
 

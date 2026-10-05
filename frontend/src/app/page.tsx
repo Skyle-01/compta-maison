@@ -16,6 +16,8 @@ import {
   frenchDate,
   frenchMonth,
   frenchMonthShort,
+  leafFilters,
+  treeLabel,
 } from "@/lib/api";
 import BudgetSection, { TONE_TEXT } from "@/components/BudgetSection";
 import Gap from "@/components/Gap";
@@ -26,11 +28,6 @@ import { AVERAGE_PERIODS, periodSummary, visibleAverageNodes } from "@/lib/avera
 import { budgetRatio, budgetTone } from "@/lib/budget";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { reportLink } from "@/lib/report";
-
-// The tree's structural node names come from the backend in English ("total", "uncategorised");
-// everything else is already French. Display them in French without renaming the data.
-const TREE_LABELS: Record<string, string> = { total: "Total", uncategorised: "Non classé" };
-const treeLabel = (name: string): string => TREE_LABELS[name] ?? name;
 
 /** A muted "▲ 1 234 € vs avril" delta line under a stat. `goodIsUp` colours the change green/red
  *  by whether an increase is good (revenus, reste) or bad (dépenses). */
@@ -478,19 +475,8 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
     setOpen(next);
     if (next && txns === null && !loading) {
       setLoading(true);
-      // Imported-savings leaves list their account's operations; external-savings leaves (kids)
-      // list the checking-account rows matching their libellé; node.id === null (and not
-      // synthetic) marks the uncategorised bucket; otherwise filter by category.
-      const params =
-        node.synthetic && node.account_id
-          ? { month, account: node.account_id, limit: 500 }
-          : node.synthetic && node.libelle_match
-            ? { month, depositPattern: node.libelle_match, limit: 500 }
-            : node.id === null
-              ? { month, uncategorized: true, limit: 500 }
-              : { month, categoryId: node.id, limit: 500 };
       api
-        .listTransactions(params)
+        .listTransactions({ ...leafFilters(node, month), limit: 500 })
         .then((p) => setTxns(p.items))
         .catch(() => setTxns([]))
         .finally(() => setLoading(false));

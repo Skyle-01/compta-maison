@@ -3,23 +3,22 @@ import {
   ALL_MONTHS,
   type AverageNode,
   type AveragePeriod,
-  type BudgetSummary,
   type CategoryAverages,
+  type CategoryNode,
   type Dashboard,
   type MonthTotals,
-  type UncategorizedStats,
   formatEuro,
   frenchMonth,
 } from "./api";
+import { gapTone } from "./averages";
 
 /** Budget months in the « Les derniers mois » statement. */
 export const STATEMENT_MONTHS = 6;
 /** The period every report average covers (complete budget months). */
 export const REPORT_AVERAGE: AveragePeriod = "12";
-/** A month's spending rise worth flagging: at least this many euros and this share of the average. */
-export const RISE_MIN = 20;
-export const RISE_RATIO = 0.2;
-export const MAX_RISES = 3;
+/** A month worth highlighting: at least this many euros away from the average and this share of it. */
+export const NOTABLE_MIN = 20;
+export const NOTABLE_RATIO = 0.2;
 
 const EPS = 0.005;
 const nonZero = (value: number | null | undefined) => Math.abs(value ?? 0) >= EPS;
@@ -58,7 +57,7 @@ export interface StatementRow {
   values: number[];
   /** The average month; null while no budget month is complete. */
   average: number | null;
-  /** An explanatory line (Non classé, compensations) rather than a category. */
+  /** An explanatory line (Non classé) rather than a category. */
   muted?: boolean;
 }
 
@@ -112,35 +111,36 @@ function collect(
     .sort((a, b) => (b.average ?? 0) - (a.average ?? 0) || a.label.localeCompare(b.label, "fr"));
 }
 
+const cents = (value: number) => Math.round(value * 100) / 100;
+
+/** The cards net of refunds: `offset` (refunds on spending categories + spending on income
+ *  categories, see CategoryAverages.offset) counts on both sides of the cards, so taking it off
+ *  both leaves each category net and the reste unchanged. */
+export function netOfRefunds<T extends { income: number; expenses: number }>(totals: T, offset: number): T {
+  return { ...totals, income: cents(totals.income - offset), expenses: cents(totals.expenses - offset) };
+}
+
 /** The « Les derniers mois » statement: one column per budget month (`columns`, oldest first, each
  *  the averages payload for that month, all over the same window) plus the average month.
  *  Income is listed by source (income-side leaves, as the Sankey does), spending by top-level
- *  category, savings by account; Non classé and the compensations close each side so a column adds
- *  up to that month's cards. Totals come from `history` (the cards' own figures). */
+ *  category, savings by account, every category net of its refunds; Non classé closes each side.
+ *  Totals are the cards (`history`) net of refunds, so a column's rows add up to its total. */
 export function buildStatement(columns: CategoryAverages[], history: MonthTotals[]): Statement {
   const months = columns.map((c) => c.month ?? "");
-  const hasAverage = columns.length > 0 && columns[columns.length - 1].months > 0;
-  const averageTotals = hasAverage ? columns[columns.length - 1].totals : null;
+  const last = columns[columns.length - 1];
+  const hasAverage = columns.length > 0 && last.months > 0;
+  const averageTotals = hasAverage ? netOfRefunds(last.totals, last.offset.value) : null;
   const byMonth = new Map(history.map((h) => [h.month, h]));
+  const monthTotals = columns.map((c, i) =>
+    netOfRefunds(byMonth.get(months[i]) ?? NO_TOTALS, c.offset.month_value ?? 0),
+  );
   const total = (key: string, label: string, pick: (t: Totals) => number): StatementRow => ({
     key,
     label,
-    values: months.map((m) => pick(byMonth.get(m) ?? NO_TOTALS)),
+    values: monthTotals.map(pick),
     average: averageTotals ? pick(averageTotals) : null,
   });
   const muted = (rows: StatementRow[]) => rows.map((r) => ({ ...r, muted: true }));
-  const compensations = collect(
-    columns,
-    (a) => [
-      {
-        key: "offset",
-        label: "Remboursements et compensations",
-        value: a.offset.month_value ?? 0,
-        average: a.offset.value,
-      },
-    ],
-    hasAverage,
-  );
 
   const income: StatementSection = {
     title: "Revenus",
@@ -170,7 +170,6 @@ export function buildStatement(columns: CategoryAverages[], history: MonthTotals
           hasAverage,
         ),
       ),
-      ...muted(compensations),
     ],
     total: total("income", "Total des revenus", (t) => t.income),
   };
@@ -203,7 +202,6 @@ export function buildStatement(columns: CategoryAverages[], history: MonthTotals
           hasAverage,
         ),
       ),
-      ...muted(compensations),
     ],
     total: total("expenses", "Total des dépenses", (t) => t.expenses),
   };
@@ -245,17 +243,19 @@ export interface BreakdownGroup extends BreakdownLine {
   leaves: BreakdownLine[];
 }
 
-/** The month's spending per top-level category and its leaves (named by their path below the
- *  group), largest first, with the average month and the target; a category with neither spending
- *  this month nor on average is left out. */
-export function expenseBreakdown(avg: CategoryAverages): BreakdownGroup[] {
+export type BreakdownSide = "expenses" | "income";
+
+/** The month's spending (or income) per top-level category and its leaves (named by their path
+ *  below the group), largest first, with the average month and, for spending, the target; a
+ *  category with none of it this month nor on average is left out. */
+export function breakdown(avg: CategoryAverages, side: BreakdownSide): BreakdownGroup[] {
   const hasAverage = avg.months > 0;
   const line = (n: AverageNode, name: string): BreakdownLine => ({
     id: n.id,
     name,
-    month: n.month_expenses ?? 0,
-    average: hasAverage ? n.expenses : null,
-    target: n.target,
+    month: (side === "expenses" ? n.month_expenses : n.month_income) ?? 0,
+    average: hasAverage ? n[side] : null,
+    target: side === "expenses" ? n.target : null,
   });
   const relevant = (l: BreakdownLine) => nonZero(l.month) || nonZero(l.average);
   const order = (a: BreakdownLine, b: BreakdownLine) =>
@@ -272,52 +272,34 @@ export function expenseBreakdown(avg: CategoryAverages): BreakdownGroup[] {
     .sort(order);
 }
 
-/** A group's leaves named « Group / Leaf », or the group itself when it has none (a top-level leaf). */
-function groupLeaves<T extends { name: string }>(groups: (T & { leaves: T[] })[]): T[] {
-  return groups.flatMap((g) =>
-    g.leaves.length === 0 ? [g] : g.leaves.map((l) => ({ ...l, name: `${g.name} / ${l.name}` })),
-  );
+/** Whether a month's amount deserves a highlight: "bad" for spending over its target, else the
+ *  gap's tone when the month is at least NOTABLE_MIN € and NOTABLE_RATIO of the average away from
+ *  it; null for an ordinary month (or no average to compare with). */
+export function notable(
+  month: number,
+  average: number | null,
+  goodIsUp: boolean,
+  target: number | null = null,
+): "good" | "bad" | null {
+  if (target !== null && month - target >= EPS) return "bad";
+  if (average === null) return null;
+  const gap = month - average;
+  if (Math.abs(gap) < NOTABLE_MIN || Math.abs(gap) < NOTABLE_RATIO * Math.abs(average)) return null;
+  const tone = gapTone(gap, goodIsUp);
+  return tone === "flat" ? null : tone;
 }
 
-/** What deserves a reader's attention this month, in plain French: targets overrun, the largest
- *  spending rises against the average (at least RISE_MIN € and RISE_RATIO of it, MAX_RISES at
- *  most), and the operations still uncategorised. */
-export function attentionPoints(
-  breakdown: BreakdownGroup[],
-  budget: BudgetSummary,
-  uncategorized: UncategorizedStats,
-): string[] {
-  const points: string[] = [];
-  for (const t of groupLeaves(budget.groups)) {
-    const over = t.actual - t.target;
-    if (over >= EPS) {
-      points.push(
-        `Objectif dépassé, ${t.name} : ${formatEuro(t.actual)} pour ${formatEuro(t.target)} prévus ` +
-          `(+${formatEuro(over)}).`,
-      );
-    }
-  }
-  const rises = groupLeaves(breakdown)
-    .filter((l) => l.average !== null)
-    .map((l) => ({ ...l, average: l.average ?? 0, rise: l.month - (l.average ?? 0) }))
-    .filter((l) => l.rise >= RISE_MIN && l.rise >= RISE_RATIO * l.average)
-    .sort((a, b) => b.rise - a.rise)
-    .slice(0, MAX_RISES);
-  for (const l of rises) {
-    points.push(
-      `En hausse, ${l.name} : ${formatEuro(l.month)} contre ${formatEuro(l.average)} en moyenne ` +
-        `(+${formatEuro(l.rise)}).`,
-    );
-  }
-  if (uncategorized.count > 0) {
-    const s = uncategorized.count > 1 ? "s" : "";
-    points.push(
-      `${uncategorized.count} opération${s} pas encore classée${s} (${formatEuro(uncategorized.debit)} de ` +
-        `dépenses, ${formatEuro(uncategorized.credit)} de revenus) : comptée${s} sous « Non classé ».`,
-    );
-  }
-  return points;
+/** The balance tree's leaves with some money (below the root), in display order: the nodes whose
+ *  operations the report's « Détail par catégorie » lists. */
+export function treeLeaves(root: CategoryNode): CategoryNode[] {
+  const active = (n: CategoryNode) => n.credit !== 0 || n.debit !== 0;
+  const walk = (n: CategoryNode): CategoryNode[] =>
+    n.children.filter(active).flatMap((c) => (c.children.length === 0 ? [c] : walk(c)));
+  return walk(root);
 }
+
+/** "2026-08-07" -> "07/08": an operation's day in the one-month report. */
+export const dayMonth = (date: string): string => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
 
 /** The month in one plain sentence for a reader outside the app, e.g. « En septembre 2026, le
  *  foyer a gagné … et dépensé … Il a mis … de côté. Il reste … (en moyenne … par mois). » */

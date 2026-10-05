@@ -383,6 +383,17 @@ export function transactionsExportUrl(
   return `/api/transactions/export${search ? `?${search}` : ""}`;
 }
 
+/** The list filters of a balance-tree leaf's operations (the dashboard drill-down, the report's
+ *  tree). Imported-savings leaves list their account's operations; external-savings leaves (kids)
+ *  the checking-account rows matching their libellé; node.id === null (and not synthetic) marks
+ *  the uncategorised bucket; otherwise filter by category. */
+export function leafFilters(node: CategoryNode, month?: string): TransactionFilters {
+  if (node.synthetic && node.account_id) return { month, account: node.account_id };
+  if (node.synthetic && node.libelle_match) return { month, depositPattern: node.libelle_match };
+  if (node.id === null) return { month, uncategorized: true };
+  return { month, categoryId: node.id };
+}
+
 export const api = {
   uploadCsv(file: File, account: string): Promise<ImportResult> {
     const form = new FormData();
@@ -499,6 +510,11 @@ export function frenchDate(date: string): string {
   if (!year || !m || !d) return date;
   return new Intl.DateTimeFormat("fr-FR").format(new Date(year, m - 1, d));
 }
+
+// The balance tree's structural node names come from the backend in English ("total",
+// "uncategorised"); everything else is already French. Display them in French without renaming the data.
+const TREE_LABELS: Record<string, string> = { total: "Total", uncategorised: "Non classé" };
+export const treeLabel = (name: string): string => TREE_LABELS[name] ?? name;
 
 /** "2026-06" -> "juin 2026" (French long month + year). Falls back to the raw value. */
 export function frenchMonth(month: string): string {
