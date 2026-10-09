@@ -178,13 +178,14 @@ describe("breakdown", () => {
       ],
     });
     const b = breakdown(avg, "expenses");
+    // Variable's 450 is the Σ of its children's targets: only Courses' own target compares.
     expect(b.map((g) => [g.name, g.month, g.average, g.target])).toEqual([
-      ["Variable", 500, 400, 450],
+      ["Variable", 500, 400, null],
       ["Impôts", 0, 100, null],
     ]);
-    expect(b[0].leaves.map((l) => [l.name, l.month])).toEqual([
-      ["Courses", 320],
-      ["Sortie / Bar", 180],
+    expect(b[0].leaves.map((l) => [l.name, l.month, l.target])).toEqual([
+      ["Courses", 320, 450],
+      ["Sortie / Bar", 180, null],
     ]);
     expect(b[1].leaves).toEqual([]);
   });

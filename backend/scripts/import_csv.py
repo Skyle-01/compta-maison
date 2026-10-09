@@ -102,8 +102,9 @@ def import_categories(conn, rows: list[dict]) -> dict[str, int]:
     """Get-or-create each category along its full path; returns {path: id}. Assumes names
     don't contain the ` / ` separator (the export format's only constraint).
 
-    The optional `budget_target` column (monthly euros) sets the leaf's target. Targets are
-    leaf-only, so one landing on a node that has children is dropped with a note."""
+    The optional `budget_target` column (monthly euros) sets the category's target (a group's
+    covers its subtree). A branch holds one target, so one below a targeted category is dropped
+    with a note."""
     path_to_id: dict[str, int] = {}
     for line_no, row in enumerate(rows, start=2):
         path = row["path"]
@@ -129,14 +130,22 @@ def import_categories(conn, rows: list[dict]) -> dict[str, int]:
         target = _parse_target(row.get("budget_target"), line_no)
         if target is not None:
             conn.execute("UPDATE categories SET budget_target_cents = ? WHERE id = ?", (target, parent_id))
-    groups = conn.execute(
-        "SELECT id FROM categories c WHERE budget_target_cents IS NOT NULL "
-        "AND EXISTS (SELECT 1 FROM categories k WHERE k.parent_id = c.id)"
-    ).fetchall()
-    paths = {cid: path for path, cid in path_to_id.items()}
-    for (cid,) in groups:
-        print(f"Dropping budget target on group {paths.get(cid, cid)!r}: targets are leaf-only")
-        conn.execute("UPDATE categories SET budget_target_cents = NULL WHERE id = ?", (cid,))
+    # Sorted by path: a targeted ancestor comes before the targets below it.
+    targeted: list[str] = []
+    for path, cid in sorted(path_to_id.items()):
+        if (
+            conn.execute(
+                "SELECT 1 FROM categories WHERE id = ? AND budget_target_cents IS NOT NULL", (cid,)
+            ).fetchone()
+            is None
+        ):
+            continue
+        above = next((t for t in targeted if path.startswith(t + PATH_SEP)), None)
+        if above is not None:
+            print(f"Dropping budget target on {path!r}: {above!r} already has one (one target per branch)")
+            conn.execute("UPDATE categories SET budget_target_cents = NULL WHERE id = ?", (cid,))
+        else:
+            targeted.append(path)
     return path_to_id
 
 

@@ -302,7 +302,7 @@ function BreakdownTable({
           <tbody>
             {groups.map((g) => (
               <Fragment key={g.id}>
-                <BreakdownRow line={g} max={max} side={side} group target={g.leaves.length === 0 ? g.target : null} />
+                <BreakdownRow line={g} max={max} side={side} group target={g.target} />
                 {g.leaves.map((l) => (
                   <BreakdownRow key={l.id} line={l} max={max} side={side} target={l.target} />
                 ))}

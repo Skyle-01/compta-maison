@@ -90,7 +90,7 @@ export interface Category {
   path: string;
   is_root: boolean;
   rule_count: number;
-  /** Monthly spending cap in euros (leaves only); null = no target. */
+  /** Monthly spending cap in euros (a group's covers its subtree; one per branch); null = none. */
   budget_target: number | null;
 }
 
@@ -197,7 +197,8 @@ export interface MonthTotals {
   reste: number;
 }
 
-/** One targeted leaf: net spending (debits − credits) vs its target × the months shown. */
+/** One targeted category: net spending (debits − credits) of it and its subtree vs its target ×
+ *  the months shown. */
 export interface BudgetLeaf {
   id: number;
   /** Path below the top-level group, e.g. "Sortie / Bar". */
@@ -206,7 +207,8 @@ export interface BudgetLeaf {
   actual: number;
 }
 
-/** A top-level group: the sums of its targeted leaves (none when the group is itself a leaf). */
+/** A top-level group: the sums of the targeted categories below it (none when the group itself
+ *  holds the target). */
 export interface BudgetGroup extends BudgetLeaf {
   leaves: BudgetLeaf[];
 }
@@ -235,7 +237,7 @@ export interface AverageNode {
   income: number;
   month_expenses: number | null;
   month_income: number | null;
-  /** Monthly target (a group: Σ of its leaves' targets); null = none. */
+  /** Own monthly target, else (a group) Σ of its children's; null = none. See `ownTarget`. */
   target: number | null;
   children: AverageNode[];
 }
@@ -443,7 +445,7 @@ export const api = {
     request("/api/categories", json("POST", c)),
   updateCategory: (id: number, c: { name: string; parent_id: number | null }): Promise<Category> =>
     request(`/api/categories/${id}`, json("PUT", c)),
-  /** Set (euros, > 0) or clear (null) a leaf's monthly budget target. */
+  /** Set (euros, > 0) or clear (null) a category's monthly budget target (one per branch). */
   setCategoryTarget: (id: number, budgetTarget: number | null): Promise<Category> =>
     request(`/api/categories/${id}/target`, json("PUT", { budget_target: budgetTarget })),
   deleteCategory: (id: number): Promise<void> =>

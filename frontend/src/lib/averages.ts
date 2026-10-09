@@ -34,6 +34,13 @@ export function visibleAverageNodes(nodes: AverageNode[]): AverageNode[] {
     );
 }
 
+/** Whether a node's target is its own, covering its whole subtree (a leaf's, or a group's set on
+ *  the group itself), rather than the Σ of its children's: only then is its spending comparable
+ *  with it. One target per branch, so a group's own target means none below it. */
+export function ownTarget(node: AverageNode): boolean {
+  return node.target !== null && node.children.every((c) => c.target === null);
+}
+
 /** What the averages cover, e.g. "sur 6 mois (mars 2026 – août 2026)"; flags a period shorter than
  *  asked ("sur 4 mois seulement"); null when no budget month is complete yet. */
 export function periodSummary(avg: CategoryAverages, period: AveragePeriod): string | null {

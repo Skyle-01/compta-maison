@@ -59,23 +59,44 @@ def reject_group_target(conn, category_id: int) -> None:
 
 def reject_populated_parent(conn, parent_id: int | None) -> None:
     """Keep the leaf-only invariant: refuse to nest a child under a category that already
-    has transactions, rules or a budget target attached directly (it would become a group
-    carrying them)."""
+    has transactions or rules attached directly (it would become a group carrying them)."""
     if parent_id is None:
         return
     has_tx = conn.execute("SELECT 1 FROM transactions WHERE category_id = ?", (parent_id,)).fetchone()
     has_rule = conn.execute("SELECT 1 FROM label_rules WHERE category_id = ?", (parent_id,)).fetchone()
-    has_target = conn.execute(
-        "SELECT 1 FROM categories WHERE id = ? AND budget_target_cents IS NOT NULL", (parent_id,)
-    ).fetchone()
-    if has_tx or has_rule or has_target:
+    if has_tx or has_rule:
         raise HTTPException(
             422,
             detail=[
-                f"« {_name(conn, parent_id)} » a déjà des opérations, des règles ou un objectif : "
+                f"« {_name(conn, parent_id)} » a déjà des opérations ou des règles : "
                 "créez-y d’abord une sous-catégorie, qui les reprendra"
             ],
         )
+
+
+def _targeted_ancestor(conn, category_id: int | None) -> str | None:
+    """The name of `category_id` or of its nearest ancestor holding a budget target, if any."""
+    while category_id is not None:
+        parent_id, name, target = conn.execute(
+            "SELECT parent_id, name, budget_target_cents FROM categories WHERE id = ?", (category_id,)
+        ).fetchone()
+        if target is not None:
+            return name
+        category_id = parent_id
+    return None
+
+
+def _has_targeted_descendant(conn, category_id: int) -> bool:
+    """Whether a category strictly below `category_id` holds a budget target."""
+    return (
+        conn.execute(
+            "WITH RECURSIVE below(id) AS (SELECT id FROM categories WHERE parent_id = ? "
+            "UNION ALL SELECT c.id FROM categories c JOIN below b ON c.parent_id = b.id) "
+            "SELECT 1 FROM categories WHERE id IN (SELECT id FROM below) AND budget_target_cents IS NOT NULL",
+            (category_id,),
+        ).fetchone()
+        is not None
+    )
 
 
 def _get_one(conn, category_id: int) -> CategoryOut:
@@ -120,15 +141,7 @@ def create_category(category: CategoryIn, db_path: DbPath) -> CategoryOut:
                 "UPDATE transactions SET category_id = ? WHERE category_id = ?",
                 (child_id, category.parent_id),
             ).rowcount
-            # The budget target moves down too (groups carry none, so a no-op there as well).
-            conn.execute(
-                "UPDATE categories SET budget_target_cents = "
-                "(SELECT budget_target_cents FROM categories WHERE id = ?) WHERE id = ?",
-                (category.parent_id, child_id),
-            )
-            conn.execute(
-                "UPDATE categories SET budget_target_cents = NULL WHERE id = ?", (category.parent_id,)
-            )
+            # A budget target stays on the parent: a group's target covers its whole subtree.
         result = _get_one(conn, child_id)
     if moved:
         apply_rules(db_path)  # re-derive non-manual rows through the moved rules → child
@@ -153,6 +166,21 @@ def update_category(category_id: int, category: CategoryIn, db_path: DbPath) -> 
                 raise HTTPException(422, detail=[f"Catégorie {category.parent_id} introuvable"])
             current = row[0]
         reject_populated_parent(conn, category.parent_id)
+        # One target per branch: a targeted subtree can't move under a targeted category.
+        holder = _targeted_ancestor(conn, category.parent_id)
+        if holder is not None and (
+            conn.execute(
+                "SELECT 1 FROM categories WHERE id = ? AND budget_target_cents IS NOT NULL", (category_id,)
+            ).fetchone()
+            or _has_targeted_descendant(conn, category_id)
+        ):
+            raise HTTPException(
+                422,
+                detail=[
+                    f"« {holder} » a déjà un objectif, qui couvrirait « {category.name} » : "
+                    "retirez l’un des objectifs d’abord"
+                ],
+            )
         try:
             cur = conn.execute(
                 "UPDATE categories SET name = ?, parent_id = ? WHERE id = ?",
@@ -218,14 +246,29 @@ def move_to_category(category_id: int, move: CategoryMoveIn, db_path: DbPath) ->
 
 @router.put("/{category_id}/target")
 def set_category_target(category_id: int, target: CategoryTargetIn, db_path: DbPath) -> CategoryOut:
-    """Set (euros, > 0) or clear (null) a leaf's monthly budget target. Groups show the sum of
-    their leaves' targets, so they cannot hold one themselves (422)."""
+    """Set (euros, > 0) or clear (null) a category's monthly budget target. A leaf's covers its
+    own operations, a group's its whole subtree; one target per branch, so setting one is refused
+    (422) under a targeted category or above a targeted sub-category."""
     with connect(db_path) as conn:
-        _get_one(conn, category_id)  # 404 first
-        reject_group_target(conn, category_id)
+        category = _get_one(conn, category_id)  # 404 first
         cents = to_cents(target.budget_target) if target.budget_target is not None else None
         if cents is not None and cents <= 0:
             raise HTTPException(422, detail=["Un objectif doit valoir au moins 0,01 €"])
+        if cents is not None:
+            holder = _targeted_ancestor(conn, category.parent_id)
+            if holder is not None:
+                raise HTTPException(
+                    422,
+                    detail=[f"« {holder} » a déjà un objectif, qui couvre « {category.name} »"],
+                )
+            if _has_targeted_descendant(conn, category_id):
+                raise HTTPException(
+                    422,
+                    detail=[
+                        f"Des sous-catégories de « {category.name} » ont déjà un objectif : "
+                        "retirez-les d’abord"
+                    ],
+                )
         conn.execute("UPDATE categories SET budget_target_cents = ? WHERE id = ?", (cents, category_id))
         return _get_one(conn, category_id)
 
@@ -258,9 +301,10 @@ def delete_category(category_id: int, db_path: DbPath) -> None:
                 "UPDATE transactions SET category_id = ? WHERE category_id = ? AND category_manual = 1",
                 (parent_id, category_id),
             )
+            # Its target too (one per branch: the parent holds one only if the child has none).
             conn.execute(
-                "UPDATE categories SET budget_target_cents = "
-                "(SELECT budget_target_cents FROM categories WHERE id = ?) WHERE id = ?",
+                "UPDATE categories SET budget_target_cents = COALESCE("
+                "(SELECT budget_target_cents FROM categories WHERE id = ?), budget_target_cents) WHERE id = ?",
                 (category_id, parent_id),
             )
         else:

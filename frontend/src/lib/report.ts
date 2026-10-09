@@ -10,7 +10,7 @@ import {
   formatEuro,
   frenchMonth,
 } from "./api";
-import { gapTone } from "./averages";
+import { gapTone, ownTarget } from "./averages";
 
 /** Budget months in the « Les derniers mois » statement. */
 export const STATEMENT_MONTHS = 6;
@@ -255,7 +255,8 @@ export function breakdown(avg: CategoryAverages, side: BreakdownSide): Breakdown
     name,
     month: (side === "expenses" ? n.month_expenses : n.month_income) ?? 0,
     average: hasAverage ? n[side] : null,
-    target: side === "expenses" ? n.target : null,
+    // Only an own target is comparable (a Σ of children's targets leaves untargeted ones out).
+    target: side === "expenses" && ownTarget(n) ? n.target : null,
   });
   const relevant = (l: BreakdownLine) => nonZero(l.month) || nonZero(l.average);
   const order = (a: BreakdownLine, b: BreakdownLine) =>

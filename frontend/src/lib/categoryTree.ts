@@ -72,6 +72,24 @@ export function averageNets(groups: AverageNode[]): Map<number, number> {
   return out;
 }
 
+/** A node's target as the tree shows it: its own, else (a group) the Σ of its children's. A branch
+ *  holds one target, so a group with its own has none below it. */
+export function treeTarget(node: CategoryTreeNode): number {
+  return node.budget_target ?? node.children.reduce((sum, child) => sum + treeTarget(child), 0);
+}
+
+/** The nearest strict ancestor of `id` holding a target (which covers it), if any. */
+export function targetedAncestor(id: number, byId: Map<number, Category>): Category | undefined {
+  let parentId = byId.get(id)?.parent_id;
+  while (parentId != null) {
+    const parent = byId.get(parentId);
+    if (!parent) return undefined;
+    if (parent.budget_target != null) return parent;
+    parentId = parent.parent_id;
+  }
+  return undefined;
+}
+
 export const ruleMatches = (r: Rule, q: string) => fold(`${r.pattern} ${r.description ?? ""}`).includes(q);
 export const manualMatches = (tx: Transaction, q: string) => fold(`${tx.libelle} ${tx.note ?? ""}`).includes(q);
 
