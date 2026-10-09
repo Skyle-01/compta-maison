@@ -180,8 +180,13 @@ function AverageLine({
   );
 }
 
+/** The spending the Objectif colour judges: the displayed month's, else (« Tous les mois ») the average. */
+function monthSpending(node: AverageNode): number {
+  return node.month_expenses !== null ? node.month_expenses - (node.month_income ?? 0) : node.expenses - node.income;
+}
+
 /** A category row (indented by depth), expandable to its sub-categories. An own target turns
- *  amber or red as its average spending nears or passes it (the Budget section's bands). */
+ *  amber or red as the month’s spending nears or passes it (the Budget section's bands). */
 function AverageRow({
   node,
   depth,
@@ -214,7 +219,7 @@ function AverageRow({
             <span
               className={
                 ownTarget(node)
-                  ? OBJECTIVE_TEXT[budgetTone(budgetRatio(node.expenses - node.income, node.target))]
+                  ? OBJECTIVE_TEXT[budgetTone(budgetRatio(monthSpending(node), node.target))]
                   : "text-zinc-500"
               }
             >
@@ -403,7 +408,7 @@ function AveragesSection({ data }: { data: Dashboard }) {
           Chaque ligne est le solde moyen d’un mois : en vert ce qui rentre, en rouge ce qui sort (un
           remboursement vient en déduction de sa catégorie) ; le total vaut Revenus − Dépenses. La colonne
           du mois affiche {gaps ? monthLabel : "le mois affiché"} et, entre parenthèses, son écart à cette moyenne. Sur une catégorie avec
-          objectif, l’objectif est vert tant que la moyenne reste sous 90 %, orange de 90 à 100 %, rouge au-delà.
+          objectif, l’objectif est vert tant que la dépense du mois reste sous 90 %, orange de 90 à 100 %, rouge au-delà.
         </p>
       </>
     );
