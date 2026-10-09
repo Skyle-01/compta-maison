@@ -1477,13 +1477,29 @@ class TestBudgetTargets:
         assert resp.json()["budget_target"] is None
 
     def test_rejections(self, seeded_db, client):
-        sortie = _category_id(client, "sortie")
         bar = _category_id(client, "bar")
-        assert client.put(f"/api/categories/{sortie}/target", json={"budget_target": 10}).status_code == 422
         assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 0}).status_code == 422
         assert client.put("/api/categories/9999/target", json={"budget_target": 10}).status_code == 404
         # Rounds to 0 cents: rejected rather than stored as a zero target.
         assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 0.001}).status_code == 422
+
+    def test_one_target_per_branch(self, seeded_db, client):
+        variable, sortie, bar = (_category_id(client, n) for n in ("variable", "sortie", "bar"))
+        assert (
+            client.put(f"/api/categories/{sortie}/target", json={"budget_target": 80}).json()["budget_target"]
+            == 80
+        )
+        # Below a targeted group, and above one: refused.
+        resp = client.put(f"/api/categories/{bar}/target", json={"budget_target": 10})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == ["« sortie » a déjà un objectif, qui couvre « bar »"]
+        resp = client.put(f"/api/categories/{variable}/target", json={"budget_target": 500})
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0].startswith("Des sous-catégories de « variable » ont déjà un objectif")
+        # Clearing is always allowed, and frees the branch.
+        assert client.put(f"/api/categories/{bar}/target", json={"budget_target": None}).status_code == 200
+        client.put(f"/api/categories/{sortie}/target", json={"budget_target": None})
+        assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 10}).status_code == 200
 
     def test_dashboard_without_transactions(self, seeded_db, client):
         """A fresh DB with targets (data/ ships some) but nothing imported yet."""
@@ -1493,12 +1509,12 @@ class TestBudgetTargets:
         budget = resp.json()["budget"]
         assert (budget["months"], budget["target"], budget["actual"]) == (1, 60, 0)
 
-    def test_subdivide_moves_target_down(self, seeded_db, client):
+    def test_subdivide_keeps_target_on_parent(self, seeded_db, client):
         courses = _category_id(client, "courses")
         client.put(f"/api/categories/{courses}/target", json={"budget_target": 300})
         client.post("/api/categories", json={"name": "bio", "parent_id": courses})
         targets = _targets(seeded_db)
-        assert (targets["courses"], targets["bio"]) == (None, 30000)
+        assert (targets["courses"], targets["bio"]) == (30000, None)
 
     def test_delete_last_child_rolls_target_up(self, seeded_db, client):
         bar = _category_id(client, "bar")
@@ -1506,21 +1522,29 @@ class TestBudgetTargets:
         client.delete(f"/api/categories/{bar}")
         assert _targets(seeded_db)["sortie"] == 6000
 
+    def test_delete_last_child_keeps_parent_target(self, seeded_db, client):
+        client.put(f"/api/categories/{_category_id(client, 'sortie')}/target", json={"budget_target": 80})
+        client.delete(f"/api/categories/{_category_id(client, 'bar')}")
+        assert _targets(seeded_db)["sortie"] == 8000
+
     def test_delete_with_siblings_drops_target(self, seeded_db, client):
         courses = _category_id(client, "courses")
         client.put(f"/api/categories/{courses}/target", json={"budget_target": 300})
         client.delete(f"/api/categories/{courses}")
         assert _targets(seeded_db)["variable"] is None
 
-    def test_reparent_under_targeted_leaf_rejected(self, seeded_db, client):
-        courses = _category_id(client, "courses")
-        client.put(f"/api/categories/{courses}/target", json={"budget_target": 300})
-        created = client.post("/api/categories", json={"name": "voyage", "parent_id": None}).json()
-        resp = client.put(f"/api/categories/{created['id']}", json={"name": "voyage", "parent_id": courses})
+    def test_reparent_keeps_one_target_per_branch(self, seeded_db, client):
+        sortie = _category_id(client, "sortie")
+        client.put(f"/api/categories/{sortie}/target", json={"budget_target": 80})
+        voyage = client.post("/api/categories", json={"name": "voyage", "parent_id": None}).json()["id"]
+        client.put(f"/api/categories/{voyage}/target", json={"budget_target": 200})
+        resp = client.put(f"/api/categories/{voyage}", json={"name": "voyage", "parent_id": sortie})
         assert resp.status_code == 422
-        assert resp.json()["detail"][0].startswith(
-            "« courses » a déjà des opérations, des règles ou un objectif"
-        )
+        assert resp.json()["detail"][0].startswith("« sortie » a déjà un objectif, qui couvrirait « voyage »")
+        # Without its own target it fits under the targeted group.
+        client.put(f"/api/categories/{voyage}/target", json={"budget_target": None})
+        resp = client.put(f"/api/categories/{voyage}", json={"name": "voyage", "parent_id": sortie})
+        assert resp.status_code == 200
 
     def test_export_and_round_trip(self, seeded_db, client, tmp_path):
         client.put(f"/api/categories/{_category_id(client, 'bar')}/target", json={"budget_target": 12.5})
@@ -1548,13 +1572,14 @@ class TestBudgetTargets:
         cats_csv.write_text("path\nfixe\nfixe / salaire\n", encoding="utf-8")
         import_csv(cats_csv, rules_csv, fresh)
         assert _targets(fresh) == {"fixe": None, "salaire": None}
-        # Comma decimals and thousands spaces are accepted; a target on a group is dropped.
+        # Comma decimals and thousands spaces are accepted; a group keeps its target, and one below
+        # it is dropped (one target per branch).
         cats_csv.write_text(
-            "path;budget_target\nvariable;100\nvariable / courses;1 234,50\n", encoding="utf-8"
+            "path;budget_target\nvariable;1 234,50\nvariable / courses;100\n", encoding="utf-8"
         )
         import_csv(cats_csv, rules_csv, fresh)
-        assert _targets(fresh) == {"variable": None, "courses": 123450}
-        assert "Dropping budget target on group 'variable'" in capsys.readouterr().out
+        assert _targets(fresh) == {"variable": 123450, "courses": None}
+        assert "Dropping budget target on 'variable / courses'" in capsys.readouterr().out
         cats_csv.write_text("path;budget_target\nvariable;-5\n", encoding="utf-8")
         with pytest.raises(ValueError, match="line 2"):
             import_csv(cats_csv, rules_csv, fresh)

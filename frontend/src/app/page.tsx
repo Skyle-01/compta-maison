@@ -24,7 +24,14 @@ import Gap from "@/components/Gap";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
-import { AVERAGE_PERIODS, averageNet, monthNet, periodSummary, visibleAverageNodes } from "@/lib/averages";
+import {
+  AVERAGE_PERIODS,
+  averageNet,
+  monthNet,
+  ownTarget,
+  periodSummary,
+  visibleAverageNodes,
+} from "@/lib/averages";
 import { budgetRatio, budgetTone } from "@/lib/budget";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { reportLink } from "@/lib/report";
@@ -126,7 +133,7 @@ function NetCell({ value }: { value: number }) {
 }
 
 /** One table row of the averages: a label, the signed average with its gap, and a last cell. The
- *  gap is neutral unless `gapClass` colours it (a targeted leaf: the month's spending vs its target). */
+ *  gap is neutral unless `gapClass` colours it (an own target: the month's spending vs it). */
 function AverageLine({
   label,
   value,
@@ -171,14 +178,14 @@ function AverageLine({
   );
 }
 
-/** A targeted leaf's gap colour: neutral while the month stays under 90 % of the target, then the
+/** A targeted category's gap colour: neutral while the month stays under 90 % of the target, then the
  *  Budget section's amber / red. */
 function gapBudgetClass(monthSpending: number, target: number): string | undefined {
   const tone = budgetTone(budgetRatio(monthSpending, target));
   return tone === "ok" ? undefined : TONE_TEXT[tone];
 }
 
-/** A category row (indented by depth), expandable to its sub-categories. A leaf's target turns
+/** A category row (indented by depth), expandable to its sub-categories. An own target turns
  *  amber or red as its average spending nears or passes it (the Budget section's bands). */
 function AverageRow({
   node,
@@ -203,9 +210,9 @@ function AverageRow({
         month={monthNet(node.month_expenses, node.month_income)}
         gaps={gaps}
         gapClass={
-          // Only a leaf's spending is comparable with its target (a group also counts untargeted leaves).
-          !expandable && node.target !== null && node.month_expenses !== null
-            ? gapBudgetClass(node.month_expenses, node.target)
+          // Only an own target is comparable (a Σ of children's targets leaves untargeted ones out).
+          ownTarget(node) && node.target !== null && node.month_expenses !== null
+            ? gapBudgetClass(node.month_expenses - (node.month_income ?? 0), node.target)
             : undefined
         }
         indent={depth * 20}
@@ -215,10 +222,11 @@ function AverageRow({
         onClick={expandable ? () => toggle(node.id) : undefined}
         last={
           node.target !== null && (
-            // A group's spending also counts its untargeted leaves: only a leaf is comparable.
             <span
               className={
-                expandable ? "text-zinc-500" : TONE_TEXT[budgetTone(budgetRatio(node.expenses, node.target))]
+                ownTarget(node)
+                  ? TONE_TEXT[budgetTone(budgetRatio(node.expenses - node.income, node.target))]
+                  : "text-zinc-500"
               }
             >
               {formatEuro(node.target)}

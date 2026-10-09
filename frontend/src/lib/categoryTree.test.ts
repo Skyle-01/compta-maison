@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { AverageNode, Category, Rule, Transaction } from "./api";
-import { averageNets, buildTree, contentsByCategory, movedMessage, searchTree, undoMoves } from "./categoryTree";
+import {
+  averageNets,
+  buildTree,
+  contentsByCategory,
+  movedMessage,
+  searchTree,
+  targetedAncestor,
+  treeTarget,
+  undoMoves,
+} from "./categoryTree";
 
 function cat(id: number, name: string, parent_id: number | null): Category {
   return { id, name, parent_id, path: name, is_root: parent_id == null, rule_count: 0, budget_target: null };
@@ -73,6 +82,27 @@ describe("contentsByCategory", () => {
     expect(contents.get(5)).toEqual({ rules: 0, ruleOperations: 0, manual: 1 });
   });
 
+});
+
+describe("targets", () => {
+  const withTargets = (targets: Record<number, number>) =>
+    CATS.map((c) => ({ ...c, budget_target: targets[c.id] ?? null }));
+
+  it("shows a node's own target, else the Σ of its children's", () => {
+    const tree = buildTree(withTargets({ 2: 300, 4: 50 }));
+    const variable = tree[1];
+    expect(treeTarget(variable)).toBe(350);
+    expect(treeTarget(variable.children[1])).toBe(50); // Sortie: Bar's
+    expect(treeTarget(buildTree(withTargets({ 1: 500 }))[1])).toBe(500);
+    expect(treeTarget(tree[0])).toBe(0);
+  });
+
+  it("finds the targeted ancestor covering a node", () => {
+    const byId = new Map(withTargets({ 3: 80 }).map((c) => [c.id, c]));
+    expect(targetedAncestor(4, byId)?.name).toBe("Sortie");
+    expect(targetedAncestor(3, byId)).toBeUndefined(); // its own target is not an ancestor's
+    expect(targetedAncestor(2, byId)).toBeUndefined();
+  });
 });
 
 describe("averageNets", () => {

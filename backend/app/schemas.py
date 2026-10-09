@@ -154,7 +154,8 @@ class CategoryOut(BaseModel):
     is_root: bool = Field(description="True for top-level groups (parent_id is null)")
     rule_count: int = 0
     budget_target: float | None = Field(
-        default=None, description="Monthly spending cap in euros (leaves only); null = no target"
+        default=None,
+        description="Monthly spending cap in euros (a group's covers its subtree; one per branch); null = none",
     )
 
 
@@ -205,9 +206,11 @@ class RulePreview(BaseModel):
 
 class BudgetLeaf(BaseModel):
     id: int
-    name: str = Field(description="Path below the top-level group, e.g. 'Sortie / Bar'")
+    name: str = Field(description="A targeted category's path below the top-level group, e.g. 'Sortie / Bar'")
     target: float = Field(description="Monthly target × the number of budget months shown")
-    actual: float = Field(description="Net spending (debits − credits, transfers excluded)")
+    actual: float = Field(
+        description="Net spending of the category and its subtree (debits − credits, transfers excluded)"
+    )
 
 
 class BudgetGroup(BudgetLeaf):
@@ -230,7 +233,7 @@ class AverageNode(BaseModel):
     income: float = Field(description="Average monthly income of its net-credit leaves")
     month_expenses: float | None = Field(description="The displayed month's spending (None: all months)")
     month_income: float | None
-    target: float | None = Field(description="Monthly target, a group's Σ of its leaves' targets")
+    target: float | None = Field(description="Own monthly target, else a group's Σ of its children's")
     children: list["AverageNode"]
 
 

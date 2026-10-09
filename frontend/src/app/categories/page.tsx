@@ -27,6 +27,8 @@ import {
   movedMessage,
   ruleMatches,
   searchTree,
+  targetedAncestor,
+  treeTarget,
   undoMoves,
 } from "@/lib/categoryTree";
 import { fold } from "@/lib/categorySearch";
@@ -385,21 +387,22 @@ export default function CategoriesPage() {
     run(() => api.setCategoryTarget(node.id, target)).then((ok) => ok && setEditingTargetId(null));
   }
 
-  // A group's target is the sum of its descendant leaves' targets (read-only).
-  function sumTargets(node: CategoryTreeNode): number {
-    return node.children.length === 0
-      ? (node.budget_target ?? 0)
-      : node.children.reduce((sum, child) => sum + sumTargets(child), 0);
-  }
-
+  // One target per branch: on a leaf, or on a group (covering its whole subtree), never both.
   function renderTarget(node: CategoryTreeNode) {
-    if (node.children.length > 0) {
-      const sum = sumTargets(node);
-      return sum > 0 ? (
-        <span className="text-xs text-zinc-500" title="Somme des objectifs de ses sous-catégories">
-          Σ {formatEuro(sum)} / mois
-        </span>
-      ) : null;
+    if (editingTargetId !== node.id && node.budget_target == null) {
+      // A group whose sub-categories hold targets shows their sum (read-only).
+      const sum = treeTarget(node);
+      if (sum > 0)
+        return (
+          <span
+            className="text-xs text-zinc-500"
+            title="Somme des objectifs de ses sous-catégories (retirez-les pour fixer un objectif sur le groupe)"
+          >
+            Σ {formatEuro(sum)} / mois
+          </span>
+        );
+      // Covered by a targeted ancestor: no target of its own.
+      if (targetedAncestor(node.id, byId)) return null;
     }
     if (editingTargetId === node.id) {
       return (
@@ -437,7 +440,11 @@ export default function CategoriesPage() {
       <button
         onClick={() => startEditTarget(node)}
         className="rounded bg-sky-50 px-1.5 py-0.5 text-xs text-sky-800 hover:bg-sky-100"
-        title="Objectif de dépense mensuel : cliquer pour modifier (vide = supprimer)"
+        title={
+          node.children.length > 0
+            ? "Objectif de dépense mensuel du groupe entier : cliquer pour modifier (vide = supprimer)"
+            : "Objectif de dépense mensuel : cliquer pour modifier (vide = supprimer)"
+        }
       >
         {formatEuro(node.budget_target)} / mois
       </button>
@@ -445,7 +452,11 @@ export default function CategoriesPage() {
       <button
         onClick={() => startEditTarget(node)}
         className="text-xs text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-zinc-900 focus:opacity-100"
-        title="Définir un objectif de dépense mensuel"
+        title={
+          node.children.length > 0
+            ? "Définir un objectif de dépense mensuel pour tout le groupe"
+            : "Définir un objectif de dépense mensuel"
+        }
       >
         ＋ objectif
       </button>
@@ -869,12 +880,14 @@ export default function CategoriesPage() {
               const name = childName.trim();
               if (!name) return;
               const c = contents.get(node.id);
-              // Subdividing a populated leaf moves its rules, operations and target into the new child.
+              // Subdividing a populated leaf moves its rules and operations into the new child (a
+              // target stays on the category, which then covers the new child too).
               if (
                 isLeaf &&
-                ((c != null && (c.rules > 0 || c.manual > 0)) || node.budget_target != null) &&
+                c != null &&
+                (c.rules > 0 || c.manual > 0) &&
                 !confirm(
-                  `« ${name} » héritera des règles, opérations et de l’objectif de « ${node.name} », à répartir ensuite. Continuer ?`,
+                  `« ${name} » héritera des règles et opérations de « ${node.name} », à répartir ensuite. Continuer ?`,
                 )
               )
                 return;
@@ -919,7 +932,8 @@ export default function CategoriesPage() {
           Un seul arbre, indépendant du sens : revenu ou dépense dépend de chaque opération. ▸ sur une
           sous-catégorie finale montre ce qui y classe des opérations. ＋ ajoute une sous-catégorie (la
           première hérite du contenu de la catégorie, à répartir ensuite), ✎ renomme ou déplace, ✕
-          supprime ; « ＋ objectif » fixe un plafond de dépense mensuel. Le montant d’une catégorie est sa
+          supprime ; « ＋ objectif » fixe un plafond de dépense mensuel, sur une sous-catégorie ou sur
+          tout un groupe (un seul objectif par branche). Le montant d’une catégorie est sa
           moyenne mensuelle {(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur les 12 derniers mois complets"},
           le mois en cours exclu ; celui d’une règle, le total de ses opérations.
         </p>

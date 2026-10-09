@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { AverageNode, CategoryAverages } from "./api";
-import { averageGap, averageNet, gapTone, monthNet, periodSummary, visibleAverageNodes } from "./averages";
+import {
+  averageGap,
+  averageNet,
+  gapTone,
+  monthNet,
+  ownTarget,
+  periodSummary,
+  visibleAverageNodes,
+} from "./averages";
 
 const node = (name: string, over: Partial<AverageNode> = {}): AverageNode => ({
   id: name.length,
@@ -29,6 +37,23 @@ const averages = (over: Partial<CategoryAverages>): CategoryAverages => ({
 });
 
 describe("averages helpers", () => {
+  it("tells an own target from a Σ of the children's", () => {
+    const n = (target: number | null, children: AverageNode[] = []): AverageNode => ({
+      id: 1,
+      name: "n",
+      expenses: 0,
+      income: 0,
+      month_expenses: null,
+      month_income: null,
+      target,
+      children,
+    });
+    expect(ownTarget(n(100))).toBe(true); // a leaf's
+    expect(ownTarget(n(300, [n(null), n(null)]))).toBe(true); // set on the group itself
+    expect(ownTarget(n(100, [n(100), n(null)]))).toBe(false); // its children's sum
+    expect(ownTarget(n(null))).toBe(false);
+  });
+
   it("computes the gap to the average, none without a month", () => {
     expect(averageGap(120.1, 100.05)).toBe(20.05);
     expect(averageGap(80, 100)).toBe(-20);

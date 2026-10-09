@@ -239,14 +239,16 @@ def budget_status(
     """Spending vs budget targets (euros) for one budget month, or all months when `month` is None
     (targets are then multiplied by `n_months`, the number of budget months covered).
 
-    A target is a monthly cap on a leaf's *net* spending: Σdebit − Σcredit of its real flows
-    (a refund lowers it; transfers are excluded). Only targeted leaves count, so an untargeted
-    income leaf (Salaire under Fixe) never offsets a group. Leaves are grouped under their
-    top-level category (deeper sub-groups flattened: the leaf's name is its path below the group);
-    a group's target/actual is the sum of its targeted leaves, and a top-level leaf is a group of
-    its own with no leaves. Groups and leaves are ordered by actual/target, overruns first.
-    `untargeted` sums the kind='expense' debits outside any targeted category (uncategorised
-    included) — the spending no target covers."""
+    A target is a monthly cap on a category's *net* spending: Σdebit − Σcredit of the real flows
+    of the category and everything below it (a leaf: its own; a group: its whole subtree; a refund
+    lowers it; transfers are excluded). A branch holds at most one target. Only targeted categories
+    count, so an untargeted income leaf (Salaire under Fixe) never offsets a group. Targeted
+    categories are grouped under their top-level category (deeper ones flattened: the name is the
+    path below the group, kept in `leaves`); a group's target/actual is the sum of its targeted
+    categories, and a targeted top-level category is a group of its own with no leaves. Groups and
+    leaves are ordered by actual/target, overruns first. `untargeted` sums the kind='expense'
+    debits outside any targeted category (uncategorised included) — the spending no target
+    covers."""
     with connect(db_path) as conn:
         categories = {
             cid: (name, parent_id, target)
@@ -254,30 +256,39 @@ def budget_status(
                 "SELECT id, name, parent_id, budget_target_cents FROM categories"
             )
         }
-        # Both queries alias transactions as t (the untargeted one joins categories).
-        month_clause = " AND t.budget_month = ?" if month else ""
+        month_clause = " AND budget_month = ?" if month else ""
         params: tuple = (month,) if month else ()
-        actuals = dict(
-            conn.execute(
-                "SELECT category_id, COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0) "
-                "FROM transactions t WHERE category_id IN "
-                "(SELECT id FROM categories WHERE budget_target_cents IS NOT NULL) "
-                f"AND {real_flow_clause()}{month_clause} GROUP BY category_id",
-                params,
-            ).fetchall()
-        )
-        untargeted_cents = conn.execute(
-            "SELECT COALESCE(SUM(t.debit_cents), 0) FROM transactions t "
-            "LEFT JOIN categories c ON c.id = t.category_id "
-            f"WHERE t.kind = 'expense' AND c.budget_target_cents IS NULL{month_clause}",
+        nets = conn.execute(
+            "SELECT category_id, COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0) "
+            f"FROM transactions WHERE category_id IS NOT NULL AND {real_flow_clause()}{month_clause} "
+            "GROUP BY category_id",
             params,
-        ).fetchone()[0]
+        ).fetchall()
+        expenses = conn.execute(
+            "SELECT category_id, COALESCE(SUM(debit_cents), 0) FROM transactions "
+            f"WHERE kind = 'expense'{month_clause} GROUP BY category_id",
+            params,
+        ).fetchall()
 
     def lineage(cid: int) -> list[int]:
         chain = [cid]
         while categories[chain[-1]][1] is not None:
             chain.append(categories[chain[-1]][1])
         return list(reversed(chain))  # top-level first
+
+    def holder(cid: int | None) -> int | None:
+        """The targeted category covering `cid` (itself or its nearest targeted ancestor)."""
+        while cid is not None:
+            if categories[cid][2] is not None:
+                return cid
+            cid = categories[cid][1]
+        return None
+
+    actuals: dict[int, int] = {}
+    for cid, net in nets:
+        if (h := holder(cid)) is not None:
+            actuals[h] = actuals.get(h, 0) + net
+    untargeted_cents = sum(debit for cid, debit in expenses if holder(cid) is None)
 
     groups: dict[int, dict[str, Any]] = {}
     for cid, (_name, _parent, target) in categories.items():
@@ -339,8 +350,8 @@ def category_averages(
     `income` (credits − debits); a leaf without net over the window takes its side from `month`.
     Its counter-side flows (refunds on a spending leaf, debits on an income leaf) go to `offset`,
     so Σ group expenses + uncategorised debits + offset = the Dépenses card average, and likewise
-    for income. Groups sum their leaves (in cents, divided once); `target` is a leaf's monthly
-    target, a group's Σ of its leaves' targets. The uncategorised bucket is gross on both sides.
+    for income. Groups sum their leaves (in cents, divided once); `target` is a category's own
+    monthly target, else (a group) the Σ of its children's. The uncategorised bucket is gross on both sides.
     Savings are the derived per-account nets bucketed per month (see _savings_by_month), averaged
     the same way, and `totals` the averages of monthly_totals over the window. Transfers excluded."""
     with connect(db_path) as conn:
@@ -391,7 +402,8 @@ def category_averages(
         if kids:
             values = [sum(kid["values"][i] for kid in kids) for i in range(4)]
             targets = [kid["target"] for kid in kids if kid["target"] is not None]
-            target = sum(targets) if targets else None
+            if target is None and targets:  # one target per branch: its own, else Σ of its children's
+                target = sum(targets)
         else:
             wc, wd, mc, md = sums.get(category_id, [0, 0, 0, 0])
             income_side = wc > wd or (wc == wd and mc > md)

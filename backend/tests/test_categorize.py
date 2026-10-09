@@ -325,7 +325,7 @@ def _set_target(db, name: str, cents: int | None) -> None:
 
 
 class TestBudgetStatus:
-    """Spending vs the leaves' monthly budget targets (the dashboard Budget section)."""
+    """Spending vs the categories' monthly budget targets (the dashboard Budget section)."""
 
     def test_net_spending_grouping_and_order(self, seeded_db):
         _set_target(seeded_db, "courses", 10000)
@@ -384,6 +384,46 @@ class TestBudgetStatus:
             {"id": cat_id(seeded_db, "voyage"), "name": "voyage", "target": 50, "actual": 0, "leaves": []}
         ]
 
+    def test_group_target_covers_its_subtree(self, seeded_db):
+        _set_target(seeded_db, "sortie", 5000)  # a sub-group: bar (and any sibling) count
+        _set_target(seeded_db, "courses", 10000)
+        import_rows(
+            seeded_db,
+            ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"),
+            ("2026-06-08", "2026-06-08", "BAR ANGELUS", 15, 0, "PERSO"),
+            ("2026-06-09", "2026-06-09", "BAR ANGELUS", 30, 0, "PERSO"),
+            ("2026-06-09", "2026-06-09", "MYSTERY SHOP", 7, 0, "PERSO"),
+        )
+        apply_rules(seeded_db)
+        status = budget_status(seeded_db, "2026-06")
+        variable = status["groups"][0]
+        assert [(leaf["name"], leaf["target"], leaf["actual"]) for leaf in variable["leaves"]] == [
+            ("sortie", 50, 45),
+            ("courses", 100, 80),
+        ]
+        assert (variable["target"], variable["actual"]) == (150, 125)
+        assert status["untargeted"] == 7
+
+    def test_targeted_top_level_group(self, seeded_db):
+        _set_target(seeded_db, "variable", 20000)
+        import_rows(
+            seeded_db,
+            ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"),
+            ("2026-06-08", "2026-06-08", "BAR ANGELUS", 15, 0, "PERSO"),
+        )
+        apply_rules(seeded_db)
+        status = budget_status(seeded_db, "2026-06")
+        assert status["groups"] == [
+            {
+                "id": cat_id(seeded_db, "variable"),
+                "name": "variable",
+                "target": 200,
+                "actual": 95,
+                "leaves": [],
+            }
+        ]
+        assert status["untargeted"] == 0
+
     def test_zero_target_does_not_divide_by_zero(self, seeded_db):
         _set_target(seeded_db, "courses", 10000)
         _set_target(seeded_db, "bar", 1000)
@@ -438,6 +478,15 @@ class TestCategoryAverages:
         assert averaging_window(months, 2) == ["2026-04", "2026-05"]
         assert averaging_window(months, 12) == ["2026-03", "2026-04", "2026-05"]
         assert averaging_window(["2026-06"], 3) == averaging_window([], None) == []
+
+    def test_group_own_target(self, seeded_db):
+        self._seed(seeded_db)
+        _set_target(seeded_db, "courses", None)
+        _set_target(seeded_db, "bar", None)
+        _set_target(seeded_db, "variable", 20000)
+        variable = self._group(category_averages(seeded_db, 3, "2026-06"), "variable")
+        assert variable["target"] == 200  # its own, not a Σ of its (untargeted) children
+        assert _find(variable, "courses")["target"] is None
 
     def test_sides_offset_and_reconciliation(self, seeded_db):
         self._seed(seeded_db)
