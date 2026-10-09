@@ -70,8 +70,19 @@ def get_dashboard(db_path: DbPath, month: str | None = None) -> Dashboard:
         transfers=transfers_summary(db_path, period),
         history=monthly_totals(db_path),
         # With no data yet there is no month: count one so targets still show at face value.
-        budget=budget_status(db_path, period, max(1, len(months)) if period is None else 1),
+        budget=_budget(db_path, period, max(1, len(months)) if period is None else 1, epargne - desepargne),
     )
+
+
+def _budget(db_path: DbPath, period: str | None, n_months: int, savings: float) -> dict[str, Any]:
+    """budget_status plus what balances it: the reference income (the average month of the last 12
+    complete budget months, net of refunds like the report) and the net savings of the period."""
+    averages = category_averages(db_path, 12, None)
+    return {
+        **budget_status(db_path, period, n_months),
+        "income_reference": round(averages["totals"]["income"] - averages["offset"]["value"], 2),
+        "savings_actual": round(savings, 2),
+    }
 
 
 @router.get("/averages")

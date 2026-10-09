@@ -222,6 +222,12 @@ export interface BudgetSummary {
   untargeted: number;
   /** Overruns first. */
   groups: BudgetGroup[];
+  /** Savings goal (the Épargne group's target) × `months`; null = none. */
+  savings_target: number | null;
+  /** Average monthly income of the last 12 complete months, net of refunds. */
+  income_reference: number;
+  /** Net savings of the period (épargne − désépargne). */
+  savings_actual: number;
 }
 
 /** « Moyennes mensuelles » periods: the last 3, 6, 12 complete budget months, or all of them. */

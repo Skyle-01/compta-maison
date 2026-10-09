@@ -31,7 +31,16 @@ function dashboard(salary: number): Dashboard {
     uncategorized: { count: 2, credit: 50, debit: 30, difference: 20, balanced: false },
     transfers: {} as Dashboard["transfers"],
     history: [],
-    budget: { months: 1, target: 0, actual: 0, untargeted: 0, groups: [] },
+    budget: {
+      months: 1,
+      target: 0,
+      actual: 0,
+      untargeted: 0,
+      groups: [],
+      savings_target: null,
+      income_reference: 0,
+      savings_actual: 0,
+    },
   };
 }
 

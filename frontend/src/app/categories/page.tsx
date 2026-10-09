@@ -16,7 +16,8 @@ import {
 import CategoryPicker from "@/components/CategoryPicker";
 import SignedAmount from "@/components/SignedAmount";
 import { periodSummary } from "@/lib/averages";
-import { parseTarget } from "@/lib/budget";
+import { BudgetBalance } from "@/components/BudgetSection";
+import { categoryTargets, parseTarget } from "@/lib/budget";
 import {
   averageNets,
   buildTree,
@@ -319,6 +320,7 @@ export default function CategoriesPage() {
   const byId = new Map(categories.map((c) => [c.id, c]));
   const tree = buildTree(categories);
   const contents = contentsByCategory(tree, rules, manual);
+  const targetSums = categoryTargets(categories);
   const nets = averageNets(averages?.groups ?? []);
   const averageTitle = `Moyenne mensuelle ${(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur 12 mois"}`;
   const search = searchTree(tree, rules, manual, query);
@@ -926,6 +928,15 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Catégories</h1>
+      {averages && (targetSums.spending > 0 || targetSums.savings !== null) && (
+        <div className="rounded-lg border border-zinc-200 bg-white px-4 py-2">
+          <BudgetBalance
+            income={Math.round((averages.totals.income - averages.offset.value) * 100) / 100}
+            spending={targetSums.spending}
+            savings={targetSums.savings}
+          />
+        </div>
+      )}
 
       <div className="space-y-1 text-sm text-zinc-500">
         <p>
@@ -933,7 +944,8 @@ export default function CategoriesPage() {
           sous-catégorie finale montre ce qui y classe des opérations. ＋ ajoute une sous-catégorie (la
           première hérite du contenu de la catégorie, à répartir ensuite), ✎ renomme ou déplace, ✕
           supprime ; « ＋ objectif » fixe un plafond de dépense mensuel, sur une sous-catégorie ou sur
-          tout un groupe (un seul objectif par branche). Le montant d’une catégorie est sa
+          tout un groupe (un seul objectif par branche), jamais sur un revenu ; celui du groupe « Épargne »
+          est l’épargne visée chaque mois. Le montant d’une catégorie est sa
           moyenne mensuelle {(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur les 12 derniers mois complets"},
           le mois en cours exclu ; celui d’une règle, le total de ses opérations.
         </p>

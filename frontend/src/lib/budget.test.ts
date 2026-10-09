@@ -1,7 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { barWidth, budgetLeft, budgetRatio, budgetTone, parseTarget } from "./budget";
+import { barWidth, budgetLeft, budgetMargin, budgetRatio, budgetTone, categoryTargets, parseTarget } from "./budget";
 
 describe("budget helpers", () => {
+  it("balances the targets against the income", () => {
+    expect(budgetMargin(3370, 2385.1, 300)).toBe(684.9);
+    expect(budgetMargin(2000, 2100, null)).toBe(-100);
+    const cats = [
+      { name: "Épargne", parent_id: null, budget_target: 300 },
+      { name: "Logement", parent_id: null, budget_target: 1500 },
+      { name: "Courses", parent_id: 7, budget_target: 450.5 },
+      { name: "Bar", parent_id: 7, budget_target: null },
+    ];
+    expect(categoryTargets(cats)).toEqual({ spending: 1950.5, savings: 300 });
+    expect(categoryTargets(cats.slice(1))).toEqual({
+      spending: 1950.5,
+      savings: null,
+    });
+  });
+
   it("computes the spent ratio, ignoring net refunds and missing targets", () => {
     expect(budgetRatio(45, 90)).toBe(0.5);
     expect(budgetRatio(-10, 90)).toBe(0);

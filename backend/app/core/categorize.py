@@ -233,6 +233,12 @@ def monthly_totals(db_path: Path = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
     return result
 
 
+# Top-level groups of the derived savings leaves. A target on SAVINGS_GROUP itself is the household's
+# monthly savings goal (a floor, not a cap); nothing below them, nor DEFICIT_GROUP, takes a target.
+SAVINGS_GROUP = "Épargne"
+DEFICIT_GROUP = "Déficit"
+
+
 def budget_status(
     db_path: Path = DEFAULT_DB_PATH, month: str | None = None, n_months: int = 1
 ) -> dict[str, Any]:
@@ -291,11 +297,16 @@ def budget_status(
     untargeted_cents = sum(debit for cid, debit in expenses if holder(cid) is None)
 
     groups: dict[int, dict[str, Any]] = {}
+    savings_target = None
     for cid, (_name, _parent, target) in categories.items():
         if target is None:
             continue
         chain = lineage(cid)
         top = chain[0]
+        if categories[top][0] in (SAVINGS_GROUP, DEFICIT_GROUP):
+            if cid == top and categories[top][0] == SAVINGS_GROUP:
+                savings_target = target  # the savings goal: not a spending cap
+            continue
         group = groups.setdefault(
             top, {"id": top, "name": categories[top][0], "target": 0, "actual": 0, "leaves": []}
         )
@@ -325,6 +336,7 @@ def budget_status(
         "target": euros(total_target),
         "actual": euros(total_actual),
         "untargeted": euros(untargeted_cents),
+        "savings_target": euros(savings_target * n_months) if savings_target is not None else None,
         "groups": ordered,
     }
 

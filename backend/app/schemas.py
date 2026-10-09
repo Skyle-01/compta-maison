@@ -224,6 +224,13 @@ class BudgetSummary(BaseModel):
     actual: float
     untargeted: float = Field(description="Expenses (kind='expense' debits) outside any targeted category")
     groups: list[BudgetGroup] = Field(description="Top-level groups with a target, overruns first")
+    savings_target: float | None = Field(
+        default=None, description="Savings goal (the Épargne group's target) × the months shown"
+    )
+    income_reference: float = Field(
+        default=0, description="Average monthly income over the last 12 complete months, net of refunds"
+    )
+    savings_actual: float = Field(default=0, description="Net savings of the period (épargne − désépargne)")
 
 
 class AverageNode(BaseModel):

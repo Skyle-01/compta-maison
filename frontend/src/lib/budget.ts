@@ -32,3 +32,30 @@ export function parseTarget(text: string): number | null {
   const value = Number(cleaned);
   return Number.isFinite(value) && value > 0 ? value : NaN;
 }
+
+/** The budget's balance, monthly: reference income − Σ spending caps − savings goal = the margin
+ *  left unbudgeted (negative: the targets promise more than comes in). Rounded to the cent. */
+export function budgetMargin(income: number, spendingTargets: number, savingsTarget: number | null): number {
+  return Math.round((income - spendingTargets - (savingsTarget ?? 0)) * 100) / 100;
+}
+
+/** The Catégories page's targets, monthly: Σ of the spending caps (one per branch) and the savings
+ *  goal (the target of the top-level `savingsGroup` category; nothing below it, nor in Déficit,
+ *  holds one). */
+export function categoryTargets(
+  cats: {
+    name: string;
+    parent_id: number | null;
+    budget_target: number | null;
+  }[],
+  savingsGroup = "Épargne",
+): { spending: number; savings: number | null } {
+  let spending = 0;
+  let savings: number | null = null;
+  for (const c of cats) {
+    if (c.budget_target == null) continue;
+    if (c.parent_id == null && c.name === savingsGroup) savings = c.budget_target;
+    else spending += c.budget_target;
+  }
+  return { spending: Math.round(spending * 100) / 100, savings };
+}

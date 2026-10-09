@@ -3,9 +3,9 @@ import sqlite3
 from fastapi import APIRouter, HTTPException, Response
 
 from app.api.deps import DbPath
-from app.core.categorize import apply_rules
+from app.core.categorize import DEFICIT_GROUP, SAVINGS_GROUP, apply_rules, averaging_window
 from app.core.config_export import category_paths, csv_text
-from app.db import connect, euros, to_cents
+from app.db import connect, euros, real_flow_clause, to_cents
 from app.schemas import CategoryIn, CategoryMoveIn, CategoryOut, CategoryTargetIn
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
@@ -84,6 +84,40 @@ def _targeted_ancestor(conn, category_id: int | None) -> str | None:
             return name
         category_id = parent_id
     return None
+
+
+def _reject_non_spending_target(conn, category: CategoryOut) -> None:
+    """Targets cap spending: refuse one on income (a subtree whose real flows over the last 12
+    complete budget months are net credit), inside Déficit, or below Épargne (the Épargne group's
+    own target is the savings goal)."""
+    top = category.path.split(" / ")[0]
+    if top == DEFICIT_GROUP or (top == SAVINGS_GROUP and not category.is_root):
+        raise HTTPException(
+            422,
+            detail=[
+                f"Pas d’objectif sur « {category.path} » : l’objectif d’épargne se fixe sur « {SAVINGS_GROUP} »"
+            ],
+        )
+    if top == SAVINGS_GROUP:
+        return
+    months = [
+        m for (m,) in conn.execute("SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month")
+    ]
+    window = averaging_window(months, 12)
+    if not window:
+        return
+    marks = ",".join("?" * len(window))
+    debit, credit = conn.execute(
+        "WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM categories c JOIN sub s ON c.parent_id = s.id) "
+        "SELECT COALESCE(SUM(debit_cents), 0), COALESCE(SUM(credit_cents), 0) FROM transactions "
+        f"WHERE category_id IN (SELECT id FROM sub) AND {real_flow_clause()} AND budget_month IN ({marks})",
+        (category.id, *window),
+    ).fetchone()
+    if credit > debit:
+        raise HTTPException(
+            422,
+            detail=[f"« {category.name} » est un revenu : un objectif plafonne une dépense, pas un revenu"],
+        )
 
 
 def _has_targeted_descendant(conn, category_id: int) -> bool:
@@ -255,6 +289,7 @@ def set_category_target(category_id: int, target: CategoryTargetIn, db_path: DbP
         if cents is not None and cents <= 0:
             raise HTTPException(422, detail=["Un objectif doit valoir au moins 0,01 €"])
         if cents is not None:
+            _reject_non_spending_target(conn, category)
             holder = _targeted_ancestor(conn, category.parent_id)
             if holder is not None:
                 raise HTTPException(

@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.categories import _load_all
 from app.api.errors import french_message
+from app.core.categorize import apply_rules
 from app.core.config_export import category_paths, export_config
 from app.core.parsing import parse_csv
 from app.db import connect, get_transfer_markers, import_transactions, init_db
@@ -1500,6 +1501,28 @@ class TestBudgetTargets:
         assert client.put(f"/api/categories/{bar}/target", json={"budget_target": None}).status_code == 200
         client.put(f"/api/categories/{sortie}/target", json={"budget_target": None})
         assert client.put(f"/api/categories/{bar}/target", json={"budget_target": 10}).status_code == 200
+
+    def test_targets_cap_spending_only(self, seeded_db, client):
+        import_rows(
+            seeded_db,
+            ("2026-05-05", "2026-05-05", "VIR EMPLOYEUR", 0, 2000, "PERSO"),
+            ("2026-06-05", "2026-06-05", "VIR EMPLOYEUR", 0, 2000, "PERSO"),
+        )
+        apply_rules(seeded_db)
+        resp = client.put(
+            f"/api/categories/{_category_id(client, 'salaire')}/target", json={"budget_target": 10}
+        )
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == [
+            "« salaire » est un revenu : un objectif plafonne une dépense, pas un revenu"
+        ]
+        epargne = client.post("/api/categories", json={"name": "Épargne", "parent_id": None}).json()["id"]
+        livret = client.post("/api/categories", json={"name": "Livret", "parent_id": epargne}).json()["id"]
+        assert client.put(f"/api/categories/{livret}/target", json={"budget_target": 10}).status_code == 422
+        # The Épargne group's own target is the savings goal, out of the spending caps.
+        assert client.put(f"/api/categories/{epargne}/target", json={"budget_target": 300}).status_code == 200
+        budget = client.get("/api/dashboard", params={"month": "2026-06"}).json()["budget"]
+        assert (budget["savings_target"], budget["groups"], budget["income_reference"]) == (300, [], 2000)
 
     def test_dashboard_without_transactions(self, seeded_db, client):
         """A fresh DB with targets (data/ ships some) but nothing imported yet."""
