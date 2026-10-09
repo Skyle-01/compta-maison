@@ -71,8 +71,17 @@ function TrendDot({
 
 /** A compact reste-by-month sparkline so the current month reads in context: short month ticks,
  *  the current month's amount (the extremes in the "Tous les mois" view), a labelled zero line and
- *  a red tint below it so a deficit month stands out. */
-export default function ResteTrend({ history, current }: { history: MonthTotals[]; current: string }) {
+ *  a red tint below it so a deficit month stands out. With `onSelect` (the dashboard; not the
+ *  printed report) a click anywhere on the chart picks the month under the tooltip. */
+export default function ResteTrend({
+  history,
+  current,
+  onSelect,
+}: {
+  history: MonthTotals[];
+  current: string;
+  onSelect?: (month: string) => void;
+}) {
   if (history.length < 2) return null;
   const values = history.map((h) => h.reste);
   const min = Math.min(0, ...values);
@@ -83,9 +92,24 @@ export default function ResteTrend({ history, current }: { history: MonthTotals[
   const labelled = trendValueLabels(history, current);
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4">
-      <div className="mb-1 text-sm text-zinc-500">Reste mois par mois</div>
+      <div className="mb-1 flex items-baseline justify-between text-sm text-zinc-500">
+        <span>Reste mois par mois</span>
+        {onSelect && <span className="text-xs print:hidden">Cliquez sur un mois pour l’afficher</span>}
+      </div>
       <ResponsiveContainer width="100%" height={112}>
-        <LineChart data={history} margin={{ top: 18, right: 8, bottom: 0, left: 28 }}>
+        <LineChart
+          data={history}
+          margin={{ top: 18, right: 8, bottom: 0, left: 28 }}
+          style={onSelect ? { cursor: "pointer" } : undefined}
+          onClick={
+            onSelect
+              ? (state) => {
+                  const month = history[Number(state.activeIndex)]?.month;
+                  if (month && month !== current) onSelect(month);
+                }
+              : undefined
+          }
+        >
           <XAxis
             dataKey="month"
             ticks={trendTicks(history, current)}

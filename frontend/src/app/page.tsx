@@ -600,7 +600,7 @@ export default function DashboardPage() {
         <Stat label="Reste" value={data.reste} delta={deltaProps(data.reste, prev?.reste, true)} />
       </div>
 
-      <ResteTrend history={hist} current={data.month} />
+      <ResteTrend history={hist} current={data.month} onSelect={load} />
 
       <BudgetSection budget={data.budget} all={all} />
 
