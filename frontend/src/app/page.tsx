@@ -270,7 +270,7 @@ function AverageStat({
  *  still filling, never counts), each compared with the displayed month. The rows, Non classé and
  *  the compensations add up to the Revenus / Dépenses averages; the savings accounts to Épargne. */
 function AveragesSection({ data }: { data: Dashboard }) {
-  const [period, setPeriod] = useState<AveragePeriod>("6");
+  const [period, setPeriod] = useState<AveragePeriod>("12");
   const [avg, setAvg] = useState<CategoryAverages | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Set<number>>(new Set());
