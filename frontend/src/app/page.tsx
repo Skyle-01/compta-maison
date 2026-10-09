@@ -124,6 +124,9 @@ function HeroSummary({ data }: { data: Dashboard }) {
   );
 }
 
+/** The Objectif cell's colour: green while under 90 % of the target, then the Budget bands. */
+const OBJECTIVE_TEXT = { ...TONE_TEXT, ok: "text-green-700" };
+
 const NUM = "px-2 py-1 text-right tabular-nums";
 
 /** A signed average, green above zero and red below; blank when zero. */
@@ -139,7 +142,6 @@ function AverageLine({
   value,
   month,
   gaps,
-  gapClass = "text-zinc-700",
   last,
   className = "border-b border-zinc-100",
   labelClass = "font-medium",
@@ -151,7 +153,6 @@ function AverageLine({
   value: number;
   month: number | null;
   gaps: boolean;
-  gapClass?: string;
   last?: ReactNode;
   className?: string;
   labelClass?: string;
@@ -171,19 +172,12 @@ function AverageLine({
       {gaps && (
         <td className={NUM}>
           {month !== null && <NetCell value={month} />}{" "}
-          <Gap month={month} average={value} className={gapClass} wrap />
+          <Gap month={month} average={value} className="text-zinc-700" wrap />
         </td>
       )}
       <td className={NUM}>{last}</td>
     </tr>
   );
-}
-
-/** A targeted category's gap colour: neutral while the month stays under 90 % of the target, then the
- *  Budget section's amber / red. */
-function gapBudgetClass(monthSpending: number, target: number): string | undefined {
-  const tone = budgetTone(budgetRatio(monthSpending, target));
-  return tone === "ok" ? undefined : TONE_TEXT[tone];
 }
 
 /** A category row (indented by depth), expandable to its sub-categories. An own target turns
@@ -210,12 +204,6 @@ function AverageRow({
         value={averageNet(node.expenses, node.income)}
         month={monthNet(node.month_expenses, node.month_income)}
         gaps={gaps}
-        gapClass={
-          // Only an own target is comparable (a Σ of children's targets leaves untargeted ones out).
-          ownTarget(node) && node.target !== null && node.month_expenses !== null
-            ? gapBudgetClass(node.month_expenses - (node.month_income ?? 0), node.target)
-            : undefined
-        }
         indent={depth * 20}
         marker={expandable ? (isOpen ? "▾" : "▸") : ""}
         labelClass={depth === 0 ? "font-medium" : "text-zinc-700"}
@@ -226,7 +214,7 @@ function AverageRow({
             <span
               className={
                 ownTarget(node)
-                  ? TONE_TEXT[budgetTone(budgetRatio(node.expenses - node.income, node.target))]
+                  ? OBJECTIVE_TEXT[budgetTone(budgetRatio(node.expenses - node.income, node.target))]
                   : "text-zinc-500"
               }
             >
@@ -414,8 +402,8 @@ function AveragesSection({ data }: { data: Dashboard }) {
           Mois complets uniquement : {frenchMonth(avg.current_month ?? "")}, en cours, n’est pas compté.
           Chaque ligne est le solde moyen d’un mois : en vert ce qui rentre, en rouge ce qui sort (un
           remboursement vient en déduction de sa catégorie) ; le total vaut Revenus − Dépenses. La colonne
-          du mois affiche {gaps ? monthLabel : "le mois affiché"} et, entre parenthèses, son écart à cette moyenne ; sur une catégorie avec
-          objectif, il passe en orange ou en rouge quand ce mois-là approche ou dépasse l’objectif.
+          du mois affiche {gaps ? monthLabel : "le mois affiché"} et, entre parenthèses, son écart à cette moyenne. Sur une catégorie avec
+          objectif, l’objectif est vert tant que la moyenne reste sous 90 %, orange de 90 à 100 %, rouge au-delà.
         </p>
       </>
     );
