@@ -444,6 +444,11 @@ export const api = {
     return (await api.listTransactions({ uncategorized: true, limit: 1 })).total;
   },
 
+  /** Value date of the most recent operation (the list is ordered by it), null on an empty DB. */
+  async latestTransactionDate(): Promise<string | null> {
+    return (await api.listTransactions({ limit: 1 })).items[0]?.date_valeur ?? null;
+  },
+
   listAccounts: (): Promise<Account[]> => request("/api/accounts"),
 
   listCategories: (): Promise<Category[]> => request("/api/categories"),

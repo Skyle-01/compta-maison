@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, UNCATEGORIZED_CHANGED } from "@/lib/api";
+import { api, frenchDate, UNCATEGORIZED_CHANGED } from "@/lib/api";
 
 const NAV = [
   { href: "/", label: "Tableau de bord" },
@@ -19,6 +19,7 @@ const NAV = [
 export default function Nav() {
   const pathname = usePathname();
   const [count, setCount] = useState<number | null>(null);
+  const [latest, setLatest] = useState<string | null>(null);
 
   useEffect(() => {
     const refresh = () =>
@@ -27,6 +28,10 @@ export default function Nav() {
         .then(setCount)
         .catch(() => setCount(null));
     refresh();
+    api
+      .latestTransactionDate()
+      .then(setLatest)
+      .catch(() => setLatest(null));
     window.addEventListener(UNCATEGORIZED_CHANGED, refresh);
     return () => window.removeEventListener(UNCATEGORIZED_CHANGED, refresh);
   }, [pathname]);
@@ -40,6 +45,11 @@ export default function Nav() {
           {href === "/a-classer" && count != null && ` (${count})`}
         </Link>
       ))}
+      {latest && (
+        <span className="ml-auto text-xs text-zinc-500" title="Date de valeur de l’opération la plus récente">
+          Dernière opération : {frenchDate(latest)}
+        </span>
+      )}
     </nav>
   );
 }
