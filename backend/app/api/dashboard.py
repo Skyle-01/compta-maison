@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.deps import DbPath
 from app.core.categorize import (
+    INCOME_GROUP,
     budget_status,
     category_averages,
     category_tree,
@@ -75,12 +76,14 @@ def get_dashboard(db_path: DbPath, month: str | None = None) -> Dashboard:
 
 
 def _budget(db_path: DbPath, period: str | None, n_months: int, savings: float) -> dict[str, Any]:
-    """budget_status plus what balances it: the reference income (the average month of the last 12
-    complete budget months, net of refunds like the report) and the net savings of the period."""
-    averages = category_averages(db_path, 12, None)
+    """budget_status plus what balances it: the reference income (the net average month of the
+    INCOME_GROUP top-level category over the last 12 complete budget months: no rent received nor
+    savings withdrawn) and the net savings of the period."""
+    groups = category_averages(db_path, 12, None)["groups"]
+    income = next((g["income"] - g["expenses"] for g in groups if g["name"] == INCOME_GROUP), 0.0)
     return {
         **budget_status(db_path, period, n_months),
-        "income_reference": round(averages["totals"]["income"] - averages["offset"]["value"], 2),
+        "income_reference": round(income, 2),
         "savings_actual": round(savings, 2),
     }
 

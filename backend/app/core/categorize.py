@@ -237,6 +237,9 @@ def monthly_totals(db_path: Path = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
 # monthly savings goal (a floor, not a cap); nothing below them, nor DEFICIT_GROUP, takes a target.
 SAVINGS_GROUP = "Épargne"
 DEFICIT_GROUP = "Déficit"
+# The top-level group whose net average month is the budget's reference income (not rent received,
+# refunds or savings withdrawn).
+INCOME_GROUP = "Revenus"
 
 
 def budget_status(

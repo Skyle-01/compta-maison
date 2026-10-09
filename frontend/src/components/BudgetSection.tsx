@@ -64,7 +64,7 @@ export function BudgetBalance({
   return (
     <p
       className="text-sm text-zinc-700"
-      title="Revenu mensuel moyen des 12 derniers mois complets, net des remboursements"
+      title="Revenu mensuel moyen du groupe « Revenus » sur les 12 derniers mois complets (hors loyers perçus et désépargne)"
     >
       Revenu moyen <span className="tabular-nums">{formatEuro(income)}</span> − objectifs de dépense{" "}
       <span className="tabular-nums">{formatEuro(spending)}</span>

@@ -1522,7 +1522,13 @@ class TestBudgetTargets:
         # The Épargne group's own target is the savings goal, out of the spending caps.
         assert client.put(f"/api/categories/{epargne}/target", json={"budget_target": 300}).status_code == 200
         budget = client.get("/api/dashboard", params={"month": "2026-06"}).json()["budget"]
-        assert (budget["savings_target"], budget["groups"], budget["income_reference"]) == (300, [], 2000)
+        # The reference income is the « Revenus » group's only: none here yet.
+        assert (budget["savings_target"], budget["groups"], budget["income_reference"]) == (300, [], 0)
+        client.put(
+            f"/api/categories/{_category_id(client, 'fixe')}", json={"name": "Revenus", "parent_id": None}
+        )
+        budget = client.get("/api/dashboard", params={"month": "2026-06"}).json()["budget"]
+        assert budget["income_reference"] == 2000
 
     def test_dashboard_without_transactions(self, seeded_db, client):
         """A fresh DB with targets (data/ ships some) but nothing imported yet."""

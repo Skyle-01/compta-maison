@@ -1,3 +1,5 @@
+import type { CategoryAverages } from "./api";
+
 /** Pure helpers for the dashboard Budget section (spending vs a category's target). */
 
 export type BudgetTone = "ok" | "warn" | "over";
@@ -58,4 +60,11 @@ export function categoryTargets(
     else spending += c.budget_target;
   }
   return { spending: Math.round(spending * 100) / 100, savings };
+}
+
+/** The budget's reference income: the net average month of the top-level `incomeGroup` category
+ *  (salaries…), not rent received nor savings withdrawn; 0 without it. Mirrors the backend's. */
+export function incomeReference(avg: CategoryAverages, incomeGroup = "Revenus"): number {
+  const g = avg.groups.find((n) => n.name === incomeGroup);
+  return g ? Math.round((g.income - g.expenses) * 100) / 100 : 0;
 }
