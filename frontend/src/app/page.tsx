@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ALL_MONTHS,
@@ -28,6 +28,7 @@ import { AVERAGE_PERIODS, averageNet, monthNet, periodSummary, visibleAverageNod
 import { budgetRatio, budgetTone } from "@/lib/budget";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { reportLink } from "@/lib/report";
+import { resteAverage, resteAverageMonths } from "@/lib/trend";
 
 /** A muted "▲ 1 234 € vs avril" delta line under a stat. `goodIsUp` colours the change green/red
  *  by whether an increase is good (revenus, reste) or bad (dépenses). */
@@ -517,14 +518,40 @@ export default function DashboardPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const request = useRef(0); // a slower answer for a previous month must not overwrite this one
+
   const load = useCallback((month?: string) => {
+    const id = ++request.current;
     api
       .dashboard(month)
-      .then(setData)
-      .catch((e) => setError(errorMessage(e)));
+      .then((d) => {
+        // An unknown ?month= (a stale link, a rebuilt DB) falls back to the latest month.
+        if (!month || month === ALL_MONTHS || d.months_available.includes(month)) return d;
+        window.history.replaceState(null, "", window.location.pathname);
+        return api.dashboard();
+      })
+      .then((d) => {
+        if (id === request.current) setData(d);
+      })
+      .catch((e) => {
+        if (id === request.current) setError(errorMessage(e));
+      });
   }, []);
 
-  useEffect(() => load(), [load]);
+  // The displayed month lives in the URL (?month=, none for the latest month) so a reload keeps it
+  // and the browser's Back button returns to the previous month.
+  useEffect(() => {
+    const fromUrl = () => load(new URLSearchParams(window.location.search).get("month") ?? undefined);
+    fromUrl();
+    window.addEventListener("popstate", fromUrl);
+    return () => window.removeEventListener("popstate", fromUrl);
+  }, [load]);
+
+  const select = (month: string, latest: string | undefined) => {
+    const url = month === latest ? window.location.pathname : `?month=${month}`;
+    window.history.pushState(null, "", url);
+    load(month);
+  };
 
   if (error) return <p className="text-red-700">{error}</p>;
   if (!data) return <p className="text-zinc-500">Chargement…</p>;
@@ -545,6 +572,8 @@ export default function DashboardPage() {
   const cur = hist.findIndex((h) => h.month === data.month);
   const prev = cur > 0 ? hist[cur - 1] : null;
   const epargneNet = data.epargne - data.desepargne;
+  const latest = data.months_available[0];
+  const choose = (m: string) => select(m, latest);
   const deltaProps = (current: number, previous: number | undefined, goodIsUp: boolean) =>
     prev && previous !== undefined
       ? { delta: current - previous, prevMonth: prev.month, goodIsUp }
@@ -561,10 +590,19 @@ export default function DashboardPage() {
           >
             Rapport PDF
           </Link>
+          {data.month !== latest && (
+            <button
+              type="button"
+              onClick={() => choose(latest)}
+              className="text-sm text-zinc-600 underline hover:text-zinc-900 hover:no-underline"
+            >
+              Dernier mois
+            </button>
+          )}
           <select
             className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
             value={data.month}
-            onChange={(e) => load(e.target.value)}
+            onChange={(e) => choose(e.target.value)}
           >
             <option value={ALL_MONTHS}>Tous les mois</option>
             {data.months_available.map((m) => (
@@ -600,7 +638,14 @@ export default function DashboardPage() {
         <Stat label="Reste" value={data.reste} delta={deltaProps(data.reste, prev?.reste, true)} />
       </div>
 
-      <ResteTrend history={hist} current={data.month} onSelect={load} />
+      <ResteTrend
+        history={hist}
+        current={data.month}
+        latest={hist.at(-1)?.month}
+        average={resteAverage(hist)}
+        averageMonths={resteAverageMonths(hist)}
+        onSelect={choose}
+      />
 
       <BudgetSection budget={data.budget} all={all} />
 

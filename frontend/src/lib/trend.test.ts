@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { MonthTotals } from "./api";
-import { MAX_TREND_TICKS, monthTick, trendTicks, trendValueLabels } from "./trend";
+import {
+  MAX_TREND_TICKS,
+  averageLabel,
+  monthTick,
+  resteAverage,
+  resteAverageMonths,
+  trendTicks,
+  trendValueLabels,
+} from "./trend";
 
 const months = (n: number, reste: (i: number) => number = () => 100): MonthTotals[] =>
   Array.from({ length: n }, (_, i) => {
@@ -34,5 +42,28 @@ describe("trend helpers", () => {
     expect([...trendValueLabels(h, h[2].month)]).toEqual([h[2].month]);
     expect(trendValueLabels(h, "all")).toEqual(new Set([h[1].month, h[3].month]));
     expect(trendValueLabels([], "all").size).toBe(0);
+  });
+
+  it("averages the Reste of the complete months only", () => {
+    const h = months(4, (i) => [100, 200, 300, -1000][i]);
+    expect(resteAverage(h)).toBe(200);
+  });
+
+  it("keeps the last 12 complete months", () => {
+    const h = months(20, (i) => (i < 7 ? 1000 : 10));
+    expect(resteAverage(h)).toBe(10);
+  });
+
+  it("has no average without a complete month", () => {
+    expect(resteAverage(months(1))).toBeNull();
+    expect(resteAverage([])).toBeNull();
+  });
+
+  it("names the months the average spans", () => {
+    expect(resteAverageMonths(months(20))).toBe(12);
+    expect(resteAverageMonths(months(5))).toBe(4);
+    expect(averageLabel(12)).toBe("moyenne des 12 derniers mois clos");
+    expect(averageLabel(4)).toBe("moyenne des 4 mois clos");
+    expect(averageLabel(1)).toBe("moyenne du seul mois clos");
   });
 });

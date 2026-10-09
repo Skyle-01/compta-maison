@@ -447,7 +447,13 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
         </p>
 
         <div className="mt-5">
-          <ResteTrend history={history} current={month} />
+          <ResteTrend
+            history={history}
+            current={month}
+            latest={data.history.at(-1)?.month}
+            average={totals?.reste ?? null}
+            averageMonths={avg.months}
+          />
         </div>
 
         <div className="mt-5 rounded-lg bg-zinc-50 p-4 text-sm text-zinc-700">
@@ -592,7 +598,10 @@ export default function ReportPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="flex items-center gap-3">
-          <Link href="/" className="text-sm text-zinc-600 hover:text-zinc-900">
+          <Link
+            href={month && month !== available?.[0] ? `/?month=${month}` : "/"}
+            className="text-sm text-zinc-600 hover:text-zinc-900"
+          >
             ← Tableau de bord
           </Link>
           <h1 className="text-xl font-semibold">Rapport</h1>
