@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AverageNode, CategoryAverages } from "./api";
-import { averageGap, gapTone, periodSummary, visibleAverageNodes } from "./averages";
+import { averageGap, averageNet, gapTone, monthNet, periodSummary, visibleAverageNodes } from "./averages";
 
 const node = (name: string, over: Partial<AverageNode> = {}): AverageNode => ({
   id: name.length,
@@ -64,5 +64,14 @@ describe("averages helpers", () => {
       "sur 1 mois seulement (août 2026)",
     );
     expect(periodSummary(averages({ months: 0, first_month: null, last_month: null }), "3")).toBeNull();
+  });
+
+  it("signs a row: income positive, spending negative", () => {
+    expect(averageNet(450.1, 0)).toBe(-450.1);
+    expect(averageNet(0, 2500)).toBe(2500);
+    expect(averageNet(30.1, 10.05)).toBe(-20.05); // Non classé, gross on both sides
+    expect(monthNet(-12, null)).toBe(12); // a refund month on a spending category
+    expect(monthNet(null, 300)).toBe(300);
+    expect(monthNet(null, null)).toBeNull();
   });
 });

@@ -24,7 +24,7 @@ import Gap from "@/components/Gap";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
-import { AVERAGE_PERIODS, periodSummary, visibleAverageNodes } from "@/lib/averages";
+import { AVERAGE_PERIODS, averageNet, monthNet, periodSummary, visibleAverageNodes } from "@/lib/averages";
 import { budgetRatio, budgetTone } from "@/lib/budget";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { reportLink } from "@/lib/report";
@@ -117,19 +117,22 @@ function HeroSummary({ data }: { data: Dashboard }) {
   );
 }
 
-/** An average amount, blank when zero so a group's empty side reads as nothing rather than 0 €. */
-const amountCell = (value: number) => (Math.abs(value) < 0.005 ? "" : formatEuro(value));
-
 const NUM = "px-2 py-1 text-right tabular-nums";
 
-/** One table row of the averages: a label, spending and income with their gaps, and a last cell. */
+/** A signed average, green above zero and red below; blank when zero. */
+function NetCell({ value }: { value: number }) {
+  if (Math.abs(value) < 0.005) return null;
+  return <span className={value > 0 ? "text-green-700" : "text-red-700"}>{formatEuro(value)}</span>;
+}
+
+/** One table row of the averages: a label, the signed average with its gap, and a last cell.
+ *  `goodIsUp` is false for the savings rows, where putting more aside (more negative) is good. */
 function AverageLine({
   label,
-  expenses,
-  income,
-  monthExpenses,
-  monthIncome,
+  value,
+  month,
   gaps,
+  goodIsUp = true,
   last,
   className = "border-b border-zinc-100",
   labelClass = "font-medium",
@@ -138,11 +141,10 @@ function AverageLine({
   onClick,
 }: {
   label: string;
-  expenses: number;
-  income: number;
-  monthExpenses: number | null;
-  monthIncome: number | null;
+  value: number;
+  month: number | null;
   gaps: boolean;
+  goodIsUp?: boolean;
   last?: ReactNode;
   className?: string;
   labelClass?: string;
@@ -156,16 +158,12 @@ function AverageLine({
         <span className="mr-1 inline-block w-3 text-zinc-500">{marker}</span>
         {label}
       </td>
-      <td className={`${NUM} text-red-700`}>{amountCell(expenses)}</td>
+      <td className={NUM}>
+        <NetCell value={value} />
+      </td>
       {gaps && (
         <td className={NUM}>
-          <Gap month={monthExpenses} average={expenses} goodIsUp={false} />
-        </td>
-      )}
-      <td className={`${NUM} text-green-700`}>{amountCell(income)}</td>
-      {gaps && (
-        <td className={NUM}>
-          <Gap month={monthIncome} average={income} goodIsUp />
+          <Gap month={month} average={value} goodIsUp={goodIsUp} />
         </td>
       )}
       <td className={NUM}>{last}</td>
@@ -194,10 +192,8 @@ function AverageRow({
     <>
       <AverageLine
         label={node.name}
-        expenses={node.expenses}
-        income={node.income}
-        monthExpenses={node.month_expenses}
-        monthIncome={node.month_income}
+        value={averageNet(node.expenses, node.income)}
+        month={monthNet(node.month_expenses, node.month_income)}
         gaps={gaps}
         indent={depth * 20}
         marker={expandable ? (isOpen ? "▾" : "▸") : ""}
@@ -306,8 +302,7 @@ function AveragesSection({ data }: { data: Dashboard }) {
       </p>
     );
   } else {
-    const { totals, uncategorized: unc, offset } = avg;
-    const showOffset = offset.value >= 0.005 || (offset.month_value ?? 0) >= 0.005;
+    const { totals, uncategorized: unc } = avg;
     body = (
       <>
         <div className="grid grid-cols-4 gap-3">
@@ -349,9 +344,7 @@ function AveragesSection({ data }: { data: Dashboard }) {
           <thead>
             <tr className="border-b border-zinc-200 text-xs text-zinc-500">
               <th className="py-1 text-left font-normal">Catégorie</th>
-              <th className="px-2 py-1 text-right font-normal">Dépenses / mois</th>
-              {gaps && <th className="px-2 py-1 text-right font-normal">Écart {monthLabel}</th>}
-              <th className="px-2 py-1 text-right font-normal">Revenus / mois</th>
+              <th className="px-2 py-1 text-right font-normal">Moyenne / mois</th>
               {gaps && <th className="px-2 py-1 text-right font-normal">Écart {monthLabel}</th>}
               <th className="px-2 py-1 text-right font-normal">Objectif</th>
             </tr>
@@ -362,71 +355,34 @@ function AveragesSection({ data }: { data: Dashboard }) {
             ))}
             <AverageLine
               label="Non classé"
-              expenses={unc.expenses}
-              income={unc.income}
-              monthExpenses={unc.month_expenses}
-              monthIncome={unc.month_income}
+              value={averageNet(unc.expenses, unc.income)}
+              month={monthNet(unc.month_expenses, unc.month_income)}
               gaps={gaps}
             />
-            {showOffset && (
-              // Shown on both sides without gaps: it explains the totals, it is not a category.
+            {avg.savings.map((s) => (
               <AverageLine
-                label="Remboursements et compensations"
-                expenses={offset.value}
-                income={offset.value}
-                monthExpenses={null}
-                monthIncome={null}
+                key={s.account_id}
+                label={`Épargne ${s.name}`}
+                value={averageNet(s.epargne, s.desepargne)}
+                month={monthNet(s.month_epargne, s.month_desepargne)}
                 gaps={gaps}
-                labelClass="text-zinc-500"
+                goodIsUp={false}
               />
-            )}
+            ))}
             <AverageLine
-              label="Total"
-              expenses={totals.expenses}
-              income={totals.income}
-              monthExpenses={gaps ? data.expenses : null}
-              monthIncome={gaps ? data.income : null}
+              label="Reste"
+              value={totals.reste}
+              month={gaps ? data.reste : null}
               gaps={gaps}
               className="border-t-2 border-zinc-200 font-medium"
             />
-            {avg.savings.length > 0 && (
-              <tr className="text-xs text-zinc-500">
-                <td className="pb-1 pt-4">Comptes d’épargne</td>
-                <td className="px-2 pb-1 pt-4 text-right">Mis de côté / mois</td>
-                {gaps && <td />}
-                <td className="px-2 pb-1 pt-4 text-right">Puisé / mois</td>
-                {gaps && <td />}
-                <td />
-              </tr>
-            )}
-            {avg.savings.map((s) => (
-              <tr key={s.account_id} className="border-t border-zinc-100">
-                <td className="py-1 pr-2 text-zinc-700">
-                  <span className="mr-1 inline-block w-3" />
-                  {s.name}
-                </td>
-                <td className={`${NUM} text-violet-700`}>{amountCell(s.epargne)}</td>
-                {gaps && (
-                  <td className={NUM}>
-                    <Gap month={s.month_epargne} average={s.epargne} goodIsUp />
-                  </td>
-                )}
-                <td className={`${NUM} text-amber-700`}>{amountCell(s.desepargne)}</td>
-                {gaps && (
-                  <td className={NUM}>
-                    <Gap month={s.month_desepargne} average={s.desepargne} goodIsUp={false} />
-                  </td>
-                )}
-                <td />
-              </tr>
-            ))}
           </tbody>
         </table>
         <p className="mt-3 text-xs text-zinc-500">
           Mois complets uniquement : {frenchMonth(avg.current_month ?? "")}, en cours, n’est pas compté.
-          Une catégorie compte en dépenses ou en revenus selon son solde sur la période ; ce qu’elle
-          reçoit ou paie à contre-sens (un remboursement de courses) passe en « Remboursements et
-          compensations », pour que les totaux égalent les moyennes de Revenus et Dépenses.
+          Chaque ligne est le solde moyen d’un mois : en vert ce qui rentre, en rouge ce qui sort (un
+          remboursement vient en déduction de sa catégorie). Les lignes s’additionnent pour donner le
+          Reste ; l’écart compare {gaps ? monthLabel : "le mois affiché"} à cette moyenne.
         </p>
       </>
     );

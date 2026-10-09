@@ -45,3 +45,15 @@ export function periodSummary(avg: CategoryAverages, period: AveragePeriod): str
       : `${frenchMonth(avg.first_month)} – ${frenchMonth(avg.last_month)}`;
   return `sur ${avg.months} mois${short} (${range})`;
 }
+
+/** A row's signed average (income − spending: a spending category reads negative), rounded to the
+ *  cent. Netting the two sides drops the compensations: the rows add up to Revenus − Dépenses. */
+export function averageNet(expenses: number, income: number): number {
+  return Math.round((income - expenses) * 100) / 100;
+}
+
+/** The displayed month's signed value of a row; null when there is no month (« Tous les mois »). */
+export function monthNet(monthExpenses: number | null, monthIncome: number | null): number | null {
+  if (monthExpenses === null && monthIncome === null) return null;
+  return averageNet(monthExpenses ?? 0, monthIncome ?? 0);
+}
