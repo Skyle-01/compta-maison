@@ -125,14 +125,14 @@ function NetCell({ value }: { value: number }) {
   return <span className={value > 0 ? "text-green-700" : "text-red-700"}>{formatEuro(value)}</span>;
 }
 
-/** One table row of the averages: a label, the signed average with its gap, and a last cell.
- *  `goodIsUp` is false for the savings rows, where putting more aside (more negative) is good. */
+/** One table row of the averages: a label, the signed average with its gap, and a last cell. The
+ *  gap is neutral unless `gapClass` colours it (a targeted leaf: the month's spending vs its target). */
 function AverageLine({
   label,
   value,
   month,
   gaps,
-  goodIsUp = true,
+  gapClass = "text-zinc-700",
   last,
   className = "border-b border-zinc-100",
   labelClass = "font-medium",
@@ -144,7 +144,7 @@ function AverageLine({
   value: number;
   month: number | null;
   gaps: boolean;
-  goodIsUp?: boolean;
+  gapClass?: string;
   last?: ReactNode;
   className?: string;
   labelClass?: string;
@@ -163,12 +163,19 @@ function AverageLine({
       </td>
       {gaps && (
         <td className={NUM}>
-          <Gap month={month} average={value} goodIsUp={goodIsUp} />
+          <Gap month={month} average={value} className={gapClass} />
         </td>
       )}
       <td className={NUM}>{last}</td>
     </tr>
   );
+}
+
+/** A targeted leaf's gap colour: neutral while the month stays under 90 % of the target, then the
+ *  Budget section's amber / red. */
+function gapBudgetClass(monthSpending: number, target: number): string | undefined {
+  const tone = budgetTone(budgetRatio(monthSpending, target));
+  return tone === "ok" ? undefined : TONE_TEXT[tone];
 }
 
 /** A category row (indented by depth), expandable to its sub-categories. A leaf's target turns
@@ -195,6 +202,12 @@ function AverageRow({
         value={averageNet(node.expenses, node.income)}
         month={monthNet(node.month_expenses, node.month_income)}
         gaps={gaps}
+        gapClass={
+          // Only a leaf's spending is comparable with its target (a group also counts untargeted leaves).
+          !expandable && node.target !== null && node.month_expenses !== null
+            ? gapBudgetClass(node.month_expenses, node.target)
+            : undefined
+        }
         indent={depth * 20}
         marker={expandable ? (isOpen ? "▾" : "▸") : ""}
         labelClass={depth === 0 ? "font-medium" : "text-zinc-700"}
@@ -359,30 +372,40 @@ function AveragesSection({ data }: { data: Dashboard }) {
               month={monthNet(unc.month_expenses, unc.month_income)}
               gaps={gaps}
             />
-            {avg.savings.map((s) => (
-              <AverageLine
-                key={s.account_id}
-                label={`Épargne ${s.name}`}
-                value={averageNet(s.epargne, s.desepargne)}
-                month={monthNet(s.month_epargne, s.month_desepargne)}
-                gaps={gaps}
-                goodIsUp={false}
-              />
-            ))}
             <AverageLine
-              label="Reste"
-              value={totals.reste}
-              month={gaps ? data.reste : null}
+              label="Total"
+              value={averageNet(totals.expenses, totals.income)}
+              month={gaps ? averageNet(data.expenses, data.income) : null}
               gaps={gaps}
               className="border-t-2 border-zinc-200 font-medium"
             />
+            {avg.savings.length > 0 && (
+              <tr className="text-xs text-zinc-500">
+                <td className="pb-1 pt-4">Comptes d’épargne</td>
+                <td className="px-2 pb-1 pt-4 text-right">Mis de côté / mois</td>
+                {gaps && <td />}
+                <td />
+              </tr>
+            )}
+            {avg.savings.map((s) => (
+              // Positive = set aside, negative = dipped into (the Épargne card's sign).
+              <AverageLine
+                key={s.account_id}
+                label={s.name}
+                value={averageNet(s.desepargne, s.epargne)}
+                month={monthNet(s.month_desepargne, s.month_epargne)}
+                gaps={gaps}
+                labelClass="text-zinc-700"
+              />
+            ))}
           </tbody>
         </table>
         <p className="mt-3 text-xs text-zinc-500">
           Mois complets uniquement : {frenchMonth(avg.current_month ?? "")}, en cours, n’est pas compté.
           Chaque ligne est le solde moyen d’un mois : en vert ce qui rentre, en rouge ce qui sort (un
-          remboursement vient en déduction de sa catégorie). Les lignes s’additionnent pour donner le
-          Reste ; l’écart compare {gaps ? monthLabel : "le mois affiché"} à cette moyenne.
+          remboursement vient en déduction de sa catégorie) ; le total vaut Revenus − Dépenses. L’écart
+          compare {gaps ? monthLabel : "le mois affiché"} à cette moyenne ; sur une catégorie avec
+          objectif, il passe en orange ou en rouge quand ce mois-là approche ou dépasse l’objectif.
         </p>
       </>
     );
