@@ -170,7 +170,8 @@ function AverageLine({
       </td>
       {gaps && (
         <td className={NUM}>
-          <Gap month={month} average={value} className={gapClass} />
+          {month !== null && <NetCell value={month} />}{" "}
+          <Gap month={month} average={value} className={gapClass} wrap />
         </td>
       )}
       <td className={NUM}>{last}</td>
@@ -367,7 +368,7 @@ function AveragesSection({ data }: { data: Dashboard }) {
             <tr className="border-b border-zinc-200 text-xs text-zinc-500">
               <th className="py-1 text-left font-normal">Catégorie</th>
               <th className="px-2 py-1 text-right font-normal">Moyenne / mois</th>
-              {gaps && <th className="px-2 py-1 text-right font-normal">Écart {monthLabel}</th>}
+              {gaps && <th className="px-2 py-1 text-right font-normal">{monthLabel} (écart)</th>}
               <th className="px-2 py-1 text-right font-normal">Objectif</th>
             </tr>
           </thead>
@@ -412,8 +413,8 @@ function AveragesSection({ data }: { data: Dashboard }) {
         <p className="mt-3 text-xs text-zinc-500">
           Mois complets uniquement : {frenchMonth(avg.current_month ?? "")}, en cours, n’est pas compté.
           Chaque ligne est le solde moyen d’un mois : en vert ce qui rentre, en rouge ce qui sort (un
-          remboursement vient en déduction de sa catégorie) ; le total vaut Revenus − Dépenses. L’écart
-          compare {gaps ? monthLabel : "le mois affiché"} à cette moyenne ; sur une catégorie avec
+          remboursement vient en déduction de sa catégorie) ; le total vaut Revenus − Dépenses. La colonne
+          du mois affiche {gaps ? monthLabel : "le mois affiché"} et, entre parenthèses, son écart à cette moyenne ; sur une catégorie avec
           objectif, il passe en orange ou en rouge quand ce mois-là approche ou dépasse l’objectif.
         </p>
       </>
