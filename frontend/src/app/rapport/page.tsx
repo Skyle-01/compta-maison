@@ -451,8 +451,6 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
             history={history}
             current={month}
             latest={data.history.at(-1)?.month}
-            average={totals?.reste ?? null}
-            averageMonths={avg.months}
           />
         </div>
 

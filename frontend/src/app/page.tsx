@@ -28,7 +28,6 @@ import { AVERAGE_PERIODS, averageNet, monthNet, periodSummary, visibleAverageNod
 import { budgetRatio, budgetTone } from "@/lib/budget";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { reportLink } from "@/lib/report";
-import { resteAverage, resteAverageMonths } from "@/lib/trend";
 
 /** A muted "▲ 1 234 € vs avril" delta line under a stat. `goodIsUp` colours the change green/red
  *  by whether an increase is good (revenus, reste) or bad (dépenses). */
@@ -642,8 +641,6 @@ export default function DashboardPage() {
         history={hist}
         current={data.month}
         latest={hist.at(-1)?.month}
-        average={resteAverage(hist)}
-        averageMonths={resteAverageMonths(hist)}
         onSelect={choose}
       />
 
