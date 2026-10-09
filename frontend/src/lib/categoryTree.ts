@@ -1,4 +1,5 @@
-import type { Category, Rule, Transaction } from "./api";
+import type { AverageNode, Category, Rule, Transaction } from "./api";
+import { averageNet } from "./averages";
 import { fold } from "./categorySearch";
 
 /** The Catégories page's pure helpers: the tree, what each node holds, search, and move undo. */
@@ -23,10 +24,8 @@ export function buildTree(cats: Category[]): CategoryTreeNode[] {
 }
 
 /** What classifies operations into a node: a leaf's own rules and manual assignments, a group's
- *  the sum of its leaves'. `net` = credits − debits of all those operations, in euros. */
-export type Contents = { rules: number; ruleOperations: number; manual: number; net: number };
-
-const round = (euros: number) => Math.round(euros * 100) / 100;
+ *  the sum of its leaves'. */
+export type Contents = { rules: number; ruleOperations: number; manual: number };
 
 export function contentsByCategory(
   tree: CategoryTreeNode[],
@@ -35,19 +34,15 @@ export function contentsByCategory(
 ): Map<number, Contents> {
   const out = new Map<number, Contents>();
   const visit = (node: CategoryTreeNode): Contents => {
-    let contents: Contents = { rules: 0, ruleOperations: 0, manual: 0, net: 0 };
+    let contents: Contents = { rules: 0, ruleOperations: 0, manual: 0 };
     if (node.children.length === 0) {
       for (const r of rules)
         if (r.category_id === node.id) {
           contents.rules += 1;
           contents.ruleOperations += r.operation_count;
-          contents.net += r.credit - r.debit;
         }
       for (const tx of manual)
-        if (tx.category_id === node.id) {
-          contents.manual += 1;
-          contents.net += tx.credit - tx.debit;
-        }
+        if (tx.category_id === node.id) contents.manual += 1;
     } else {
       for (const child of node.children) {
         const c = visit(child);
@@ -55,15 +50,25 @@ export function contentsByCategory(
           rules: contents.rules + c.rules,
           ruleOperations: contents.ruleOperations + c.ruleOperations,
           manual: contents.manual + c.manual,
-          net: contents.net + c.net,
         };
       }
     }
-    contents.net = round(contents.net);
     out.set(node.id, contents);
     return contents;
   };
   tree.forEach(visit);
+  return out;
+}
+
+/** Each category's signed monthly average (income − spending, so a spending category reads
+ *  negative) from the dashboard averages' tree, by category id. */
+export function averageNets(groups: AverageNode[]): Map<number, number> {
+  const out = new Map<number, number>();
+  const visit = (node: AverageNode) => {
+    out.set(node.id, averageNet(node.expenses, node.income));
+    node.children.forEach(visit);
+  };
+  groups.forEach(visit);
   return out;
 }
 

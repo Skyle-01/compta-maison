@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Category, Rule, Transaction } from "./api";
-import { buildTree, contentsByCategory, movedMessage, searchTree, undoMoves } from "./categoryTree";
+import type { AverageNode, Category, Rule, Transaction } from "./api";
+import { averageNets, buildTree, contentsByCategory, movedMessage, searchTree, undoMoves } from "./categoryTree";
 
 function cat(id: number, name: string, parent_id: number | null): Category {
   return { id, name, parent_id, path: name, is_root: parent_id == null, rule_count: 0, budget_target: null };
@@ -66,16 +66,31 @@ describe("contentsByCategory", () => {
     ];
     const manual = [tx(20, 2, { debit: 9.5 }), tx(21, 5, { credit: 2500 })];
     const contents = contentsByCategory(TREE, rules, manual);
-    expect(contents.get(2)).toEqual({ rules: 1, ruleOperations: 3, manual: 1, net: -130 });
-    expect(contents.get(4)).toEqual({ rules: 2, ruleOperations: 2, manual: 0, net: -15 });
+    expect(contents.get(2)).toEqual({ rules: 1, ruleOperations: 3, manual: 1 });
+    expect(contents.get(4)).toEqual({ rules: 2, ruleOperations: 2, manual: 0 });
     expect(contents.get(3)).toEqual(contents.get(4));
-    expect(contents.get(1)).toEqual({ rules: 3, ruleOperations: 5, manual: 1, net: -145 });
-    expect(contents.get(5)).toEqual({ rules: 0, ruleOperations: 0, manual: 1, net: 2500 });
+    expect(contents.get(1)).toEqual({ rules: 3, ruleOperations: 5, manual: 1 });
+    expect(contents.get(5)).toEqual({ rules: 0, ruleOperations: 0, manual: 1 });
   });
 
-  it("rounds sums to the cent", () => {
-    const contents = contentsByCategory(TREE, [rule(10, 2, { debit: 0.1 }), rule(11, 2, { debit: 0.2 })], []);
-    expect(contents.get(2)?.net).toBe(-0.3);
+});
+
+describe("averageNets", () => {
+  it("maps every node, groups included, to its signed average", () => {
+    const node = (id: number, expenses: number, income: number, children: AverageNode[] = []): AverageNode => ({
+      id,
+      name: String(id),
+      expenses,
+      income,
+      month_expenses: null,
+      month_income: null,
+      target: null,
+      children,
+    });
+    const nets = averageNets([node(1, 300.1, 2500, [node(2, 300.1, 0), node(5, 0, 2500)])]);
+    expect(nets.get(1)).toBe(2199.9);
+    expect(nets.get(2)).toBe(-300.1);
+    expect(nets.get(5)).toBe(2500);
   });
 });
 

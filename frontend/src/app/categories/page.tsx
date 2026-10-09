@@ -5,6 +5,7 @@ import {
   api,
   errorMessage,
   type Category,
+  type CategoryAverages,
   formatEuro,
   frenchDate,
   notifyUncategorizedChanged,
@@ -14,8 +15,10 @@ import {
 } from "@/lib/api";
 import CategoryPicker from "@/components/CategoryPicker";
 import SignedAmount from "@/components/SignedAmount";
+import { periodSummary } from "@/lib/averages";
 import { parseTarget } from "@/lib/budget";
 import {
+  averageNets,
   buildTree,
   type CategoryTreeNode,
   contentsByCategory,
@@ -31,6 +34,8 @@ import { emptyRuleForm, type RuleForm, ruleFormToPayload, ruleToForm } from "@/l
 
 const UNDO_DELAY_MS = 8000;
 const RULE_PAGE = 20;
+// The node amounts: a monthly average over the last 12 complete budget months, to set targets by.
+const AVERAGE_PERIOD = "12";
 
 /** The last move's confirmation; `undo` reverts it. */
 type Toast = { message: string; undo: () => Promise<unknown> };
@@ -201,6 +206,7 @@ export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [rules, setRules] = useState<Rule[]>([]);
   const [manual, setManual] = useState<Transaction[]>([]);
+  const [averages, setAverages] = useState<CategoryAverages | null>(null);
   // Bumped after every reload so the open rules' operation lists refetch.
   const [version, setVersion] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -237,12 +243,15 @@ export default function CategoriesPage() {
 
   const load = useCallback(
     () =>
-      Promise.all([api.listCategories(), api.listRules(), listAllManual()]).then(([cats, ruleList, manualList]) => {
-        setCategories(cats);
-        setRules(ruleList);
-        setManual(manualList);
-        setVersion((v) => v + 1);
-      }),
+      Promise.all([api.listCategories(), api.listRules(), listAllManual(), api.averages(AVERAGE_PERIOD, "all")]).then(
+        ([cats, ruleList, manualList, avg]) => {
+          setCategories(cats);
+          setRules(ruleList);
+          setManual(manualList);
+          setAverages(avg);
+          setVersion((v) => v + 1);
+        },
+      ),
     [],
   );
 
@@ -308,6 +317,8 @@ export default function CategoriesPage() {
   const byId = new Map(categories.map((c) => [c.id, c]));
   const tree = buildTree(categories);
   const contents = contentsByCategory(tree, rules, manual);
+  const nets = averageNets(averages?.groups ?? []);
+  const averageTitle = `Moyenne mensuelle ${(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur 12 mois"}`;
   const search = searchTree(tree, rules, manual, query);
   const q = fold(query.trim());
 
@@ -441,18 +452,22 @@ export default function CategoriesPage() {
     );
   }
 
-  /** « 3 ⚙ (42 op.) · 2 ✎ » and the net amount: what classifies operations into the node. */
-  function renderContents(c: Contents | undefined) {
-    if (!c || (c.rules === 0 && c.manual === 0)) return null;
+  /** « 3 ⚙ (42 op.) · 2 ✎ » (what classifies operations into the node) and its monthly average. */
+  function renderContents(c: Contents | undefined, net: number | undefined) {
+    if ((!c || (c.rules === 0 && c.manual === 0)) && !net) return null;
     return (
       <span className="flex items-center gap-2 text-xs">
-        {c.rules > 0 && (
+        {c && c.rules > 0 && (
           <span title={`${c.rules} règle(s) classant ${c.ruleOperations} opération(s)`}>
             {c.rules} ⚙ ({c.ruleOperations} op.)
           </span>
         )}
-        {c.manual > 0 && <span title={`${c.manual} opération(s) classée(s) à la main`}>{c.manual} ✎</span>}
-        <Net amount={c.net} />
+        {c && c.manual > 0 && <span title={`${c.manual} opération(s) classée(s) à la main`}>{c.manual} ✎</span>}
+        {net ? (
+          <span title={averageTitle}>
+            <Net amount={net} /> <span className="text-zinc-500">/ mois</span>
+          </span>
+        ) : null}
       </span>
     );
   }
@@ -811,7 +826,7 @@ export default function CategoriesPage() {
             </span>
           )}
           <span className="ml-auto flex items-center gap-3 text-zinc-500">
-            {renderContents(contents.get(node.id))}
+            {renderContents(contents.get(node.id), nets.get(node.id))}
             {/* A fixed slot, so the amounts line up whether a row has a target or not. */}
             <span className="flex min-w-32 justify-end">{renderTarget(node)}</span>
             <button
@@ -904,7 +919,9 @@ export default function CategoriesPage() {
           Un seul arbre, indépendant du sens : revenu ou dépense dépend de chaque opération. ▸ sur une
           sous-catégorie finale montre ce qui y classe des opérations. ＋ ajoute une sous-catégorie (la
           première hérite du contenu de la catégorie, à répartir ensuite), ✎ renomme ou déplace, ✕
-          supprime ; « ＋ objectif » fixe un plafond de dépense mensuel.
+          supprime ; « ＋ objectif » fixe un plafond de dépense mensuel. Le montant d’une catégorie est sa
+          moyenne mensuelle {(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur les 12 derniers mois complets"},
+          le mois en cours exclu ; celui d’une règle, le total de ses opérations.
         </p>
         <p>
           <strong className="font-medium text-zinc-700">⚙ Une règle</strong> classe toutes les opérations
