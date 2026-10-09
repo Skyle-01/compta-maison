@@ -17,7 +17,7 @@ There is no user documentation. The README (English) covers installation, `_conf
 - Features to cover (check the UI and CLAUDE.md "Business rules" / "Current State" when writing, this list may be stale):
   - Concepts: accounts (checking / savings / external savings with `deposit_pattern`), budget months anchored on the salary, income / expense / transfer kinds, the leaf-only category tree.
   - Import: upload with account inference, « Importer les nouveaux relevés », deduplication, archive in `_inputs/`.
-  - Dashboard: hero, the four cards and how they reconcile (Revenus − Dépenses − Épargne = Reste), deltas and the Reste sparkline, Budget section, « Moyennes mensuelles » (periods, the excluded current month, gaps, « Remboursements et compensations »), Money-flow Sankey, balance tree and drill-down, « Tous les mois », uncategorised warning.
+  - Dashboard: hero, the four cards and how they reconcile (Revenus − Dépenses − Épargne = Reste), deltas and the Reste sparkline, Budget section, « Moyennes mensuelles » (periods, the excluded current month, one signed average per category, gaps toned only by budget targets, the « Comptes d’épargne » block), Money-flow Sankey, balance tree and drill-down, « Tous les mois », uncategorised warning.
   - Printable report (« Rapport PDF » → `/rapport`): choosing the month (defaults to the latest complete one), « Enregistrer en PDF » through the browser's print dialog (pick « Enregistrer au format PDF », untick the browser's headers and footers), what each page shows.
   - Transactions: filters, categorising (manual vs rule, live count, description/note), ⚙/✎ badges, transfer pairing / « Marquer comme virement » / Dissocier / Auto, CSV export.
   - Catégories page: categories (create, rename, re-parent, delete and what happens to rules/rows), budget targets (« ＋ objectif »), rules (priority, income anchor, search, edit), manual assignments, moving rules and manual assignments between leaves, « Classer à part ».
@@ -43,3 +43,4 @@ Done when:
 - 2026-10-03: specified with the owner (decisions above). Not started.
 - 2026-10-05: the printable report landed; added to the coverage list.
 - 2026-10-05: report reworked: its Revenus/Dépenses are net of refunds (lower than the dashboard cards, same Reste: the guide must say why), income per category, bold red/green highlights instead of « Points d’attention », and a « Détail par catégorie » page listing each leaf's operations.
+- 2026-10-09: « Moyennes mensuelles » table simplified (signed « Moyenne / mois » + « Écart » + « Objectif », no more « Remboursements et compensations » line, savings in their own block, gaps neutral except near/over a target); coverage line updated.
