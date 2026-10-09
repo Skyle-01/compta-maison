@@ -14,14 +14,18 @@ export default function Gap({
   average,
   goodIsUp = true,
   className,
+  wrap = false,
 }: {
   month: number | null;
   average: number;
   goodIsUp?: boolean;
   className?: string;
+  /** Put the gap between parentheses, after a value it qualifies. */
+  wrap?: boolean;
 }) {
   const gap = averageGap(month, average);
   if (gap === null || (month === 0 && average === 0)) return null;
   const sign = gap > 0.005 ? "+" : gap < -0.005 ? "−" : "";
-  return <span className={className ?? GAP_TEXT[gapTone(gap, goodIsUp)]}>{sign + formatEuro(Math.abs(gap))}</span>;
+  const text = sign + formatEuro(Math.abs(gap));
+  return <span className={className ?? GAP_TEXT[gapTone(gap, goodIsUp)]}>{wrap ? `(${text})` : text}</span>;
 }

@@ -264,7 +264,8 @@ function AverageStat({
       <div className={`text-lg font-semibold tabular-nums ${valueClass}`}>{formatEuro(value)}</div>
       {month !== null && (
         <div className="text-xs text-zinc-500">
-          écart {monthLabel} : <Gap month={month} average={value} goodIsUp={goodIsUp} />
+          {monthLabel} : <span className="tabular-nums text-zinc-700">{formatEuro(month)}</span>{" "}
+          <Gap month={month} average={value} goodIsUp={goodIsUp} wrap />
         </div>
       )}
     </div>
