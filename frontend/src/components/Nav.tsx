@@ -14,6 +14,12 @@ const NAV = [
   { href: "/settings", label: "Réglages" },
 ];
 
+/** The report is opened from the dashboard, so it keeps « Tableau de bord » current. */
+function isCurrent(href: string, pathname: string): boolean {
+  if (href === "/") return pathname === "/" || pathname.startsWith("/rapport");
+  return pathname.startsWith(href);
+}
+
 /** The top navigation; « À classer » carries the uncategorised count, refreshed on every page
  *  change and whenever a page signals a categorisation (notifyUncategorizedChanged). */
 export default function Nav() {
@@ -37,10 +43,19 @@ export default function Nav() {
   }, [pathname]);
 
   return (
-    <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6 py-3">
+    <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6">
       <span className="font-semibold tracking-tight">compta</span>
       {NAV.map(({ href, label }) => (
-        <Link key={href} href={href} className="text-sm text-zinc-600 hover:text-zinc-900">
+        <Link
+          key={href}
+          href={href}
+          aria-current={isCurrent(href, pathname) ? "page" : undefined}
+          className={`-mb-px border-b-2 py-3 text-sm ${
+            isCurrent(href, pathname)
+              ? "border-zinc-900 text-zinc-900"
+              : "border-transparent text-zinc-600 hover:text-zinc-900"
+          }`}
+        >
           {label}
           {href === "/a-classer" && count != null && ` (${count})`}
         </Link>

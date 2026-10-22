@@ -468,7 +468,7 @@ export default function TriagePage() {
                       <button
                         onClick={() => submit(candidate)}
                         disabled={!candidate || busy || (d.mode === "rule" && !pattern)}
-                        className="rounded bg-zinc-800 px-3 py-0.5 text-white disabled:opacity-40"
+                        className="btn-primary py-1"
                       >
                         {candidate ? `Classer en ${shortPath(candidate)}` : "Classer"}
                       </button>

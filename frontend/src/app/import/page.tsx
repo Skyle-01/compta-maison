@@ -69,7 +69,7 @@ export default function ImportPage() {
       <h1 className="text-xl font-semibold">Importer des relevés bancaires</h1>
 
       <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-6 text-sm">
-        <h2 className="font-medium">Relevés déposés dans le dossier _inputs</h2>
+        <h2 className="font-semibold">Relevés déposés dans le dossier _inputs</h2>
         <p className="text-zinc-500">
           Relit tous les fichiers CSV de <code>_inputs/</code> et n’ajoute que les opérations absentes de
           la base : les relevés déjà importés ou qui se chevauchent ne créent pas de doublons. Exportez
@@ -80,7 +80,7 @@ export default function ImportPage() {
           type="button"
           onClick={importInputs}
           disabled={inputsBusy}
-          className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white disabled:opacity-40"
+          className="btn-primary"
         >
           {inputsBusy ? "Import en cours…" : "Importer les nouveaux relevés"}
         </button>
@@ -152,7 +152,7 @@ export default function ImportPage() {
         <button
           type="submit"
           disabled={!file || busy}
-          className="rounded bg-zinc-900 px-4 py-1.5 text-sm text-white disabled:opacity-40"
+          className="btn-primary"
         >
           {busy ? "Import en cours…" : "Importer"}
         </button>

@@ -171,7 +171,7 @@ function RuleOperations({
                     <button
                       disabled={asideTarget == null}
                       onClick={() => asideTarget != null && onClassAside(tx, asideTarget)}
-                      className="rounded bg-zinc-900 px-2 py-0.5 text-xs text-white disabled:opacity-40"
+                      className="btn-primary px-2 py-0.5 text-xs"
                     >
                       Valider
                     </button>
@@ -425,7 +425,7 @@ export default function CategoriesPage() {
             className="w-24 rounded border border-zinc-300 px-2 py-0.5 text-right text-sm text-zinc-800"
           />
           <span className="text-xs text-zinc-500">€ / mois</span>
-          <button type="submit" className="rounded bg-zinc-900 px-2 py-0.5 text-xs text-white">
+          <button type="submit" className="btn-primary px-2 py-0.5 text-xs">
             Enregistrer
           </button>
           <button
@@ -571,12 +571,12 @@ export default function CategoriesPage() {
       return (
         <div key={r.id} className="flex flex-wrap items-center gap-2 bg-zinc-50 px-3 py-2">
           <RuleEditor categories={categories} value={editRule} onChange={setEditRule} />
-          <button onClick={() => saveRule(r.id)} className="rounded bg-zinc-900 px-3 py-1 text-sm text-white">
+          <button onClick={() => saveRule(r.id)} className="btn-primary">
             Enregistrer
           </button>
           <button
             onClick={() => setEditingRuleId(null)}
-            className="rounded border border-zinc-300 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50"
+            className="btn-secondary py-1"
           >
             Annuler
           </button>
@@ -682,7 +682,7 @@ export default function CategoriesPage() {
             <>
               <button
                 onClick={() => saveNote(tx.id)}
-                className="mr-2 rounded bg-zinc-900 px-2 py-0.5 text-xs text-white"
+                className="mr-2 btn-primary px-2 py-0.5 text-xs"
               >
                 Enregistrer
               </button>
@@ -740,12 +740,12 @@ export default function CategoriesPage() {
           {addingRuleIn === node.id && (
             <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 bg-zinc-50 px-3 py-2">
               <RuleEditor categories={categories} value={newRule} onChange={setNewRule} />
-              <button onClick={addRule} className="rounded bg-zinc-900 px-3 py-1 text-sm text-white">
+              <button onClick={addRule} className="btn-primary">
                 Ajouter la règle
               </button>
               <button
                 onClick={() => setAddingRuleIn(null)}
-                className="rounded border border-zinc-300 px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-50"
+                className="btn-secondary py-1"
               >
                 Annuler
               </button>
@@ -811,7 +811,7 @@ export default function CategoriesPage() {
                   ))}
                 </select>
               </label>
-              <button type="submit" className="rounded bg-zinc-900 px-2 py-0.5 text-xs text-white">
+              <button type="submit" className="btn-primary px-2 py-0.5 text-xs">
                 Enregistrer
               </button>
               <button
@@ -905,7 +905,7 @@ export default function CategoriesPage() {
               style={{ paddingLeft: 8, marginLeft: (depth + 1) * 20 + 22 }}
               className="rounded border border-zinc-300 px-2 py-0.5 text-sm"
             />
-            <button type="submit" className="rounded bg-zinc-900 px-2 py-0.5 text-xs text-white">
+            <button type="submit" className="btn-primary px-2 py-0.5 text-xs">
               Ajouter
             </button>
             <button
@@ -927,7 +927,7 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Catégories</h1>
+      <h1 className="text-xl font-semibold">Catégories</h1>
       {averages && (targetSums.spending > 0 || targetSums.savings !== null) && (
         <div className="rounded-lg border border-zinc-200 bg-white px-4 py-2">
           <BudgetBalance
@@ -997,7 +997,7 @@ export default function CategoriesPage() {
             <button
               onClick={moveSelected}
               disabled={moveTarget == null}
-              className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-40"
+              className="btn-primary"
             >
               Déplacer
             </button>
@@ -1034,7 +1034,7 @@ export default function CategoriesPage() {
           onChange={(e) => setNewGroup(e.target.value)}
           className="rounded border border-zinc-300 px-2 py-1"
         />
-        <button type="submit" className="rounded bg-zinc-900 px-3 py-1 text-white">
+        <button type="submit" className="btn-primary">
           Ajouter le groupe
         </button>
       </form>

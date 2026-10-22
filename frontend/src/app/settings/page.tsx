@@ -44,7 +44,7 @@ function SectionError({ message, onClose }: { message: string | null; onClose: (
 export default function SettingsPage() {
   return (
     <div className="space-y-10">
-      <h1 className="text-2xl font-semibold">Réglages</h1>
+      <h1 className="text-xl font-semibold">Réglages</h1>
       {/* A direct child of the page container, so it stays stuck for the whole page. */}
       <nav
         aria-label="Sections des réglages"
@@ -106,7 +106,7 @@ function ManualTransfersSection() {
 
   return (
     <section id="virements-manuels" className={SECTION_CLASS}>
-      <h2 className="text-xl font-semibold">Virements manuels</h2>
+      <h2 className="text-base font-semibold">Virements manuels</h2>
       <SectionError message={status} onClose={() => setStatus(null)} />
       <p className="text-sm text-zinc-500">
         Les décisions prises sur la page Transactions : deux opérations associées en virement, une
@@ -211,7 +211,7 @@ function TransferMarkersSection() {
 
   return (
     <section id="virements-internes" className={SECTION_CLASS}>
-      <h2 className="text-xl font-semibold">Virements internes</h2>
+      <h2 className="text-base font-semibold">Virements internes</h2>
       <SectionError message={error} onClose={() => setError(null)} />
       <p className="text-sm text-zinc-500">
         Un débit et un crédit de même montant sur deux comptes, à 3 jours d’écart au plus, sont
@@ -227,7 +227,7 @@ function TransferMarkersSection() {
           rows={3}
           className="w-48 rounded border border-zinc-300 px-2 py-1 font-mono text-xs"
         />
-        <button onClick={save} className="rounded bg-zinc-900 px-3 py-1 text-white">
+        <button onClick={save} className="btn-primary">
           Enregistrer
         </button>
         {isDefault && <span className="text-xs text-zinc-500">(par défaut)</span>}
@@ -272,7 +272,7 @@ function BackupSection() {
 
   return (
     <section id="sauvegarde" className={SECTION_CLASS}>
-      <h2 className="text-xl font-semibold">Sauvegarde</h2>
+      <h2 className="text-base font-semibold">Sauvegarde</h2>
       <SectionError message={error} onClose={() => setError(null)} />
       <p className="text-sm text-zinc-500">
         Enregistre les comptes, catégories, règles, modifications manuelles et marqueurs de virement
@@ -286,7 +286,7 @@ function BackupSection() {
         <button
           onClick={save}
           disabled={saving}
-          className="rounded bg-zinc-900 px-3 py-1 text-white disabled:opacity-50"
+          className="btn-primary"
         >
           {saving ? "Enregistrement…" : "Enregistrer la configuration"}
         </button>

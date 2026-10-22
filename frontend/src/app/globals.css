@@ -17,6 +17,29 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  /* Amounts line up in columns and don't jitter when they change. */
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-zinc-200);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-zinc-900);
+  outline-offset: 2px;
+}
+
+/* The two button looks shared by every page. They sit in the components layer, so a size utility
+   on the element (px-2 py-0.5 text-xs for a compact row action) overrides the default size. */
+@layer components {
+  .btn-primary {
+    @apply rounded bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:cursor-not-allowed disabled:bg-zinc-900 disabled:opacity-40;
+  }
+
+  .btn-secondary {
+    @apply rounded border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50 hover:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white;
+  }
 }
 
 /* The printable report (/rapport): each .sheet is one A4 page, previewed on screen at its print

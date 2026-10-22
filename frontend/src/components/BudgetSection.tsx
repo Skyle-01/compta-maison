@@ -91,7 +91,7 @@ export default function BudgetSection({ budget, all }: { budget: BudgetSummary; 
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="font-medium">
+        <h2 className="font-semibold">
           Budget
           {all && (
             <span className="ml-2 text-sm font-normal text-zinc-500">

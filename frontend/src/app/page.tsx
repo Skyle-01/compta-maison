@@ -417,7 +417,7 @@ function AveragesSection({ data }: { data: Dashboard }) {
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="font-medium">
+        <h2 className="font-semibold">
           Moyennes mensuelles
           {summary && <span className="ml-2 text-sm font-normal text-zinc-500">{summary}</span>}
         </h2>
@@ -672,7 +672,7 @@ export default function DashboardPage() {
       )}
 
       <section>
-        <h2 className="mb-3 font-medium">Flux d’argent</h2>
+        <h2 className="mb-3 font-semibold">Flux d’argent</h2>
         <div className="rounded-lg border border-zinc-200 bg-white p-4">
           {flow.links.length > 0 ? (
             // Too wide for a phone: the chart keeps a readable width and scrolls sideways inside

@@ -216,7 +216,7 @@ export default function TransactionsPage() {
           <a
             href={transactionsExportUrl({ month: month || undefined, uncategorized: onlyUncategorized })}
             download
-            className="rounded border border-zinc-300 px-3 py-1 hover:bg-zinc-50"
+            className="btn-secondary"
           >
             Exporter CSV
           </a>
@@ -238,14 +238,14 @@ export default function TransactionsPage() {
                   "Virement associé.",
                 )
               }
-              className="rounded bg-zinc-800 px-3 py-0.5 text-xs text-white"
+              className="btn-primary py-0.5 text-xs"
             >
               Associer en virement
             </button>
           ) : (
             <button
               onClick={() => setMode(selectedRows[0], "transfer", "Opération marquée comme virement.")}
-              className="rounded bg-zinc-800 px-3 py-0.5 text-xs text-white"
+              className="btn-primary py-0.5 text-xs"
               title="Virement vers un compte dont le relevé n’est pas importé — exclu des revenus/dépenses"
             >
               Marquer comme virement
@@ -253,7 +253,7 @@ export default function TransactionsPage() {
           )}
           <button
             onClick={() => setSelected(new Map())}
-            className="rounded border border-zinc-300 px-2 py-0.5 text-xs text-zinc-600 hover:bg-white"
+            className="btn-secondary px-2 py-0.5 text-xs"
           >
             Effacer
           </button>
@@ -407,13 +407,13 @@ export default function TransactionsPage() {
                         <button
                           onClick={() => submitEditor(tx)}
                           disabled={submitDisabled}
-                          className="rounded bg-zinc-800 px-3 py-0.5 text-white disabled:opacity-40"
+                          className="btn-primary py-1"
                         >
                           Valider
                         </button>
                         <button
                           onClick={() => setEditingTxId(null)}
-                          className="rounded border border-zinc-300 px-2 py-0.5 text-zinc-600 hover:bg-zinc-50"
+                          className="btn-secondary py-1"
                         >
                           Annuler
                         </button>
@@ -477,14 +477,14 @@ export default function TransactionsPage() {
           <button
             disabled={offset === 0}
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-            className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40"
+            className="btn-secondary"
           >
             Précédent
           </button>
           <button
             disabled={offset + PAGE_SIZE >= total}
             onClick={() => setOffset(offset + PAGE_SIZE)}
-            className="rounded border border-zinc-300 px-2 py-1 disabled:opacity-40"
+            className="btn-secondary"
           >
             Suivant
           </button>
