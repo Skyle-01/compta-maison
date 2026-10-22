@@ -199,7 +199,7 @@ export default function TransactionsPage() {
             Sans catégorie uniquement
           </label>
           <select
-            className="rounded border border-zinc-300 bg-white px-2 py-1"
+            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
             value={month}
             onChange={(e) => {
               setMonth(e.target.value);

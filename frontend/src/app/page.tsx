@@ -422,7 +422,7 @@ function AveragesSection({ data }: { data: Dashboard }) {
           {summary && <span className="ml-2 text-sm font-normal text-zinc-500">{summary}</span>}
         </h2>
         <select
-          className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+          className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
           value={period}
           onChange={(e) => setPeriod(e.target.value as AveragePeriod)}
           aria-label="Période des moyennes"
@@ -588,7 +588,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <Link
             href={reportLink(data.month, data.months_available)}
-            className="text-sm text-zinc-600 underline hover:text-zinc-900 hover:no-underline"
+            className="btn-secondary"
           >
             Rapport PDF
           </Link>
@@ -596,13 +596,13 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => choose(latest)}
-              className="text-sm text-zinc-600 underline hover:text-zinc-900 hover:no-underline"
+              className="btn-secondary"
             >
               Dernier mois
             </button>
           )}
           <select
-            className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
             value={data.month}
             onChange={(e) => choose(e.target.value)}
           >

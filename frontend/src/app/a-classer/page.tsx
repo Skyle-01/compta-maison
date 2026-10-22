@@ -305,7 +305,7 @@ export default function TriagePage() {
           )}
         </div>
         <select
-          className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+          className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
         >
