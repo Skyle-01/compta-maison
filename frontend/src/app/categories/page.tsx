@@ -938,27 +938,30 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <div className="space-y-1 text-sm text-zinc-500">
-        <p>
-          Un seul arbre, indépendant du sens : revenu ou dépense dépend de chaque opération. ▸ sur une
-          sous-catégorie finale montre ce qui y classe des opérations. ＋ ajoute une sous-catégorie (la
-          première hérite du contenu de la catégorie, à répartir ensuite), ✎ renomme ou déplace, ✕
-          supprime ; « ＋ objectif » fixe un plafond de dépense mensuel, sur une sous-catégorie ou sur
-          tout un groupe (un seul objectif par branche), jamais sur un revenu ; celui du groupe « Épargne »
-          est l’épargne visée chaque mois. Le montant d’une catégorie est sa
-          moyenne mensuelle {(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur les 12 derniers mois complets"},
-          le mois en cours exclu ; celui d’une règle, le total de ses opérations.
-        </p>
-        <p>
-          <strong className="font-medium text-zinc-700">⚙ Une règle</strong> classe toutes les opérations
-          dont le libellé contient son motif (sous-chaîne ; la plus petite priorité l’emporte ; ⚓ = ancre
-          de revenu) : la déplacer emporte toutes ses opérations.{" "}
-          <strong className="font-medium text-zinc-700">✎ Une opération classée à la main</strong> se
-          déplace seule, avec sa description. Une opération suivie par une règle ne se déplace pas seule :
-          « Classer à part » la classe à la main ailleurs. Cochez des règles et des opérations, puis
-          choisissez où les déplacer.
-        </p>
-      </div>
+      <details className="text-sm text-zinc-500">
+        <summary className="w-fit cursor-pointer text-zinc-600 hover:text-zinc-900">Comment ça marche</summary>
+        <div className="mt-2 space-y-1">
+          <p>
+            Un seul arbre, indépendant du sens : revenu ou dépense dépend de chaque opération. ▸ sur une
+            sous-catégorie finale montre ce qui y classe des opérations. ＋ ajoute une sous-catégorie (la
+            première hérite du contenu de la catégorie, à répartir ensuite), ✎ renomme ou déplace, ✕
+            supprime ; « ＋ objectif » fixe un plafond de dépense mensuel, sur une sous-catégorie ou sur
+            tout un groupe (un seul objectif par branche), jamais sur un revenu ; celui du groupe « Épargne »
+            est l’épargne visée chaque mois. Le montant d’une catégorie est sa
+            moyenne mensuelle {(averages && periodSummary(averages, AVERAGE_PERIOD)) || "sur les 12 derniers mois complets"},
+            le mois en cours exclu ; celui d’une règle, le total de ses opérations.
+          </p>
+          <p>
+            <strong className="font-medium text-zinc-700">⚙ Une règle</strong> classe toutes les opérations
+            dont le libellé contient son motif (sous-chaîne ; la plus petite priorité l’emporte ; ⚓ = ancre
+            de revenu) : la déplacer emporte toutes ses opérations.{" "}
+            <strong className="font-medium text-zinc-700">✎ Une opération classée à la main</strong> se
+            déplace seule, avec sa description. Une opération suivie par une règle ne se déplace pas seule :
+            « Classer à part » la classe à la main ailleurs. Cochez des règles et des opérations, puis
+            choisissez où les déplacer.
+          </p>
+        </div>
+      </details>
 
       {error && (
         <div
@@ -978,7 +981,7 @@ export default function CategoriesPage() {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && setQuery("")}
           placeholder="Rechercher une catégorie, un motif, un libellé, une description…"
-          className="w-96 rounded border border-zinc-300 bg-white px-2 py-1 text-sm"
+          className="w-[28rem] rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
         />
         {selected > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -1032,7 +1035,7 @@ export default function CategoriesPage() {
           placeholder="Nouveau groupe principal"
           value={newGroup}
           onChange={(e) => setNewGroup(e.target.value)}
-          className="rounded border border-zinc-300 px-2 py-1"
+          className="w-64 rounded border border-zinc-300 px-2 py-1.5"
         />
         <button type="submit" className="btn-primary">
           Ajouter le groupe
