@@ -63,6 +63,39 @@ class InputFileResult:
     profile: str | None = None
     error: str | None = None
     rows_before_start: int = 0
+    gap_warning: str | None = None
+
+
+# Days a statement may start after the account's last operation without being flagged: a weekend
+# plus a bank holiday.
+GAP_TOLERANCE_DAYS = 4
+
+
+def last_value_date(db_path: Path, account_code: str) -> str | None:
+    """The account's latest value date already in the DB (ISO), None when it has no rows."""
+    with connect(db_path) as conn:
+        (last,) = conn.execute(
+            "SELECT MAX(date_valeur) FROM transactions WHERE account_id = ?", (account_code,)
+        ).fetchone()
+    return last
+
+
+def gap_warning(last: str | None, rows: list[dict]) -> str | None:
+    """French warning when the statement's first value date falls more than GAP_TOLERANCE_DAYS
+    after `last` (read before inserting it). Overlapping or contiguous files, an account's first
+    import and a file left empty by the start date give None. A heuristic: only the import that
+    creates a hole flags it (a rescan of _inputs then overlaps), and a quiet account can warn."""
+    if last is None or not rows:
+        return None
+    previous = date.fromisoformat(last[:10])
+    first = date.fromisoformat(min(row["Date valeur"] for row in rows)[:10])
+    if (first - previous).days <= GAP_TOLERANCE_DAYS:
+        return None
+    return (
+        f"Trou possible : aucune opération entre le {previous:%d/%m/%Y} (dernière en base) et le "
+        f"{first:%d/%m/%Y} (début du fichier), soit {(first - previous).days - 1} jours. "
+        "Un relevé manque-t-il ?"
+    )
 
 
 def import_inputs_dir(
@@ -81,7 +114,8 @@ def import_inputs_dir(
     results = []
     for path in sorted(inputs_dir.glob("*.csv")):
         account = infer_account(path.name, profiles)
-        if not account or resolve_account_code(account, aliases) is None:
+        code = resolve_account_code(account, aliases) if account else None
+        if not account or code is None:
             results.append(
                 InputFileResult(path.name, account, error="aucun compte connu dans le nom du fichier")
             )
@@ -94,8 +128,17 @@ def import_inputs_dir(
         rows, before_start = rows_since(rows, start_date)
         for row in rows:
             row["account"] = account
+        gap = gap_warning(last_value_date(db_path, code), rows)  # before the insert
         new = import_transactions(rows, db_path)
         results.append(
-            InputFileResult(path.name, account, len(rows), new, profile.name, rows_before_start=before_start)
+            InputFileResult(
+                path.name,
+                account,
+                len(rows),
+                new,
+                profile.name,
+                rows_before_start=before_start,
+                gap_warning=gap,
+            )
         )
     return results

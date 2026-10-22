@@ -47,6 +47,8 @@ def import_inputs(db_path: Path) -> int:
             print(f"Skipping {r.name}: {r.error}")
         elif r.rows_new:
             print(f"Imported {r.rows_new}/{r.rows_total} new rows from {r.name} -> {r.account} [{r.profile}]")
+        if r.gap_warning:
+            print(f"  {r.gap_warning}")
     recompute_budget_months(db_path)
     recompute_transfers(db_path)
     apply_rules(db_path)

@@ -206,6 +206,52 @@ class TestImports:
         assert (statement["rows_total"], statement["rows_new"], statement["rows_before_start"]) == (2, 2, 2)
         assert body["rows_new"] == 2
 
+    @staticmethod
+    def _statement_from(day: int) -> bytes:
+        """Two new JOINT operations from `day` June 2026 (SAMPLE_CSV ends on 08/06)."""
+        return (
+            b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
+            + f'"{day:02d}/06/2026";"{day:02d}/06/2026";"CARTE PHARMACIE";"7,50";""\n'.encode()
+            + f'"{day + 1:02d}/06/2026";"{day + 1:02d}/06/2026";"CARTE LIBRAIRIE";"9,00";""\n'.encode()
+        )
+
+    GAP_WARNING = (
+        "Trou possible : aucune opération entre le 08/06/2026 (dernière en base) et le 20/06/2026 "
+        "(début du fichier), soit 11 jours. Un relevé manque-t-il ?"
+    )
+
+    @pytest.mark.parametrize(
+        ("day", "expected"),
+        [(7, None), (9, None), (12, None), (13, "gap"), (20, GAP_WARNING)],
+        ids=["overlapping", "contiguous", "at-tolerance", "past-tolerance", "gapped"],
+    )
+    def test_upload_reports_a_gap_after_the_accounts_last_operation(self, seeded_db, client, day, expected):
+        first = _upload(client).json()
+        assert first["gap_warning"] is None  # the account's first import
+        body = _upload(
+            client, filename="RELEVE_COMPTE_JOINT_2026_06_30.csv", content=self._statement_from(day)
+        )
+        assert body.status_code == 201, body.text
+        warning = body.json()["gap_warning"]
+        if expected == "gap":
+            assert warning is not None and "soit 4 jours" in warning
+        else:
+            assert warning == expected
+        assert body.json()["rows_new"] == 2  # a warning never blocks
+
+    def test_import_inputs_reports_a_gap(self, seeded_db, client, tmp_path):
+        _upload(client)
+        self._drop_overlapping_statement(tmp_path)  # 07/06 -> 12/06, overlaps
+        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
+        body = client.post("/api/imports/inputs").json()
+        by_name = {f["name"]: f for f in body["files"]}
+        assert by_name["RELEVE_COMPTE_JOINT_2026_06_12.csv"]["gap_warning"] is None
+        gapped = by_name["RELEVE_COMPTE_JOINT_2026_06_30.csv"]
+        assert gapped["gap_warning"] == self.GAP_WARNING.replace("08/06/2026", "12/06/2026").replace(
+            "11 jours", "7 jours"
+        )
+        assert gapped["rows_new"] == 2
+
     def test_invalid_settings_file_rejected(self, client, tmp_path):
         _write_start_date(tmp_path, "'demain'")
         resp = _upload(client)

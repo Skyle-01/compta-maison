@@ -21,6 +21,9 @@ class ImportResult(BaseModel):
     archived_as: str | None = Field(
         None, description="File name the statement was copied to in _inputs/; None if it couldn't be"
     )
+    gap_warning: str | None = Field(
+        None, description="French warning when the file starts after a hole in its account's data"
+    )
 
 
 class InputFileResult(BaseModel):
@@ -31,6 +34,9 @@ class InputFileResult(BaseModel):
     profile: str | None
     error: str | None = Field(None, description="Why the file was skipped (French)")
     rows_before_start: int = 0
+    gap_warning: str | None = Field(
+        None, description="French warning when the file starts after a hole in its account's data"
+    )
 
 
 class InputsImportResult(BaseModel):

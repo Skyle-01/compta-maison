@@ -8,7 +8,7 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile
 from app.api.deps import ConfigDir, DbPath, InputsDir
 from app.core.bank_profiles import PROFILES_FILENAME, BankProfile, BankProfileError, load_bank_profiles
 from app.core.categorize import apply_rules, uncategorized_balance
-from app.core.inputs import archive_statement, import_inputs_dir
+from app.core.inputs import archive_statement, gap_warning, import_inputs_dir, last_value_date
 from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
 from app.core.periods import recompute_budget_months
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date
@@ -57,7 +57,8 @@ def upload_csv(
         account = inferred or ""
     if not account:
         raise HTTPException(422, detail=["Aucun compte choisi, et le nom du fichier n’en désigne aucun"])
-    if resolve_account_code(account, aliases) is None:
+    code = resolve_account_code(account, aliases)
+    if code is None:
         raise HTTPException(
             422,
             detail=[f"« {account} » ne désigne aucun compte connu ({', '.join(known_codes)})"],
@@ -73,6 +74,7 @@ def upload_csv(
         row["account"] = account
     archived_as = archive_statement(inputs_dir, file.filename or "", content, account, profiles)
 
+    gap = gap_warning(last_value_date(db_path, code), rows)  # before the insert
     rows_new = import_transactions(rows, db_path)
     recompute_budget_months(db_path)
     recompute_transfers(db_path)
@@ -89,7 +91,7 @@ def upload_csv(
                 for (m,) in conn.execute(
                     "SELECT DISTINCT budget_month FROM transactions "
                     "WHERE account_id = ? AND date_valeur BETWEEN ? AND ? ORDER BY budget_month",
-                    (resolve_account_code(account, aliases), rows[0]["Date valeur"], rows[-1]["Date valeur"]),
+                    (code, rows[0]["Date valeur"], rows[-1]["Date valeur"]),
                 )
             ]
     warnings: dict[str, float] = {}
@@ -109,6 +111,7 @@ def upload_csv(
         balance_warnings=warnings,
         profile=profile.name,
         archived_as=archived_as,
+        gap_warning=gap,
     )
 
 

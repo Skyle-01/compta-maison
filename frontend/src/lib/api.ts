@@ -10,6 +10,8 @@ export interface ImportResult {
   profile: string;
   /** File name the statement was copied to in _inputs/ (null: not copied, a rebuild will miss it). */
   archived_as: string | null;
+  /** French warning when the file starts after a hole in its account's data. */
+  gap_warning: string | null;
 }
 
 /** One _inputs/ statement of a bulk import (error: why it was skipped). */
@@ -21,6 +23,7 @@ export interface InputFileResult {
   profile: string | null;
   error: string | null;
   rows_before_start: number;
+  gap_warning: string | null;
 }
 
 export interface InputsImportResult {

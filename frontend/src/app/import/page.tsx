@@ -57,8 +57,10 @@ export default function ImportPage() {
     }
   }
 
-  // Files that brought new rows or were skipped; the already imported ones are only counted.
-  const inputsNotable = inputsResult?.files.filter((f) => f.error || f.rows_new > 0) ?? [];
+  // Files that brought new rows, were skipped or start after a hole; the already imported ones are
+  // only counted.
+  const inputsNotable =
+    inputsResult?.files.filter((f) => f.error || f.rows_new > 0 || f.gap_warning) ?? [];
   const inputsUnchanged = (inputsResult?.files.length ?? 0) - inputsNotable.length;
   const inputsBeforeStart = inputsResult?.files.reduce((n, f) => n + f.rows_before_start, 0) ?? 0;
 
@@ -70,7 +72,9 @@ export default function ImportPage() {
         <h2 className="font-medium">Relevés déposés dans le dossier _inputs</h2>
         <p className="text-zinc-500">
           Relit tous les fichiers CSV de <code>_inputs/</code> et n’ajoute que les opérations absentes de
-          la base : les relevés déjà importés ou qui se chevauchent ne créent pas de doublons.
+          la base : les relevés déjà importés ou qui se chevauchent ne créent pas de doublons. Exportez
+          vos relevés avec quelques jours de chevauchement : un trou entre deux relevés est alors
+          signalé à coup sûr.
         </p>
         <button
           type="button"
@@ -100,6 +104,7 @@ export default function ImportPage() {
                         : {f.rows_new} / {f.rows_total} dans {f.account}
                       </span>
                     )}
+                    {f.gap_warning && <p className="text-amber-800">{f.gap_warning}</p>}
                   </li>
                 ))}
               </ul>
@@ -168,6 +173,7 @@ export default function ImportPage() {
             {result.rows_total} dans <strong>{result.account}</strong>
             {result.rows_new === 0 && result.rows_total > 0 && " (toutes en double — déjà importées)"}.
           </p>
+          {result.gap_warning && <p className="text-amber-800">{result.gap_warning}</p>}
           {result.rows_before_start > 0 && <BeforeStart count={result.rows_before_start} />}
           <p className="text-zinc-500">
             Format : {result.profile === "default" ? "par défaut" : result.profile}
