@@ -31,6 +31,17 @@ import {
 const UNDO_DELAY_MS = 8000;
 const MAX_RESULTS = 8;
 
+/** The keyboard help under the title: [keys, action]; empty keys = plain typing. */
+const SHORTCUTS: [string, string][] = [
+  ["↑ ↓", "changer de groupe"],
+  ["", "tapez pour chercher une catégorie"],
+  ["Entrée", "valider (la suggestion si la recherche est vide)"],
+  ["Alt+M", "règle / opérations"],
+  ["→ ←", "détails"],
+  ["Échap", "effacer"],
+  ["Alt+Z", "annuler le dernier classement"],
+];
+
 /** The active group's editor state; `key` ties it to its group, so moving to another group starts
  *  from that group's defaults. */
 type Draft = {
@@ -307,10 +318,14 @@ export default function TriagePage() {
         </select>
       </div>
 
-      <p className="text-xs text-zinc-500">
-        ↑ ↓ changer de groupe · tapez pour chercher une catégorie · Entrée valider (la suggestion si rien
-        n’est tapé) · Alt+M règle / opérations · → ← détails · Échap effacer · Alt+Z annuler le dernier classement
-      </p>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+        {SHORTCUTS.map(([keys, action]) => (
+          <li key={action}>
+            {keys && <kbd className="mr-1 rounded border border-zinc-300 bg-white px-1 font-sans text-zinc-700">{keys}</kbd>}
+            {action}
+          </li>
+        ))}
+      </ul>
 
       {error && <p className="text-sm text-red-700">{error}</p>}
 
@@ -332,12 +347,12 @@ export default function TriagePage() {
                   if (el) rowRefs.current.set(g.key, el);
                   else rowRefs.current.delete(g.key);
                 }}
-                className={isActive ? "bg-zinc-50" : ""}
+                className={isActive ? "bg-zinc-50 ring-1 ring-zinc-300 ring-inset" : ""}
               >
                 <div
                   onClick={() => setActive(i)}
                   className={`flex cursor-pointer items-center gap-4 px-3 py-2 text-sm ${
-                    isActive ? "border-l-2 border-zinc-800" : "border-l-2 border-transparent hover:bg-zinc-50"
+                    isActive ? "" : "hover:bg-zinc-50"
                   }`}
                 >
                   <div className="min-w-0 flex-1">
@@ -357,7 +372,7 @@ export default function TriagePage() {
                 </div>
 
                 {isActive && d && (
-                  <div onKeyDown={onKeyDown} className="space-y-2 border-l-2 border-zinc-800 px-3 pb-3 text-sm">
+                  <div onKeyDown={onKeyDown} className="space-y-2 px-3 pb-3 text-sm">
                     <div className="flex flex-wrap items-start gap-4">
                       <div className="w-80">
                         <input
@@ -430,7 +445,7 @@ export default function TriagePage() {
                                 onChange={(e) => update({ pattern: e.target.value })}
                                 placeholder="texte à rechercher"
                                 aria-label="Motif de la règle"
-                                className="w-64 rounded border border-zinc-300 px-1 py-0.5 font-mono text-xs"
+                                className="w-64 rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs"
                               />
                               <input
                                 value={d.priority}
@@ -438,7 +453,7 @@ export default function TriagePage() {
                                 inputMode="numeric"
                                 title="Priorité : le plus petit nombre l’emporte"
                                 aria-label="Priorité"
-                                className="w-14 rounded border border-zinc-300 px-1 py-0.5 text-xs"
+                                className="w-14 rounded border border-zinc-300 bg-white px-2 py-1 text-xs"
                               />
                             </div>
                             <p
@@ -459,7 +474,7 @@ export default function TriagePage() {
                           value={d.description}
                           onChange={(e) => update({ description: e.target.value })}
                           placeholder={d.mode === "rule" ? "Description de la règle (facultatif)" : "Description (facultatif)"}
-                          className="w-80 rounded border border-zinc-300 px-2 py-0.5 text-xs"
+                          className="w-80 rounded border border-zinc-300 bg-white px-2 py-1 text-xs"
                         />
                       </div>
                     </div>
