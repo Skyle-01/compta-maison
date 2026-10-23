@@ -20,3 +20,4 @@ Done when:
 ## Progress
 
 - 2026-10-05: item opened when the printable report landed without balances.
+- 2026-10-23: checked the bank exports: the default profile, the demo statements and the owner's real exports have no balance column and no « Solde » line (header on line 1, 5 columns). The CSV source is out unless the bank's export changes; a manual opening balance is the remaining option.

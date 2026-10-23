@@ -31,6 +31,29 @@ export interface InputsImportResult {
   rows_new: number;
 }
 
+/** Days `start` to `end` inclusive (ISO dates). */
+export interface Silence {
+  start: string;
+  end: string;
+  days: number;
+}
+
+/** What the DB and the _inputs/ statements cover for one account (external savings excluded). */
+export interface AccountCoverage {
+  code: string;
+  label: string;
+  /** Value dates of the account's first and last operations in the DB (null: none). */
+  first: string | null;
+  last: string | null;
+  operations: number;
+  /** _inputs/ statements of the account with rows since the start date. */
+  files: number;
+  /** Longest stretch without any operation in the DB: a quiet spell or a missing statement. */
+  longest_silence: Silence | null;
+  /** Days covered by no _inputs/ statement, between two of them: a statement is missing. */
+  holes: Silence[];
+}
+
 /** What « Enregistrer la configuration » wrote to the config dir, and where the files it replaced
  *  (plus the DB) were backed up first. */
 export interface ConfigExportResult {
@@ -415,6 +438,10 @@ export const api = {
 
   importInputs(): Promise<InputsImportResult> {
     return request("/api/imports/inputs", { method: "POST" });
+  },
+
+  importCoverage(): Promise<AccountCoverage[]> {
+    return request("/api/imports/coverage");
   },
 
   listTransactions(params: TransactionFilters & { limit?: number; offset?: number }): Promise<TransactionPage> {

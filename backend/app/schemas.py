@@ -44,6 +44,25 @@ class InputsImportResult(BaseModel):
     rows_new: int
 
 
+class Silence(BaseModel):
+    start: str
+    end: str
+    days: int
+
+
+class AccountCoverage(BaseModel):
+    """What the DB and the _inputs/ statements cover for one account (core.inputs.account_coverage)."""
+
+    code: str
+    label: str
+    first: str | None = Field(description="Value date of the account's first operation in the DB")
+    last: str | None
+    operations: int
+    files: int = Field(description="_inputs/ statements of the account with rows since the start date")
+    longest_silence: Silence | None = Field(description="Longest stretch without any operation in the DB")
+    holes: list[Silence] = Field(description="Days covered by no _inputs/ statement, between two of them")
+
+
 class ConfigExportResult(BaseModel):
     """What « Enregistrer la configuration » wrote to the config dir, and where the files it
     replaced (plus the DB) were backed up first."""

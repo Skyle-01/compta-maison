@@ -18,7 +18,7 @@ backend/
       parsing.py       # profile-driven parse/validate of one uploaded CSV (header auto-detect) -> (profile, list[dict]); rows_since; import_transactions stores the calendar month, core/periods re-derives it
       periods.py       # paycheck-anchored budget months (recompute_budget_months)
       transfers.py     # auto-pair internal transfers across accounts (recompute_transfers), transfer_candidates
-      inputs.py        # _inputs/ archive of uploads (archive_statement); import_inputs_dir = the one loop importing every _inputs/*.csv into an existing DB (no recompute), shared by reset_db, import_inputs.py and POST /api/imports/inputs
+      inputs.py        # _inputs/ archive of uploads (archive_statement); import_inputs_dir = the one loop importing every _inputs/*.csv into an existing DB (no recompute), shared by reset_db, import_inputs.py and POST /api/imports/inputs; gap_warning + account_coverage (GET /api/imports/coverage)
       categorize.py    # apply_rules, category_tree, income_and_expenses, monthly_totals, budget_status, category_averages (+ averaging_window), uncategorized_balance, transfers_summary
       config_export.py # config CSVs written from the DB (export_config, *_rows builders), backups_dir, save_config (the Réglages « Enregistrer la configuration » button); reset_db.py's snapshots use export_config too
       triage.py        # « À classer » logic: label_key, default_pattern + is_generic, SuggestionIndex, uncategorized_groups, rule_preview

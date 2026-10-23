@@ -8,13 +8,19 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile
 from app.api.deps import ConfigDir, DbPath, InputsDir
 from app.core.bank_profiles import PROFILES_FILENAME, BankProfile, BankProfileError, load_bank_profiles
 from app.core.categorize import apply_rules, uncategorized_balance
-from app.core.inputs import archive_statement, gap_warning, import_inputs_dir, last_value_date
+from app.core.inputs import (
+    account_coverage,
+    archive_statement,
+    gap_warning,
+    import_inputs_dir,
+    last_value_date,
+)
 from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
 from app.core.periods import recompute_budget_months
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date
 from app.core.transfers import recompute_transfers
 from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
-from app.schemas import ImportResult, InputFileResult, InputsImportResult
+from app.schemas import AccountCoverage, ImportResult, InputFileResult, InputsImportResult
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
 
@@ -113,6 +119,13 @@ def upload_csv(
         archived_as=archived_as,
         gap_warning=gap,
     )
+
+
+@router.get("/coverage")
+def coverage(db_path: DbPath, config_dir: ConfigDir, inputs_dir: InputsDir) -> list[AccountCoverage]:
+    """Per account, the dates the DB and the _inputs/ statements cover, and the holes between them."""
+    results = account_coverage(db_path, inputs_dir, _profiles(config_dir), _start_date(config_dir))
+    return [AccountCoverage(**asdict(r)) for r in results]
 
 
 @router.post("/inputs")

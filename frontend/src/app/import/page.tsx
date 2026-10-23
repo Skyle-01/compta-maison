@@ -5,9 +5,12 @@ import {
   api,
   errorMessage,
   type Account,
+  type AccountCoverage,
   type ImportResult,
   type InputsImportResult,
+  type Silence,
   formatEuro,
+  frenchDate,
   frenchMonth,
   notifyUncategorizedChanged,
 } from "@/lib/api";
@@ -22,9 +25,24 @@ export default function ImportPage() {
   const [inputsBusy, setInputsBusy] = useState(false);
   const [inputsResult, setInputsResult] = useState<InputsImportResult | null>(null);
   const [inputsError, setInputsError] = useState<string | null>(null);
+  const [coverage, setCoverage] = useState<AccountCoverage[] | null>(null);
+  const [coverageError, setCoverageError] = useState<string | null>(null);
+
+  async function loadCoverage() {
+    try {
+      setCoverage(await api.importCoverage());
+      setCoverageError(null);
+    } catch (err) {
+      setCoverageError(errorMessage(err));
+    }
+  }
 
   useEffect(() => {
     api.listAccounts().then(setAccounts).catch(() => setAccounts([]));
+    api
+      .importCoverage()
+      .then(setCoverage)
+      .catch((err) => setCoverageError(errorMessage(err)));
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -36,6 +54,7 @@ export default function ImportPage() {
     try {
       setResult(await api.uploadCsv(file, account));
       notifyUncategorizedChanged();
+      loadCoverage();
     } catch (err) {
       setErrors(errorMessage(err).split("\n"));
     } finally {
@@ -50,6 +69,7 @@ export default function ImportPage() {
     try {
       setInputsResult(await api.importInputs());
       notifyUncategorizedChanged();
+      loadCoverage();
     } catch (err) {
       setInputsError(errorMessage(err));
     } finally {
@@ -206,7 +226,73 @@ export default function ImportPage() {
           )}
         </div>
       </div>
+
+      <CoverageSection coverage={coverage} error={coverageError} />
     </div>
+  );
+}
+
+/** Per account, the dates the DB and the _inputs/ statements cover: a hole between two statements
+ *  means one is missing; the longest silence may only be a quiet spell. */
+function CoverageSection({ coverage, error }: { coverage: AccountCoverage[] | null; error: string | null }) {
+  return (
+    <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-6 text-sm">
+      <h2 className="font-semibold">Couverture des relevés</h2>
+      <p className="text-zinc-500">
+        Pour chaque compte, les dates couvertes par la base et par les relevés de <code>_inputs/</code>.
+        Des jours couverts par aucun relevé entre deux fichiers signalent un relevé manquant. Le plus long
+        silence (aucune opération en base) peut aussi être une simple période calme.
+      </p>
+      {error && <p className="text-red-800">{error}</p>}
+      {coverage && (
+        <table className="w-full">
+          <thead className="text-left text-zinc-500">
+            <tr>
+              <th className="py-2 pr-3 font-medium">Compte</th>
+              <th className="py-2 pr-3 text-right font-medium">Opérations</th>
+              <th className="py-2 pr-3 font-medium">Première</th>
+              <th className="py-2 pr-3 font-medium">Dernière</th>
+              <th className="py-2 pr-3 text-right font-medium">Relevés</th>
+              <th className="py-2 pr-3 font-medium">Plus long silence</th>
+              <th className="py-2 font-medium">Trous entre relevés</th>
+            </tr>
+          </thead>
+          <tbody>
+            {coverage.map((a) => (
+              <tr key={a.code} className="whitespace-nowrap border-t border-zinc-100 align-top">
+                <td className="py-1.5 pr-3">{a.label}</td>
+                <td className="py-1.5 pr-3 text-right">{a.operations}</td>
+                <td className="py-1.5 pr-3">{a.first ? frenchDate(a.first) : "-"}</td>
+                <td className="py-1.5 pr-3">{a.last ? frenchDate(a.last) : "-"}</td>
+                <td className="py-1.5 pr-3 text-right">{a.files}</td>
+                <td className="whitespace-normal py-1.5 pr-3 text-zinc-500">
+                  {a.longest_silence ? <Period period={a.longest_silence} /> : "-"}
+                </td>
+                <td className="whitespace-normal py-1.5">
+                  {a.holes.length === 0 ? (
+                    <span className="text-zinc-500">aucun</span>
+                  ) : (
+                    a.holes.map((h) => (
+                      <div key={h.start} className="text-amber-800">
+                        <Period period={h} />
+                      </div>
+                    ))
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
+
+function Period({ period }: { period: Silence }) {
+  return (
+    <>
+      {period.days} jour(s), du {frenchDate(period.start)} au {frenchDate(period.end)}
+    </>
   );
 }
 

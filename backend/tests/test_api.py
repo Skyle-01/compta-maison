@@ -252,6 +252,50 @@ class TestImports:
         )
         assert gapped["rows_new"] == 2
 
+    def test_coverage_shows_holes_between_statements(self, seeded_db, client, tmp_path):
+        _upload(client)  # 05/06 -> 08/06
+        self._drop_overlapping_statement(tmp_path)  # 07/06 -> 12/06, overlaps
+        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
+        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_14.csv").write_bytes(self._statement_from(16))
+        client.post("/api/imports/inputs")
+
+        resp = client.get("/api/imports/coverage")
+        assert resp.status_code == 200, resp.text
+        by_code = {a["code"]: a for a in resp.json()}
+        assert list(by_code) == ["PERSO", "JOINT", "LIVRET", "LOCATIF"]  # ENFANT is external
+        joint = by_code["JOINT"]
+        assert (joint["first"], joint["last"], joint["operations"], joint["files"]) == (
+            "2026-06-05",
+            "2026-06-21",
+            10,
+            4,
+        )
+        # 16/06 is 4 days after 12/06 (within the tolerance), 20/06 is 3 days after 17/06.
+        assert joint["holes"] == []
+        assert joint["longest_silence"] == {"start": "2026-06-13", "end": "2026-06-15", "days": 3}
+        assert by_code["PERSO"] == {
+            "code": "PERSO",
+            "label": "Compte perso",
+            "first": None,
+            "last": None,
+            "operations": 0,
+            "files": 0,
+            "longest_silence": None,
+            "holes": [],
+        }
+
+        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_14.csv").unlink()  # its rows stay in the DB
+        joint = {a["code"]: a for a in client.get("/api/imports/coverage").json()}["JOINT"]
+        assert joint["holes"] == [{"start": "2026-06-13", "end": "2026-06-19", "days": 7}]
+        assert joint["operations"] == 10 and joint["files"] == 3
+
+    def test_coverage_ignores_rows_before_start_date(self, seeded_db, client, tmp_path):
+        _upload(client)  # 05/06 -> 08/06, archived
+        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
+        _write_start_date(tmp_path, "2026-06-10")
+        joint = {a["code"]: a for a in client.get("/api/imports/coverage").json()}["JOINT"]
+        assert joint["files"] == 1 and joint["holes"] == []
+
     def test_invalid_settings_file_rejected(self, client, tmp_path):
         _write_start_date(tmp_path, "'demain'")
         resp = _upload(client)

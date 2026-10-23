@@ -4,7 +4,8 @@ dropped there by hand are imported in bulk by import_inputs_dir."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
+from itertools import pairwise
 from pathlib import Path
 
 from app.core.bank_profiles import BankProfile
@@ -96,6 +97,100 @@ def gap_warning(last: str | None, rows: list[dict]) -> str | None:
         f"{first:%d/%m/%Y} (début du fichier), soit {(first - previous).days - 1} jours. "
         "Un relevé manque-t-il ?"
     )
+
+
+@dataclass(frozen=True)
+class Silence:
+    """Days with no operation (in the DB) or covered by no statement (in _inputs), `start` to
+    `end` inclusive (ISO)."""
+
+    start: str
+    end: str
+    days: int
+
+
+def _silence(before: date, after: date) -> Silence:
+    """The days strictly between two dates."""
+    return Silence(str(before + timedelta(days=1)), str(after - timedelta(days=1)), (after - before).days - 1)
+
+
+@dataclass(frozen=True)
+class AccountCoverage:
+    code: str
+    label: str
+    first: str | None  # value dates of the account's first and last operations in the DB
+    last: str | None
+    operations: int
+    files: int  # _inputs statements of the account with rows since the start date
+    longest_silence: Silence | None  # in the DB: a quiet stretch, maybe a missing statement
+    holes: list[Silence]  # between _inputs statements that don't overlap, as gap_warning judges them
+
+
+def account_coverage(
+    db_path: Path, inputs_dir: Path, profiles: Sequence[BankProfile], start_date: date | None = None
+) -> list[AccountCoverage]:
+    """Per account with statements (external savings excluded), what the DB and _inputs/ cover.
+    A statement covers its first to last value date; consecutive ones whose ranges are more than
+    GAP_TOLERANCE_DAYS apart leave a hole that no file covers, which stays visible after the
+    import that created it. Unreadable files and files of no known account are left out (the
+    Import page's bulk import reports them)."""
+    with connect(db_path) as conn:
+        aliases = load_account_aliases(conn)
+        accounts = conn.execute(
+            "SELECT code, label FROM accounts WHERE deposit_pattern IS NULL ORDER BY sort_order, code"
+        ).fetchall()
+        days_by_account: dict[str, list[date]] = {code: [] for code, _ in accounts}
+        operations = dict.fromkeys(days_by_account, 0)
+        for code, day, count in conn.execute(
+            "SELECT account_id, substr(date_valeur, 1, 10) AS day, COUNT(*) FROM transactions "
+            "GROUP BY account_id, day ORDER BY day"
+        ):
+            if code in days_by_account:
+                days_by_account[code].append(date.fromisoformat(day))
+                operations[code] += count
+
+    ranges: dict[str, list[tuple[date, date]]] = {code: [] for code in days_by_account}
+    for path in sorted(inputs_dir.glob("*.csv")) if inputs_dir.exists() else []:
+        account = infer_account(path.name, profiles)
+        code = resolve_account_code(account, aliases) if account else None
+        if code not in ranges:
+            continue
+        try:
+            _, rows = parse_statement(path.read_bytes(), profiles)
+        except CsvValidationError:
+            continue
+        rows, _ = rows_since(rows, start_date)
+        if rows:  # sorted by value date
+            ranges[code].append(
+                (
+                    date.fromisoformat(rows[0]["Date valeur"][:10]),
+                    date.fromisoformat(rows[-1]["Date valeur"][:10]),
+                )
+            )
+
+    result = []
+    for code, label in accounts:
+        days = days_by_account[code]
+        longest = max(pairwise(days), key=lambda pair: pair[1] - pair[0], default=None)
+        holes = []
+        covered_until: date | None = None
+        for first, last in sorted(ranges[code]):
+            if covered_until is not None and (first - covered_until).days > GAP_TOLERANCE_DAYS:
+                holes.append(_silence(covered_until, first))
+            covered_until = last if covered_until is None else max(covered_until, last)
+        result.append(
+            AccountCoverage(
+                code,
+                label,
+                str(days[0]) if days else None,
+                str(days[-1]) if days else None,
+                operations[code],
+                len(ranges[code]),
+                _silence(*longest) if longest and (longest[1] - longest[0]).days > 1 else None,
+                holes,
+            )
+        )
+    return result
 
 
 def import_inputs_dir(
