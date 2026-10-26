@@ -15,6 +15,9 @@ const components: Components = {
   ul: (p) => <ul className="mt-3 list-disc space-y-1 pl-6 text-sm text-zinc-800" {...p} />,
   ol: (p) => <ol className="mt-3 list-decimal space-y-1 pl-6 text-sm text-zinc-800" {...p} />,
   a: (p) => <a className="text-blue-700 underline" {...p} />,
+  // The guide writes img/x.png (valid on GitHub); the app serves them from /aide/img/.
+  // eslint-disable-next-line @next/next/no-img-element
+  img: ({ src, alt }) => <img src={`/aide/${src}`} alt={alt} className="mt-3 rounded border border-zinc-200" />,
   code: (p) => <code className="rounded bg-zinc-100 px-1 text-xs" {...p} />,
   table: (p) => <table className="mt-3 w-full border-collapse text-sm" {...p} />,
   th: (p) => <th className="border border-zinc-200 bg-zinc-50 px-2 py-1 text-left" {...p} />,

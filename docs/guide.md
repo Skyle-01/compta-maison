@@ -18,6 +18,8 @@ Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qu
 
 ## Tableau de bord
 
+![Le tableau de bord](img/dashboard.png)
+
 En haut, le mois affiché (liste déroulante, « Tous les mois » pour l'ensemble de la période, « Dernier mois » pour revenir au plus récent) et le lien « Rapport PDF ».
 
 - **Les quatre cartes** : Revenus, Dépenses, Épargne et Reste. Elles se réconcilient : Revenus - Dépenses - Épargne = Reste. Les variations par rapport au mois précédent sont indiquées (masquées dans « Tous les mois »).
@@ -40,6 +42,8 @@ Le rapport montre une synthèse (cartes, tendance, « Comment lire »), les dern
 
 ## Transactions
 
+![La page Transactions](img/transactions.png)
+
 La liste des opérations, avec des filtres (mois, compte, catégorie, texte, « Sans catégorie uniquement »…). La date affichée est la **date de valeur**.
 
 - **Classer une opération** : ouvrir l'éditeur de la ligne, choisir une catégorie (feuille), puis soit « Cette opération » (classement manuel, avec une description facultative), soit « Règle (opérations similaires) » (crée une règle, avec le nombre d'opérations qu'elle classerait).
@@ -49,6 +53,8 @@ La liste des opérations, avec des filtres (mois, compte, catégorie, texte, « 
 
 ## À classer
 
+![La page À classer](img/a-classer.png)
+
 Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque groupe, on choisit une catégorie : un groupe de plusieurs opérations propose par défaut une **règle**, une opération isolée un **classement manuel**.
 
 - Au clavier : ↑/↓ changent de groupe, Entrée classe dans la catégorie proposée, Alt+M bascule règle / manuel, →/← montrent ou cachent les opérations, Échap efface la saisie.
@@ -57,6 +63,8 @@ Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque
 - Le compteur à côté de l'onglet « À classer » indique combien d'opérations restent.
 
 ## Catégories
+
+![La page Catégories](img/categories.png)
 
 L'arbre des catégories, avec pour chacune les règles, les opérations classées à la main et la moyenne mensuelle.
 
@@ -68,12 +76,16 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 
 ## Importer des relevés
 
+![La page Importer](img/import.png)
+
 - **Envoyer un relevé** : choisir le fichier CSV de la banque. Le compte est déduit du nom du fichier, qui doit contenir le nom du compte ou l'un de ses alias. Un fichier dont le compte est inconnu est refusé.
 - **Importer les nouveaux relevés** : prend en compte les fichiers déposés dans le dossier `_inputs/`. Les opérations déjà connues sont ignorées, rien n'est supprimé.
 - Les relevés envoyés sont archivés dans `_inputs/`. Les opérations antérieures à la date de départ (`start_date` dans `settings.toml`) sont écartées.
 - La couverture par compte signale les trous entre deux relevés.
 
 ## Réglages
+
+![La page Réglages](img/settings.png)
 
 - **Virements internes** : les débuts de libellé qui signalent un virement (par défaut `VIR`). `*` accepte n'importe quel libellé.
 - **Virements manuels** : les opérations appariées à la main, par paires, avec « Auto » pour rendre la main à la détection.
