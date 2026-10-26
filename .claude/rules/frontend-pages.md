@@ -15,6 +15,7 @@ White cards, light theme: clickable text (row actions ＋ ✎ ✕, « Annuler »
 - `lib/api.ts`: `ApiError` carries the `detail` strings (validation objects by their `msg`; a detail-less error gets `statusMessage(status)`, a failed fetch `UNREACHABLE`, both French); pages show `errorMessage(e)`, never `String(e)`, which prefixes an English "Error: ".
 - Nav (`components/Nav.tsx`): « À classer (N) », N = `GET /api/transactions?uncategorized=true` `total`, and « Dernière opération : date » (the most recent value date, to see whether the statements are up to date), both refetched on every route change and on the `compta:uncategorized-changed` window event (`lib/api.ts::notifyUncategorizedChanged`, called by every categorising action).
 - `CategoryPicker`: leaf-only typeahead (`lib/categorySearch` fuzzy search, ↑/↓ + Enter); hides group nodes (a top-level category without children is a leaf, and selectable).
+- « Aide » page (`app/aide/page.tsx`): renders `docs/guide.md` (react-markdown + rehype-slug; the guide's `img/x.png` are served from `docs/img` by `app/aide/img/[name]/route.ts`). Each page's title carries a « ? » (`components/HelpLink`) linking to its heading, anchors in `lib/guide.ts` (`GUIDE_ANCHORS`, one per `lib/nav.ts` entry); the guide must not use relative links to files outside `docs/`, they break in the app.
 
 ## Dashboard (`app/page.tsx`)
 - `?month=all` (« Tous les mois »): the hero says "sur l'ensemble de la période", deltas are hidden, drill-downs drop the month filter.

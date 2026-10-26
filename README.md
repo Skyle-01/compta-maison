@@ -5,6 +5,9 @@ categorise the transactions, review what's left, and explore a monthly dashboard
 Sankey, balance tree, savings). FastAPI + SQLite backend, Next.js frontend. Everything runs on
 your machine; nothing is sent anywhere.
 
+A French user guide covers every page and the common tasks: [`docs/guide.md`](docs/guide.md), also
+shown in the app's « Aide » tab.
+
 ## Your data stays out of git
 
 | Path | Holds | Tracked? |

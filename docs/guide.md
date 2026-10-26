@@ -1,6 +1,6 @@
 # Guide de compta
 
-Ce guide explique chaque page de l'application et les gestes courants. L'installation et les fichiers de `_config/` sont décrits dans le [README](../README.md) (en anglais). Chaque page a un lien « ? » à côté de son titre qui renvoie ici.
+Ce guide explique chaque page de l'application et les gestes courants. L'installation et les fichiers de `_config/` sont décrits dans le README à la racine du dépôt (en anglais). Chaque page a un lien « ? » à côté de son titre qui renvoie ici.
 
 ## Bien démarrer
 
@@ -93,7 +93,7 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 
 ### Sauvegardes et reconstruction
 
-Les opérations viennent toujours de `_inputs/`. Une copie complète de l'état = « Enregistrer la configuration » + les fichiers de `_inputs/`. La reconstruction d'une base se fait en ligne de commande (`reset_db.py`) : voir le [README](../README.md).
+Les opérations viennent toujours de `_inputs/`. Une copie complète de l'état = « Enregistrer la configuration » + les fichiers de `_inputs/`. La reconstruction d'une base se fait en ligne de commande (`reset_db.py`) : voir le README à la racine du dépôt.
 
 ## Aide
 
