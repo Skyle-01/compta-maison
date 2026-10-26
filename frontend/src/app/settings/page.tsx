@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
@@ -44,7 +45,10 @@ function SectionError({ message, onClose }: { message: string | null; onClose: (
 export default function SettingsPage() {
   return (
     <div className="space-y-10">
-      <h1 className="text-xl font-semibold">Réglages</h1>
+      <h1 className="text-xl font-semibold">
+        Réglages
+        <HelpLink page="/settings" />
+      </h1>
       {/* A direct child of the page container, so it stays stuck for the whole page. */}
       <nav
         aria-label="Sections des réglages"

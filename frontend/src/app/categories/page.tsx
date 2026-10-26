@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
@@ -929,7 +930,10 @@ export default function CategoriesPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Catégories</h1>
+      <h1 className="text-xl font-semibold">
+        Catégories
+        <HelpLink page="/categories" />
+      </h1>
       {averages && (targetSums.spending > 0 || targetSums.savings !== null) && (
         <div className="rounded-lg border border-zinc-200 bg-white px-4 py-2">
           <BudgetBalance

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
@@ -185,7 +186,10 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Transactions</h1>
+        <h1 className="text-xl font-semibold">
+          Transactions
+          <HelpLink page="/transactions" />
+        </h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <label className="flex items-center gap-1.5">
             <input

@@ -4,15 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, frenchDate, UNCATEGORIZED_CHANGED } from "@/lib/api";
-
-const NAV = [
-  { href: "/", label: "Tableau de bord" },
-  { href: "/transactions", label: "Transactions" },
-  { href: "/a-classer", label: "À classer" },
-  { href: "/categories", label: "Catégories" },
-  { href: "/import", label: "Importer" },
-  { href: "/settings", label: "Réglages" },
-];
+import { NAV } from "@/lib/nav";
 
 /** The report is opened from the dashboard, so it keeps « Tableau de bord » current. */
 function isCurrent(href: string, pathname: string): boolean {

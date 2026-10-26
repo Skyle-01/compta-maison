@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
@@ -296,7 +297,10 @@ export default function TriagePage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-xl font-semibold">À classer</h1>
+          <h1 className="text-xl font-semibold">
+            À classer
+            <HelpLink page="/a-classer" />
+          </h1>
           {groups && groups.length > 0 && (
             <p className="text-sm text-zinc-500">
               {operations(total)} sans catégorie, en {groups.length} groupe{groups.length > 1 ? "s" : ""}{" "}

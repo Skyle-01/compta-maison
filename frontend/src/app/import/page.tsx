@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
@@ -86,7 +87,10 @@ export default function ImportPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Importer des relevés bancaires</h1>
+      <h1 className="text-xl font-semibold">
+        Importer des relevés bancaires
+        <HelpLink page="/import" />
+      </h1>
 
       <div className="grid items-start gap-6 md:grid-cols-2">
         <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-6 text-sm">

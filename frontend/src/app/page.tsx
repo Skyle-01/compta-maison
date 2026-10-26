@@ -1,6 +1,7 @@
 "use client";
 
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import HelpLink from "@/components/HelpLink";
 import Link from "next/link";
 import {
   ALL_MONTHS,
@@ -584,7 +585,10 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tableau de bord</h1>
+        <h1 className="text-xl font-semibold">
+          Tableau de bord
+          <HelpLink page="/" />
+        </h1>
         <div className="flex items-center gap-3">
           <Link
             href={reportLink(data.month, data.months_available)}
