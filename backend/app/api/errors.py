@@ -1,4 +1,4 @@
-"""French messages for request-validation errors: the pages show an error's `msg` as it is, and
+"""French messages for request-validation errors (and the non-UTF-8 body 400): the pages show an error's `msg` as it is, and
 Pydantic writes it in English. Keyed by the error `type` (stable), never by the English text."""
 
 from typing import Any
