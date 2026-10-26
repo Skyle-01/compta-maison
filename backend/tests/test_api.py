@@ -1537,6 +1537,15 @@ class TestFrenchValidationErrors:
         resp = client.post("/api/rules", content=b"{bad", headers={"Content-Type": "application/json"})
         assert [e["msg"] for e in resp.json()["detail"]] == ["Requête illisible (JSON invalide)"]
 
+    def test_body_not_utf8(self, client):
+        resp = client.post(
+            "/api/categories", content=b'{"name":"\xe9"}', headers={"Content-Type": "application/json"}
+        )
+        assert resp.status_code == 400
+        assert [e["msg"] for e in resp.json()["detail"]] == [
+            "Requête illisible (encodage invalide, UTF-8 attendu)"
+        ]
+
     def test_list_item_and_constraints(self, client):
         resp = client.put("/api/transfer-markers", json={"markers": [1]})
         assert [e["msg"] for e in resp.json()["detail"]] == ["Marqueurs : un texte est attendu"]

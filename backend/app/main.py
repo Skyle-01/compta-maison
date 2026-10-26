@@ -4,9 +4,10 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api import accounts, categories, config, dashboard, imports, rules, transactions, transfer_markers
-from app.api.errors import french_validation_errors
+from app.api.errors import french_http_errors, french_validation_errors
 from app.db import DEFAULT_CONFIG_DIR, DEFAULT_DB_PATH, DEFAULT_INPUTS_DIR, init_db
 
 
@@ -24,6 +25,7 @@ def create_app(
     app.state.config_dir = config_dir if config_dir is not None else DEFAULT_CONFIG_DIR
     app.state.inputs_dir = inputs_dir if inputs_dir is not None else DEFAULT_INPUTS_DIR
     app.add_exception_handler(RequestValidationError, french_validation_errors)
+    app.add_exception_handler(StarletteHTTPException, french_http_errors)
 
     app.include_router(imports.router)
     app.include_router(transactions.router)

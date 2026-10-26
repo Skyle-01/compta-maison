@@ -4,9 +4,10 @@ Pydantic writes it in English. Keyed by the error `type` (stable), never by the 
 from typing import Any
 
 from fastapi import Request
-from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Request fields as the UI names them; any other field is shown by its API name.
 FIELD_LABELS = {
@@ -87,3 +88,19 @@ async def french_validation_errors(request: Request, exc: RequestValidationError
     errors = [{**error, "msg": french_message(error)} for error in exc.errors()]
     translated = RequestValidationError(errors, body=exc.body, endpoint_ctx=exc.endpoint_ctx)
     return await request_validation_exception_handler(request, translated)
+
+
+async def french_http_errors(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """FastAPI answers a body it cannot decode with an English 400 (`routing.py`: `raise HTTPException(400, ...)
+    from e`, `e` being the UnicodeDecodeError of `request.json()`): same list shape as the 422s, in French.
+    Recognised by status and cause, never by the English text; every other HTTPException is untouched."""
+    if exc.status_code == 400 and isinstance(exc.__cause__, UnicodeDecodeError):
+        detail = [
+            {
+                "type": "encoding_invalid",
+                "loc": ["body"],
+                "msg": "Requête illisible (encodage invalide, UTF-8 attendu)",
+            }
+        ]
+        return JSONResponse({"detail": detail}, status_code=400)
+    return await http_exception_handler(request, exc)
