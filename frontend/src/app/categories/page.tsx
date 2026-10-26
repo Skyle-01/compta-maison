@@ -206,7 +206,9 @@ function RuleOperations({
 }
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState<Category[]>([]);
+  // null until the first load ends, so the empty-tree message never shows while loading.
+  const [loadedCategories, setCategories] = useState<Category[] | null>(null);
+  const categories = loadedCategories ?? [];
   const [rules, setRules] = useState<Rule[]>([]);
   const [manual, setManual] = useState<Transaction[]>([]);
   const [averages, setAverages] = useState<CategoryAverages | null>(null);
@@ -1012,7 +1014,9 @@ export default function CategoriesPage() {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white text-sm">
-        {tree.length === 0 ? (
+        {loadedCategories === null && !error ? (
+          <p className="px-3 py-2 text-zinc-500">Chargement…</p>
+        ) : tree.length === 0 ? (
           <p className="px-3 py-2 text-zinc-500">Aucune catégorie pour l’instant.</p>
         ) : search && search.visible.size === 0 ? (
           <p className="px-3 py-2 text-zinc-500">Rien ne correspond.</p>
