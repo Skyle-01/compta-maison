@@ -27,13 +27,13 @@ backend/
   scripts/reset_db.py  # THE rebuild CLI (see Rebuild model)
   scripts/import_inputs.py # incremental CLI (or ./import_inputs.ps1): new _inputs/*.csv rows into the existing DB (deduped, nothing deleted) + recompute; the Import page's « Importer les nouveaux relevés » button does the same
   scripts/import_csv.py # config/taxonomy CSV loaders used by reset_db (import_accounts/categories/rules/overrides); not a CLI
-  tests/               # pytest
+  tests/               # pytest; test_api_*.py are split by theme (imports, transactions, transfers, categories, dashboard, export, errors), their shared helpers in api_helpers.py; test_reset_db.py tests the rebuild CLI
   requirements.txt     # runtime deps, exact pins (fastapi, uvicorn, python-multipart)
   requirements-dev.txt # -r requirements.txt + pytest, httpx2 (TestClient transport), ruff
   pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B/FAST)
 frontend/              # Next.js App Router; src/app/{page,import,transactions,a-classer,categories,settings,rapport}
-  src/app/page.tsx     # dashboard: hero, 4 reconciling cards + deltas, ResteTrend, BudgetSection, « Moyennes mensuelles » (AveragesSection, own fetch), MoneyFlowChart Sankey, balance tree (TreeNode)
-  src/components/      # Nav (« À classer (N) » + « Dernière opération »), CategoryPicker (leaf-only typeahead), SignedAmount, and the dashboard pieces the report reuses: ResteTrend, BudgetSection (+ TONE_TEXT), MoneyFlowChart, Gap
+  src/app/page.tsx     # dashboard: hero, 4 reconciling cards + deltas, ResteTrend, BudgetSection, « Moyennes mensuelles » (components/AveragesSection, own fetch), MoneyFlowChart Sankey, balance tree (TreeNode)
+  src/components/      # Nav (« À classer (N) » + « Dernière opération »), CategoryPicker (leaf-only typeahead), SignedAmount, AveragesSection (dashboard only), and the dashboard pieces the report reuses: ResteTrend, BudgetSection (+ TONE_TEXT), MoneyFlowChart, Gap
   src/lib/api.ts       # typed fetch client (+ frenchMonth/frenchDate/signedAmount/suggestPattern/errorMessage); /api/* proxied to :8000 via next.config.ts rewrites
   src/lib/*.ts         # pure, vitest-tested helpers (tests sit next to them): moneyFlow + flowLayout (Sankey), budget, averages, report, trend, manualTransfers, categorySearch, triage, ruleForm (shared rule editor state), categoryTree
 docs/guide.md          # French user guide, rendered by the « Aide » page (frontend/src/app/aide, react-markdown + rehype-slug); each page's « ? » (components/HelpLink) targets a heading listed in lib/guide.ts GUIDE_ANCHORS, guide.test.ts checks them

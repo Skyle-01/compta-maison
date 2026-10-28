@@ -31,7 +31,7 @@ White cards, light theme: clickable text (row actions ＋ ✎ ✕, « Annuler »
 - Expense leaves under 2.5% of total expenses fold into a per-group `Autres (<group>)`; a leaf name repeated under several groups gets its parent appended (`Prêt (Locatif)`).
 - Layout: `flowLayout` keeps each column in the order `moneyFlow` emits (largest first, sub-groups before leaves, `Non classé`/`Épargne`/`Reste` last) and stacks bands in the order of their other end, so links don't cross; keep that order when changing `moneyFlow`. Centring, link tints by `role`, labels, tooltip and height live in `flowLayout.ts` and `MoneyFlowChart`.
 
-## « Moyennes mensuelles » table (`page.tsx::AveragesSection`, `lib/averages.ts`)
+## « Moyennes mensuelles » table (`components/AveragesSection.tsx`, `lib/averages.ts`)
 Own fetch (`GET /api/dashboard/averages`), so switching the period doesn't refetch the dashboard; the period resets to 12 months on reload. One **signed** column per row (`averageNet`/`monthNet`: income − spending, so the offset cancels out) + « Écart » + « Objectif »: categories, `Non classé` and a `Total` row (= Revenus − Dépenses), then a separate « Comptes d'épargne » block (one row per account, « Mis de côté / mois », positive = saved). The month column shows the displayed month's value with its gap (month − average) in parentheses, always grey; the colour sits on the « Objectif » cell of an own target only (`ownTarget`): green under 90 % of it, amber 90-100 %, red over, judged on the displayed month's spending (the average in « Tous les mois », where the gaps are hidden).
 
 ## Printable report (`/rapport`, `app/rapport/page.tsx`, `lib/report.ts`)
