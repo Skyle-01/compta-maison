@@ -8,10 +8,8 @@ import csv
 import sqlite3
 from pathlib import Path
 
-from app.core.categorize import apply_rules
 from app.core.config_export import PATH_SEP
-from app.core.periods import recompute_budget_months
-from app.core.transfers import recompute_transfers
+from app.core.recompute import recompute_all
 from app.db import connect, replace_transfer_markers, to_cents, upsert_accounts
 
 ACCOUNT_TYPES = ("checking", "savings")
@@ -308,9 +306,7 @@ def import_csv(
         n_pairs, n_unpaired = restore_manual_pairs(conn, overrides, ids_by_hash)
         n_cat = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
 
-    recompute_budget_months(db_path)
-    n_transfer_legs = recompute_transfers(db_path)
-    apply_rules(db_path)
+    n_transfer_legs = recompute_all(db_path)
     summary = f"Imported {n_cat} categories and {n_rules} rules into {db_path}"
     if overrides_csv:
         summary += f"; restored {n_over} overrides ({n_skip} skipped — transaction not found)"

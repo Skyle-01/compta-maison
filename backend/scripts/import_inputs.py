@@ -16,11 +16,9 @@ BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
 from app.core.bank_profiles import BankProfileError, load_bank_profiles  # noqa: E402
-from app.core.categorize import apply_rules  # noqa: E402
 from app.core.inputs import import_inputs_dir  # noqa: E402
-from app.core.periods import recompute_budget_months  # noqa: E402
+from app.core.recompute import recompute_all  # noqa: E402
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date  # noqa: E402
-from app.core.transfers import recompute_transfers  # noqa: E402
 from app.db import DEFAULT_CONFIG_DIR, DEFAULT_DB_PATH, DEFAULT_INPUTS_DIR  # noqa: E402
 
 INPUTS_DIR = DEFAULT_INPUTS_DIR
@@ -49,9 +47,7 @@ def import_inputs(db_path: Path) -> int:
             print(f"Imported {r.rows_new}/{r.rows_total} new rows from {r.name} -> {r.account} [{r.profile}]")
         if r.gap_warning:
             print(f"  {r.gap_warning}")
-    recompute_budget_months(db_path)
-    recompute_transfers(db_path)
-    apply_rules(db_path)
+    recompute_all(db_path)
     n_new = sum(r.rows_new for r in results)
     print(f"{n_new} new transactions from {len(results)} files in {INPUTS_DIR}.")
     return n_new

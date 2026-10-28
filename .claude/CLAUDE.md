@@ -17,6 +17,7 @@ backend/
       settings.py      # optional settings.toml in the config dir: load_start_date (the books' start date)
       parsing.py       # profile-driven parse/validate of one uploaded CSV (header auto-detect) -> (profile, list[dict]); rows_since; import_transactions stores the calendar month, core/periods re-derives it
       periods.py       # paycheck-anchored budget months (recompute_budget_months)
+      recompute.py     # recompute_all: budget months, transfers, rules - the one tail after any import/rebuild (rule mutations only need apply_rules + periods, see api/rules.py)
       transfers.py     # auto-pair internal transfers across accounts (recompute_transfers), transfer_candidates
       inputs.py        # _inputs/ archive of uploads (archive_statement); import_inputs_dir = the one loop importing every _inputs/*.csv into an existing DB (no recompute), shared by reset_db, import_inputs.py and POST /api/imports/inputs; gap_warning + account_coverage (GET /api/imports/coverage)
       categorize.py    # apply_rules, category_tree, income_and_expenses, monthly_totals, budget_status, category_averages (+ averaging_window), uncategorized_balance, transfers_summary

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Form, HTTPException, UploadFile
 
 from app.api.deps import ConfigDir, DbPath, InputsDir
 from app.core.bank_profiles import PROFILES_FILENAME, BankProfile, BankProfileError, load_bank_profiles
-from app.core.categorize import apply_rules, uncategorized_balance
+from app.core.categorize import uncategorized_balance
 from app.core.inputs import (
     account_coverage,
     archive_statement,
@@ -16,9 +16,8 @@ from app.core.inputs import (
     last_value_date,
 )
 from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
-from app.core.periods import recompute_budget_months
+from app.core.recompute import recompute_all
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date
-from app.core.transfers import recompute_transfers
 from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
 from app.schemas import AccountCoverage, ImportResult, InputFileResult, InputsImportResult
 
@@ -82,9 +81,7 @@ def upload_csv(
 
     gap = gap_warning(last_value_date(db_path, code), rows)  # before the insert
     rows_new = import_transactions(rows, db_path)
-    recompute_budget_months(db_path)
-    recompute_transfers(db_path)
-    apply_rules(db_path)
+    recompute_all(db_path)
 
     # Budget months the file spans (its account over its value dates), read back after the
     # paycheck-period recompute; also right when every row was a duplicate. Empty when every row
@@ -133,9 +130,7 @@ def import_inputs(db_path: DbPath, config_dir: ConfigDir, inputs_dir: InputsDir)
     """Import every statement dropped in _inputs/ into the existing DB (already imported rows are
     skipped), then recompute like an upload."""
     results = import_inputs_dir(db_path, inputs_dir, _profiles(config_dir), _start_date(config_dir))
-    recompute_budget_months(db_path)
-    recompute_transfers(db_path)
-    apply_rules(db_path)
+    recompute_all(db_path)
     return InputsImportResult(
         files=[InputFileResult(**asdict(r)) for r in results],
         rows_new=sum(r.rows_new for r in results),
