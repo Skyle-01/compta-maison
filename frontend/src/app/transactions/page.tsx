@@ -8,21 +8,16 @@ import {
   type Category,
   type Transaction,
   type TransferMode,
-  formatEuro,
-  frenchDate,
-  frenchMonth,
   notifyUncategorizedChanged,
-  signedAmount,
   suggestPattern,
-  transactionsExportUrl,
 } from "@/lib/api";
-import CategoryPicker from "@/components/CategoryPicker";
-import SignedAmount from "@/components/SignedAmount";
 import { emptyRuleForm, type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
+import CategoryEditor, { type EditMode } from "./CategoryEditor";
+import Filters from "./Filters";
+import SelectionBar from "./SelectionBar";
+import TransactionRow from "./TransactionRow";
 
 const PAGE_SIZE = 50;
-
-type EditMode = "manual" | "rule";
 
 export default function TransactionsPage() {
   const [items, setItems] = useState<Transaction[]>([]);
@@ -190,78 +185,31 @@ export default function TransactionsPage() {
           Transactions
           <HelpLink page="/transactions" />
         </h1>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <label className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={onlyUncategorized}
-              onChange={(e) => {
-                setOnlyUncategorized(e.target.checked);
-                setOffset(0);
-              }}
-            />
-            Sans catégorie uniquement
-          </label>
-          <select
-            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              setOffset(0);
-            }}
-          >
-            <option value="">Tous les mois</option>
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {frenchMonth(m)}
-              </option>
-            ))}
-          </select>
-          <a
-            href={transactionsExportUrl({ month: month || undefined, uncategorized: onlyUncategorized })}
-            download
-            className="btn-secondary"
-          >
-            Exporter CSV
-          </a>
-        </div>
+        <Filters
+          onlyUncategorized={onlyUncategorized}
+          onOnlyUncategorizedChange={(checked) => {
+            setOnlyUncategorized(checked);
+            setOffset(0);
+          }}
+          month={month}
+          months={months}
+          onMonthChange={(m) => {
+            setMonth(m);
+            setOffset(0);
+          }}
+        />
       </div>
 
       {error && <p className="text-sm text-red-700">{error}</p>}
       {selectedRows.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-          <span className="text-zinc-600">
-            {selectedRows.length} sélectionnée(s) :{" "}
-            {selectedRows.map((tx) => `${tx.libelle} (${formatEuro(signedAmount(tx))})`).join(" ↔ ")}
-          </span>
-          {selectedRows.length === 2 ? (
-            <button
-              onClick={() =>
-                transferAction(
-                  () => api.pairTransfer([selectedRows[0].id, selectedRows[1].id]),
-                  "Virement associé.",
-                )
-              }
-              className="btn-primary py-0.5 text-xs"
-            >
-              Associer en virement
-            </button>
-          ) : (
-            <button
-              onClick={() => setMode(selectedRows[0], "transfer", "Opération marquée comme virement.")}
-              className="btn-primary py-0.5 text-xs"
-              title="Virement vers un compte dont le relevé n’est pas importé — exclu des revenus/dépenses"
-            >
-              Marquer comme virement
-            </button>
-          )}
-          <button
-            onClick={() => setSelected(new Map())}
-            className="btn-secondary px-2 py-0.5 text-xs"
-          >
-            Effacer
-          </button>
-        </div>
+        <SelectionBar
+          rows={selectedRows}
+          onPair={() =>
+            transferAction(() => api.pairTransfer([selectedRows[0].id, selectedRows[1].id]), "Virement associé.")
+          }
+          onMarkTransfer={() => setMode(selectedRows[0], "transfer", "Opération marquée comme virement.")}
+          onClear={() => setSelected(new Map())}
+        />
       )}
       {flash && <p className="text-sm text-green-700">{flash}</p>}
 
@@ -279,188 +227,31 @@ export default function TransactionsPage() {
           </thead>
           <tbody>
             {items.map((tx) => (
-              <tr key={tx.id} className="border-t border-zinc-100 align-top">
-                <td className="px-2 py-1.5">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(tx.id)}
-                    disabled={!selected.has(tx.id) && selected.size >= 2}
-                    onChange={() => toggleSelected(tx)}
-                    aria-label="Sélectionner"
-                  />
-                </td>
-                <td className="whitespace-nowrap px-3 py-1.5">{frenchDate(tx.date_valeur)}</td>
-                <td className="max-w-md truncate px-3 py-1.5" title={tx.libelle}>
-                  {tx.libelle}
-                </td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{tx.account}</td>
-                <td className="whitespace-nowrap px-3 py-1.5 text-right">
-                  <SignedAmount tx={tx} />
-                </td>
-                <td className="px-3 py-1.5">
-                  {tx.kind === "transfer" ? (
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span
-                        className="inline-block rounded bg-zinc-100 px-2 py-0.5 text-zinc-500"
-                        title="Virement / mouvement d’épargne — exclu des revenus/dépenses"
-                      >
-                        ⇄ virement
-                      </span>
-                      {tx.kind_manual && (
-                        <span className="text-zinc-500" title="Décision manuelle">
-                          ✎
-                        </span>
-                      )}
-                      {(tx.transfer_group_id != null || tx.kind_manual) && (
-                        <button
-                          onClick={() => setMode(tx, "none", "Virement dissocié.")}
-                          className="text-zinc-600 hover:text-zinc-900"
-                          title="Ce n’est pas un virement : compter dans les revenus/dépenses"
-                        >
-                          Dissocier
-                        </button>
-                      )}
-                      {tx.kind_manual && (
-                        <button
-                          onClick={() => setMode(tx, "auto", "Détection automatique rétablie.")}
-                          className="text-zinc-600 hover:text-zinc-900"
-                          title="Revenir à la détection automatique"
-                        >
-                          Auto
-                        </button>
-                      )}
-                    </div>
-                  ) : editingTxId === tx.id ? (
-                    <div className="space-y-2">
-                      <CategoryPicker
-                        categories={categories}
-                        value={form.category_id}
-                        onChange={(category_id) => edit({ category_id })}
-                        highlight={form.category_id == null}
-                        placeholder="— catégorie —"
-                      />
-                      <div className="flex items-center gap-3 text-xs text-zinc-600">
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="radio"
-                            name={`mode-${tx.id}`}
-                            checked={editMode === "manual"}
-                            onChange={() => setEditMode("manual")}
-                          />
-                          Cette opération
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input
-                            type="radio"
-                            name={`mode-${tx.id}`}
-                            checked={editMode === "rule"}
-                            onChange={() => setEditMode("rule")}
-                          />
-                          Règle (opérations similaires)
-                        </label>
-                      </div>
-                      {editMode === "rule" && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2">
-                            <input
-                              value={form.pattern}
-                              onChange={(e) => edit({ pattern: e.target.value })}
-                              placeholder="texte à rechercher"
-                              className="w-52 rounded border border-zinc-300 px-1 py-0.5 font-mono text-xs"
-                            />
-                            <span className="text-xs text-zinc-500">
-                              {!form.pattern.trim()
-                                ? ""
-                                : matchCount == null
-                                ? "…"
-                                : matchCount === 0
-                                ? "⚠ aucune opération sans catégorie ne correspond"
-                                : `classerait ${matchCount} opération(s)`}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs">
-                            <input
-                              type="number"
-                              title="Priorité — le plus petit nombre l’emporte"
-                              value={form.priority}
-                              onChange={(e) => edit({ priority: e.target.value })}
-                              className="w-16 rounded border border-zinc-300 px-1 py-0.5"
-                            />
-                            <label className="flex items-center gap-1 text-zinc-600">
-                              <input
-                                type="checkbox"
-                                checked={form.is_income_anchor}
-                                onChange={(e) => edit({ is_income_anchor: e.target.checked })}
-                              />
-                              ancre de revenu
-                            </label>
-                          </div>
-                        </div>
-                      )}
-                      <input
-                        value={form.description}
-                        onChange={(e) => edit({ description: e.target.value })}
-                        placeholder={
-                          editMode === "rule"
-                            ? "Description de la règle (facultatif)"
-                            : "Description (facultatif)"
-                        }
-                        className="w-72 rounded border border-zinc-300 px-2 py-0.5 text-xs"
-                      />
-                      <div className="flex items-center gap-2 text-xs">
-                        <button
-                          onClick={() => submitEditor(tx)}
-                          disabled={submitDisabled}
-                          className="btn-primary py-1"
-                        >
-                          Valider
-                        </button>
-                        <button
-                          onClick={() => setEditingTxId(null)}
-                          className="btn-secondary py-1"
-                        >
-                          Annuler
-                        </button>
-                      </div>
-                    </div>
-                  ) : tx.category_id ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>{tx.category}</span>
-                      <NotTransferBadge tx={tx} onAuto={() => setMode(tx, "auto", "Détection automatique rétablie.")} />
-                      {tx.category_manual ? (
-                        <span className="text-xs text-zinc-500" title="Assigné manuellement">
-                          ✎
-                        </span>
-                      ) : tx.rule_id != null ? (
-                        <span
-                          className="text-xs text-zinc-500"
-                          title={`Classé par la règle « ${tx.rule_pattern} »`}
-                        >
-                          ⚙
-                        </span>
-                      ) : null}
-                      {tx.note && <span className="text-xs italic text-zinc-500">— {tx.note}</span>}
-                      <button
-                        onClick={() => openEditor(tx)}
-                        className="text-xs text-zinc-600 hover:text-zinc-900"
-                        title="Modifier le classement"
-                      >
-                        Modifier
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        onClick={() => openEditor(tx)}
-                        className="rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-100"
-                      >
-                        Classer
-                      </button>
-                      <NotTransferBadge tx={tx} onAuto={() => setMode(tx, "auto", "Détection automatique rétablie.")} />
-                    </div>
-                  )}
-                </td>
-              </tr>
+              <TransactionRow
+                key={tx.id}
+                tx={tx}
+                checked={selected.has(tx.id)}
+                checkDisabled={!selected.has(tx.id) && selected.size >= 2}
+                onToggle={() => toggleSelected(tx)}
+                onSetMode={(mode, message) => setMode(tx, mode, message)}
+                onOpenEditor={() => openEditor(tx)}
+                editor={
+                  editingTxId === tx.id ? (
+                    <CategoryEditor
+                      tx={tx}
+                      categories={categories}
+                      form={form}
+                      onEdit={edit}
+                      mode={editMode}
+                      onModeChange={setEditMode}
+                      matchCount={matchCount}
+                      submitDisabled={submitDisabled}
+                      onSubmit={() => submitEditor(tx)}
+                      onCancel={() => setEditingTxId(null)}
+                    />
+                  ) : null
+                }
+              />
             ))}
             {items.length === 0 && (
               <tr>
@@ -495,18 +286,5 @@ export default function TransactionsPage() {
         </div>
       </div>
     </div>
-  );
-}
-
-/** A row the user declared "not a transfer": say so, with a way back to automatic detection. */
-function NotTransferBadge({ tx, onAuto }: { tx: Transaction; onAuto: () => void }) {
-  if (!tx.kind_manual) return null;
-  return (
-    <span className="text-xs text-zinc-500" title="Décision manuelle : n’est pas un virement">
-      ✎ pas un virement ·{" "}
-      <button onClick={onAuto} className="text-zinc-600 hover:text-zinc-900" title="Revenir à la détection automatique">
-        Auto
-      </button>
-    </span>
   );
 }
