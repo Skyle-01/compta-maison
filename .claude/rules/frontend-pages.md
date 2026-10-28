@@ -49,6 +49,7 @@ Own fetch (`GET /api/dashboard/averages`), so switching the period doesn't refet
 - « Exporter CSV » (`GET /api/transactions/export`, `lib/api.ts::transactionsExportUrl`): every row matching the filters, oldest first, for a French Excel (French headers, dd/mm/yyyy, comma decimals, full category path), unlike the config CSVs.
 
 ## « À classer » page (`app/a-classer/page.tsx`, `lib/triage.ts`)
+- Code layout: `page.tsx` owns the groups, the draft, the keyboard handler (`onKeyDown`), `act`/`submit`/`pair`/undo and the toast; `Shortcuts`, `GroupSummary`, `GroupEditor` (also exports `Draft`), `TransferCandidates` and `OperationsTable` sit beside it and only render.
 - A group of 2+ defaults to a rule, a lone operation or a generic pattern to a manual assignment (`defaultMode`). Manual mode uses the bulk `PATCH /api/transactions` `{ids, category_id, note}`. « Annuler » (8 s, or Alt+Z) deletes the created rule or clears the batch.
 - The active group lists its `transfer_candidates` under « Virement interne ? » with « Associer en virement » (`POST /api/transactions/transfer-pair`; « Annuler » = `PUT /api/transactions/{id}/transfer` `auto`). A group with other operations stays active after a pairing.
 - Keyboard: the active group's category search keeps the focus; ↑/↓ move between groups (or through the results while a query is typed), Enter classes in the highlighted result else the suggestion, Alt+M toggles rule/manual, →/← show/hide the operations, Échap clears the query then the draft; the next group becomes active after a validation.

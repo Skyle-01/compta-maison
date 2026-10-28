@@ -6,8 +6,6 @@ import {
   api,
   errorMessage,
   type Category,
-  formatEuro,
-  frenchDate,
   frenchMonth,
   notifyUncategorizedChanged,
   type RulePreview,
@@ -15,45 +13,17 @@ import {
   type Transaction,
   type UncategorizedGroup,
 } from "@/lib/api";
-import SignedAmount from "@/components/SignedAmount";
 import { leafCategories, searchCategories } from "@/lib/categorySearch";
 import { DEFAULT_RULE_PRIORITY, ruleFormToPayload } from "@/lib/ruleForm";
-import {
-  classedMessage,
-  defaultMode,
-  nextActiveIndex,
-  operations,
-  pairedMessage,
-  previewMessage,
-  suggestionReason,
-  type TriageMode,
-} from "@/lib/triage";
+import { classedMessage, defaultMode, nextActiveIndex, operations, pairedMessage } from "@/lib/triage";
+import GroupEditor, { type Draft } from "./GroupEditor";
+import GroupSummary from "./GroupSummary";
+import OperationsTable from "./OperationsTable";
+import Shortcuts from "./Shortcuts";
+import TransferCandidates from "./TransferCandidates";
 
 const UNDO_DELAY_MS = 8000;
 const MAX_RESULTS = 8;
-
-/** The keyboard help under the title: [keys, action]; empty keys = plain typing. */
-const SHORTCUTS: [string, string][] = [
-  ["↑ ↓", "changer de groupe"],
-  ["", "tapez pour chercher une catégorie"],
-  ["Entrée", "valider (la suggestion si la recherche est vide)"],
-  ["Alt+M", "règle / opérations"],
-  ["→ ←", "détails"],
-  ["Échap", "effacer"],
-  ["Alt+Z", "annuler le dernier classement"],
-];
-
-/** The active group's editor state; `key` ties it to its group, so moving to another group starts
- *  from that group's defaults. */
-type Draft = {
-  key: string;
-  query: string;
-  highlight: number;
-  mode: TriageMode;
-  pattern: string;
-  priority: string;
-  description: string;
-};
 
 const draftFor = (g: UncategorizedGroup): Draft => ({
   key: g.key,
@@ -69,12 +39,6 @@ const draftFor = (g: UncategorizedGroup): Draft => ({
 type Toast = { message: string; key: string; undo: () => Promise<unknown> };
 
 const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
-
-function dateRange(g: UncategorizedGroup): string {
-  return g.first_date === g.last_date
-    ? frenchDate(g.first_date)
-    : `${frenchDate(g.first_date)} – ${frenchDate(g.last_date)}`;
-}
 
 export default function TriagePage() {
   const [groups, setGroups] = useState<UncategorizedGroup[] | null>(null);
@@ -322,14 +286,7 @@ export default function TriagePage() {
         </select>
       </div>
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-        {SHORTCUTS.map(([keys, action]) => (
-          <li key={action}>
-            {keys && <kbd className="mr-1 rounded border border-zinc-300 bg-white px-1 font-sans text-zinc-700">{keys}</kbd>}
-            {action}
-          </li>
-        ))}
-      </ul>
+      <Shortcuts />
 
       {error && <p className="text-sm text-red-700">{error}</p>}
 
@@ -343,7 +300,6 @@ export default function TriagePage() {
         <div className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white">
           {groups.map((g, i) => {
             const isActive = i === active;
-            const net = g.credit - g.debit;
             return (
               <div
                 key={g.key}
@@ -353,210 +309,28 @@ export default function TriagePage() {
                 }}
                 className={isActive ? "bg-zinc-50 ring-1 ring-zinc-300 ring-inset" : ""}
               >
-                <div
-                  onClick={() => setActive(i)}
-                  className={`flex cursor-pointer items-center gap-4 px-3 py-2 text-sm ${
-                    isActive ? "" : "hover:bg-zinc-50"
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium" title={g.transactions[0].libelle}>
-                      {g.transactions[0].libelle}
-                    </div>
-                    <div className="text-xs text-zinc-500">
-                      {operations(g.count)} · {dateRange(g)} · {g.accounts.join(", ")}
-                    </div>
-                  </div>
-                  {!isActive && g.suggestion && (
-                    <span className="truncate text-xs text-zinc-500">→ {pathOf(g.suggestion.category_id)}</span>
-                  )}
-                  <span className={`whitespace-nowrap ${net >= 0 ? "text-green-700" : "text-red-700"}`}>
-                    {formatEuro(net)}
-                  </span>
-                </div>
+                <GroupSummary group={g} isActive={isActive} pathOf={pathOf} onSelect={() => setActive(i)} />
 
                 {isActive && d && (
                   <div onKeyDown={onKeyDown} className="space-y-2 px-3 pb-3 text-sm">
-                    <div className="flex flex-wrap items-start gap-4">
-                      <div className="w-80">
-                        <input
-                          ref={searchRef}
-                          value={d.query}
-                          onChange={(e) => update({ query: e.target.value, highlight: 0 })}
-                          placeholder="Catégorie : tapez pour chercher…"
-                          aria-label="Chercher une catégorie"
-                          className="w-full rounded border border-amber-400 bg-white px-2 py-1"
-                        />
-                        {d.query && (
-                          <ul className="mt-1 rounded border border-zinc-200 bg-white py-0.5">
-                            {results.map((c, j) => (
-                              <li key={c.id}>
-                                <button
-                                  type="button"
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onClick={() => submit(c)}
-                                  className={`block w-full px-2 py-1 text-left ${
-                                    j === d.highlight ? "bg-zinc-100 text-zinc-900" : "text-zinc-700 hover:bg-zinc-50"
-                                  }`}
-                                >
-                                  {shortPath(c)}
-                                </button>
-                              </li>
-                            ))}
-                            {results.length === 0 && <li className="px-2 py-1 text-zinc-500">Aucune catégorie</li>}
-                          </ul>
-                        )}
-                        {!d.query &&
-                          (suggested && g.suggestion ? (
-                            <button
-                              type="button"
-                              onClick={() => submit(suggested)}
-                              className="mt-1 text-left text-xs text-zinc-600 hover:text-zinc-900"
-                            >
-                              Suggestion : <span className="font-medium">{shortPath(suggested)}</span> (
-                              {suggestionReason(g.suggestion.count, g.suggestion.token)}) · Entrée
-                            </button>
-                          ) : (
-                            <p className="mt-1 text-xs text-zinc-500">Pas de suggestion : tapez une catégorie.</p>
-                          ))}
-                      </div>
-
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-3 text-xs text-zinc-600">
-                          <label className="flex items-center gap-1">
-                            <input
-                              type="radio"
-                              checked={d.mode === "rule"}
-                              onChange={() => update({ mode: "rule" })}
-                            />
-                            Règle (opérations similaires)
-                          </label>
-                          <label className="flex items-center gap-1">
-                            <input
-                              type="radio"
-                              checked={d.mode === "manual"}
-                              onChange={() => update({ mode: "manual" })}
-                            />
-                            {g.count > 1 ? `Ces ${g.count} opérations` : "Cette opération"}
-                          </label>
-                          <span className="text-zinc-500">Alt+M</span>
-                        </div>
-                        {d.mode === "rule" && (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={d.pattern}
-                                onChange={(e) => update({ pattern: e.target.value })}
-                                placeholder="texte à rechercher"
-                                aria-label="Motif de la règle"
-                                className="w-64 rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs"
-                              />
-                              <input
-                                value={d.priority}
-                                onChange={(e) => update({ priority: e.target.value })}
-                                inputMode="numeric"
-                                title="Priorité : le plus petit nombre l’emporte"
-                                aria-label="Priorité"
-                                className="w-14 rounded border border-zinc-300 bg-white px-2 py-1 text-xs"
-                              />
-                            </div>
-                            <p
-                              className={`text-xs ${
-                                currentPreview?.reclassified.length ? "text-amber-800" : "text-zinc-500"
-                              }`}
-                            >
-                              {!pattern
-                                ? "Saisissez un motif."
-                                : currentPreview
-                                  ? `${currentPreview.reclassified.length ? "⚠ " : ""}${previewMessage(currentPreview, pathOf)}`
-                                  : "…"}
-                              {g.pattern_generic && d.pattern === g.pattern && " · ⚠ motif trop générique"}
-                            </p>
-                          </div>
-                        )}
-                        <input
-                          value={d.description}
-                          onChange={(e) => update({ description: e.target.value })}
-                          placeholder={d.mode === "rule" ? "Description de la règle (facultatif)" : "Description (facultatif)"}
-                          className="w-80 rounded border border-zinc-300 bg-white px-2 py-1 text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs">
-                      <button
-                        onClick={() => submit(candidate)}
-                        disabled={!candidate || busy || (d.mode === "rule" && !pattern)}
-                        className="btn-primary py-1"
-                      >
-                        {candidate ? `Classer en ${shortPath(candidate)}` : "Classer"}
-                      </button>
-                      <button
-                        onClick={() => toggleExpanded(g.key)}
-                        className="text-zinc-600 hover:text-zinc-900"
-                      >
-                        {expanded.has(g.key) ? "Masquer les opérations" : "Voir les opérations"}
-                      </button>
-                    </div>
-
-                    {g.transfer_candidates.length > 0 && (
-                      <div className="space-y-1 text-xs">
-                        <p className="text-zinc-500">Virement interne ? Autre opération possible :</p>
-                        <table className="w-full">
-                          <tbody>
-                            {g.transfer_candidates.map(({ transaction_id, partner }) => {
-                              const op = g.transactions.find((t) => t.id === transaction_id);
-                              if (!op) return null;
-                              return (
-                                <tr key={`${op.id}-${partner.id}`} className="border-t border-zinc-100">
-                                  {g.count > 1 && (
-                                    <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">
-                                      pour le {frenchDate(op.date_valeur)}
-                                    </td>
-                                  )}
-                                  <td className="whitespace-nowrap py-1 pr-3">{frenchDate(partner.date_valeur)}</td>
-                                  <td className="max-w-md truncate py-1 pr-3" title={partner.libelle}>
-                                    {partner.libelle}
-                                  </td>
-                                  <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">{partner.account_id}</td>
-                                  <td className="whitespace-nowrap py-1 pr-3 text-right">
-                                    <SignedAmount tx={partner} />
-                                  </td>
-                                  <td className="whitespace-nowrap py-1 text-right">
-                                    <button
-                                      onClick={() => pair(op, partner)}
-                                      disabled={busy}
-                                      className="font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-40"
-                                    >
-                                      Associer en virement
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-
-                    {expanded.has(g.key) && (
-                      <table className="w-full text-xs">
-                        <tbody>
-                          {g.transactions.map((t) => (
-                            <tr key={t.id} className="border-t border-zinc-100">
-                              <td className="whitespace-nowrap py-1 pr-3">{frenchDate(t.date_valeur)}</td>
-                              <td className="max-w-md truncate py-1 pr-3" title={t.libelle}>
-                                {t.libelle}
-                              </td>
-                              <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">{t.account_id}</td>
-                              <td className="whitespace-nowrap py-1 text-right">
-                                <SignedAmount tx={t} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
+                    <GroupEditor
+                      group={g}
+                      draft={d}
+                      update={update}
+                      searchRef={searchRef}
+                      results={results}
+                      suggested={suggested}
+                      candidate={candidate}
+                      pattern={pattern}
+                      currentPreview={currentPreview}
+                      pathOf={pathOf}
+                      busy={busy}
+                      expanded={expanded.has(g.key)}
+                      onSubmit={submit}
+                      onToggleExpanded={() => toggleExpanded(g.key)}
+                    />
+                    {g.transfer_candidates.length > 0 && <TransferCandidates group={g} busy={busy} onPair={pair} />}
+                    {expanded.has(g.key) && <OperationsTable transactions={g.transactions} />}
                   </div>
                 )}
               </div>
