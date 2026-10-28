@@ -14,8 +14,8 @@ from app.core.config_export import (
     rule_rows,
 )
 from app.db import connect, get_transfer_markers
+from tests.api_helpers import _category_id, _upload, _upload_transfers
 from tests.conftest import isolate_reset_db
-from tests.test_api import _category_id, _upload, _upload_transfers
 
 PRESERVED = {
     "bank_profiles.toml": b'[profiles.ma_banque]\ndelimiter = ","\n',
