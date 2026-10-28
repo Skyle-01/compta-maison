@@ -5,6 +5,7 @@ import {
   buildTree,
   contentsByCategory,
   movedMessage,
+  reparentOptions,
   searchTree,
   targetedAncestor,
   treeTarget,
@@ -102,6 +103,14 @@ describe("targets", () => {
     expect(targetedAncestor(4, byId)?.name).toBe("Sortie");
     expect(targetedAncestor(3, byId)).toBeUndefined(); // its own target is not an ancestor's
     expect(targetedAncestor(2, byId)).toBeUndefined();
+  });
+});
+
+describe("reparentOptions", () => {
+  it("offers roots and groups, never the category itself or its descendants", () => {
+    expect(reparentOptions(CATS, 2).map((c) => c.name)).toEqual(["Fixe", "Sortie", "Variable"]);
+    // Sortie's subtree (itself, Bar) is excluded: moving it under Bar would make a cycle.
+    expect(reparentOptions(CATS, 3).map((c) => c.name)).toEqual(["Fixe", "Variable"]);
   });
 });
 

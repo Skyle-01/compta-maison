@@ -90,6 +90,24 @@ export function targetedAncestor(id: number, byId: Map<number, Category>): Categ
   return undefined;
 }
 
+/** The categories `id` can be moved under: roots and existing groups (by the leaf-only invariant
+ *  those carry no direct operations or rules), minus `id` and its descendants (a cycle), by path. */
+export function reparentOptions(categories: Category[], id: number): Category[] {
+  const kids = new Map<number | null, number[]>();
+  for (const c of categories) kids.set(c.parent_id, [...(kids.get(c.parent_id) ?? []), c.id]);
+  const forbidden = new Set<number>();
+  const stack = [id];
+  while (stack.length) {
+    const current = stack.pop()!;
+    forbidden.add(current);
+    stack.push(...(kids.get(current) ?? []));
+  }
+  const groupIds = new Set(categories.map((c) => c.parent_id).filter((p): p is number => p != null));
+  return categories
+    .filter((c) => (c.is_root || groupIds.has(c.id)) && !forbidden.has(c.id))
+    .sort((a, b) => a.path.localeCompare(b.path));
+}
+
 export const ruleMatches = (r: Rule, q: string) => fold(`${r.pattern} ${r.description ?? ""}`).includes(q);
 export const manualMatches = (tx: Transaction, q: string) => fold(`${tx.libelle} ${tx.note ?? ""}`).includes(q);
 
