@@ -47,7 +47,10 @@ your own `accounts.csv` their account names no longer resolve).
      names besides its `label`: the account name taken from your statement filenames, or a former
      name your bank used in transfer labels (not a holder's name, which several accounts share). `type` is `checking` or `savings`. Set
      `deposit_pattern` only for a savings account with no statement of its own: its deposits are
-     the checking-account lines containing that text, whatever its case.
+     the checking-account lines containing that text, whatever its case. `start_date` (optional,
+     `2026-08-28`) is the account's own cutoff: its lines valued earlier are not imported, on top
+     of the books' `start_date` (the later of the two applies). Pick the date of the paycheck that
+     opens the first budget month the account should count in; after changing it, rebuild with `reset_db.py`.
    - `categories.csv`: `path;budget_target` — one full category path per line
      (`Vie courante / Courses`), with an optional monthly spending target in euros on leaf categories
      (`450.00`; a file with only the `path` column still loads).

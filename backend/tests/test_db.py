@@ -1,6 +1,16 @@
+from datetime import date
+
 import pytest
 
-from app.db import connect, init_db, load_account_aliases, resolve_account_code, upsert_accounts
+from app.core.config_export import account_rows
+from app.db import (
+    account_start_dates,
+    connect,
+    init_db,
+    load_account_aliases,
+    resolve_account_code,
+    upsert_accounts,
+)
 from scripts.import_csv import import_accounts
 from tests.conftest import import_rows
 
@@ -107,6 +117,31 @@ class TestAccountNames:
         with (
             connect(tmp_path / "fresh.db") as conn,
             pytest.raises(ValueError, match="line 3: .* already names account"),
+        ):
+            import_accounts(conn, rows)
+
+
+class TestAccountStartDate:
+    def test_csv_start_date_is_loaded_and_exported(self, tmp_path):
+        init_db(tmp_path / "fresh.db")
+        rows = [
+            {"code": "PERSO", "label": "Compte perso", "type": "checking", "start_date": "2026-08-28"},
+            {"code": "JOINT", "label": "Compte joint", "type": "checking", "start_date": ""},
+        ]
+        with connect(tmp_path / "fresh.db") as conn:
+            import_accounts(conn, rows)
+            assert account_start_dates(conn) == {"PERSO": date(2026, 8, 28)}
+            assert {code: start for code, *_, start in account_rows(conn)} == {
+                "JOINT": "",
+                "PERSO": "2026-08-28",
+            }
+
+    def test_bad_start_date_names_the_line(self, tmp_path):
+        init_db(tmp_path / "fresh.db")
+        rows = [{"code": "PERSO", "label": "Compte perso", "type": "checking", "start_date": "28/08/2026"}]
+        with (
+            connect(tmp_path / "fresh.db") as conn,
+            pytest.raises(ValueError, match="line 2: start_date must be an ISO date"),
         ):
             import_accounts(conn, rows)
 

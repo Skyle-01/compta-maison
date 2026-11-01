@@ -6,11 +6,20 @@ initialised.
 
 import csv
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 from app.core.config_export import PATH_SEP
 from app.core.recompute import recompute_all
-from app.db import ACCOUNT_TYPES, claim_names, connect, replace_transfer_markers, to_cents, upsert_accounts
+from app.db import (
+    ACCOUNT_TYPES,
+    claim_names,
+    connect,
+    replace_transfer_markers,
+    set_account_start_date,
+    to_cents,
+    upsert_accounts,
+)
 
 ALIAS_SEP = "|"
 
@@ -25,18 +34,26 @@ def _read_csv(path: Path) -> list[dict]:
 def import_accounts(conn, rows: list[dict]) -> int:
     """Upsert accounts from accounts.csv rows; returns how many were loaded.
 
-    Columns: code;label;type;sort_order;deposit_pattern;aliases (other columns are ignored).
+    Columns: code;label;type;sort_order;deposit_pattern;aliases;start_date (other columns are ignored).
+    `start_date` (optional, ISO date) is the account's own cutoff: rows valued earlier are not imported.
     `type` is checking|savings; `deposit_pattern` (optional) marks an external savings account;
     `aliases` is a `|`-separated list of the account's other names, besides its label: the account
     part of a statement filename, a former bank name seen in transfer labels (see db.account_names).
     The code itself is always an alias. A name may designate one account only."""
     accounts: list[tuple] = []
     aliases: list[tuple[str, str]] = []
+    start_dates: dict[str, date | None] = {}
     owner: dict[str, str] = {}  # every name (code, label, alias), uppercased -> its account
     for line_no, row in enumerate(rows, start=2):
         code = row["code"].upper()
         if not code:
             continue
+        try:
+            start_dates[code] = date.fromisoformat(row["start_date"]) if row.get("start_date") else None
+        except ValueError:
+            raise ValueError(
+                f"accounts.csv line {line_no}: start_date must be an ISO date (2026-08-28), got {row['start_date']!r}"
+            ) from None
         if row["type"] not in ACCOUNT_TYPES:
             raise ValueError(
                 f"accounts.csv line {line_no}: type must be one of {ACCOUNT_TYPES}, got {row['type']!r}"
@@ -56,6 +73,8 @@ def import_accounts(conn, rows: list[dict]) -> int:
             raise ValueError(f"accounts.csv line {line_no}: {clash[0]!r} already names account {clash[1]}")
         aliases.extend((name, code) for name in names if name)
     upsert_accounts(conn, accounts, aliases)
+    for code, start_date in start_dates.items():
+        set_account_start_date(conn, code, start_date)
     return len(accounts)
 
 

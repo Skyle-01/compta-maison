@@ -1,6 +1,6 @@
-code;label;type;sort_order;deposit_pattern;aliases
-PERSO;Compte perso;checking;1;;COMPTE PERSO
-JOINT;Compte joint;checking;2;;COMPTE JOINT
-LIVRET;Livret A;savings;3;;LIVRET A
-LOCATIF;Appartement locatif;checking;4;;APPARTEMENT LOCATIF|COMPTE APPARTEMENT LOCATIF
-ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;
+code;label;type;sort_order;deposit_pattern;aliases;start_date
+PERSO;Compte perso;checking;1;;COMPTE PERSO;
+JOINT;Compte joint;checking;2;;COMPTE JOINT;
+LIVRET;Livret A;savings;3;;LIVRET A;
+LOCATIF;Appartement locatif;checking;4;;APPARTEMENT LOCATIF|COMPTE APPARTEMENT LOCATIF;
+ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;;

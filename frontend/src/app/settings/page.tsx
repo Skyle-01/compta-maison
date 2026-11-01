@@ -83,9 +83,16 @@ const ACCOUNT_TYPE_LABEL: Record<Account["type"], string> = {
   savings: "Épargne",
 };
 
-type AccountDraft = { code: string; label: string; type: Account["type"]; aliases: string; pattern: string };
+type AccountDraft = {
+  code: string;
+  label: string;
+  type: Account["type"];
+  aliases: string;
+  pattern: string;
+  startDate: string;
+};
 
-const NEW_ACCOUNT: AccountDraft = { code: "", label: "", type: "checking", aliases: "", pattern: "" };
+const NEW_ACCOUNT: AccountDraft = { code: "", label: "", type: "checking", aliases: "", pattern: "", startDate: "" };
 
 /** Create an account or edit one's label, aliases and deposit pattern (its code and type are fixed
  *  once created). Saving re-derives the transfers, since names and patterns decide which are. */
@@ -112,6 +119,7 @@ function AccountsSection() {
       type: a.type,
       aliases: a.aliases.join("\n"),
       pattern: a.deposit_pattern ?? "",
+      startDate: a.start_date ?? "",
     });
     setEditing(true);
     setSaved(null);
@@ -132,6 +140,7 @@ function AccountsSection() {
         type: draft.type,
         deposit_pattern: draft.type === "savings" ? draft.pattern : null,
         aliases: draft.aliases.split("\n"),
+        start_date: draft.type === "checking" && draft.startDate ? draft.startDate : null,
       });
       setSaved(`Compte ${a.code} enregistré, virements recalculés. Pensez à « Enregistrer la configuration » (section Sauvegarde).`);
       reset();
@@ -152,7 +161,9 @@ function AccountsSection() {
         libellés de virement sont lus avec le libellé et les alias. Un nom ne peut désigner qu&apos;un seul
         compte. Le code et le type ne changent plus après la création. Un motif de dépôt (épargne
         externe, sans relevé) repère ses versements dans les libellés des comptes courants, sans
-        distinction de casse.
+        distinction de casse. Une date de départ (compte courant) écarte les opérations valorisées avant
+        elle à l&apos;import : choisissez la date du salaire qui ouvre le premier mois du compte. Elle ne
+        retire pas les lignes déjà importées (reconstruisez la base pour cela).
       </p>
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
@@ -163,6 +174,7 @@ function AccountsSection() {
               <th className="px-3 py-2 font-medium">Libellé</th>
               <th className="px-3 py-2 font-medium">Type</th>
               <th className="px-3 py-2 font-medium">Alias / motif de dépôt</th>
+              <th className="px-3 py-2 font-medium">Départ</th>
               <th className="px-3 py-2" />
             </tr>
           </thead>
@@ -174,6 +186,9 @@ function AccountsSection() {
                 <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{ACCOUNT_TYPE_LABEL[a.type]}</td>
                 <td className="px-3 py-1.5 text-zinc-500">
                   {[...a.aliases, ...(a.deposit_pattern ? [`dépôts : ${a.deposit_pattern}`] : [])].join(" · ")}
+                </td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">
+                  {a.start_date ? frenchDate(a.start_date) : ""}
                 </td>
                 <td className="whitespace-nowrap px-3 py-1.5 text-right">
                   <button
@@ -229,6 +244,17 @@ function AccountsSection() {
             className="w-56 rounded border border-zinc-300 px-2 py-1 font-mono text-xs"
           />
         </label>
+        {draft.type === "checking" && (
+          <label className="flex flex-col gap-1">
+            <span className="text-zinc-500">Date de départ</span>
+            <input
+              type="date"
+              value={draft.startDate}
+              onChange={(e) => setDraft({ ...draft, startDate: e.target.value })}
+              className="rounded border border-zinc-300 px-2 py-1"
+            />
+          </label>
+        )}
         {draft.type === "savings" && (
           <label className="flex flex-col gap-1">
             <span className="text-zinc-500">Motif de dépôt (épargne externe)</span>

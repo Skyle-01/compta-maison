@@ -47,6 +47,8 @@ def import_inputs(db_path: Path) -> int:
             print(f"Imported {r.rows_new}/{r.rows_total} new rows from {r.name} -> {r.account} [{r.profile}]")
         if r.gap_warning:
             print(f"  {r.gap_warning}")
+        if r.start_warning:
+            print(f"  {r.start_warning}")
     recompute_all(db_path)
     n_new = sum(r.rows_new for r in results)
     print(f"{n_new} new transactions from {len(results)} files in {INPUTS_DIR}.")

@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import date
 from pathlib import Path
 
@@ -14,6 +15,25 @@ def _anchor_month(date_valeur: str) -> str:
     return date_valeur[:7]
 
 
+def budget_starts(conn: sqlite3.Connection) -> dict[str, str]:
+    """Budget month -> the date (ISO) of the first deposit opening it, oldest first. Anchors are
+    the credits matching a rule flagged `is_income_anchor`; empty without any. Months before the
+    first deposit are calendar months and have no entry."""
+    anchor_dates = [
+        d
+        for (d,) in conn.execute(
+            "SELECT DISTINCT t.date_valeur FROM transactions t "
+            "WHERE t.credit_cents > 0 AND EXISTS ("
+            "  SELECT 1 FROM label_rules r WHERE r.is_income_anchor = 1 AND instr(t.libelle, r.pattern) > 0"
+            ")"
+        )
+    ]
+    starts: dict[str, str] = {}
+    for d in sorted(anchor_dates):
+        starts.setdefault(_anchor_month(d), d)
+    return dict(sorted(starts.items(), key=lambda item: item[1]))
+
+
 def recompute_budget_months(db_path: Path = DEFAULT_DB_PATH) -> int:
     """Re-assign every transaction to a paycheck-to-paycheck budget month.
 
@@ -28,26 +48,15 @@ def recompute_budget_months(db_path: Path = DEFAULT_DB_PATH) -> int:
     previously stored budget_month values.
     """
     with connect(db_path) as conn:
-        anchor_dates = [
-            d
-            for (d,) in conn.execute(
-                "SELECT DISTINCT t.date_valeur FROM transactions t "
-                "WHERE t.credit_cents > 0 AND EXISTS ("
-                "  SELECT 1 FROM label_rules r WHERE r.is_income_anchor = 1 AND instr(t.libelle, r.pattern) > 0"
-                ")"
-            )
-        ]
-        if not anchor_dates:
+        starts = budget_starts(conn)
+        if not starts:
             cur = conn.execute(
                 "UPDATE transactions SET budget_month = substr(date_valeur, 1, 7) "
                 "WHERE budget_month != substr(date_valeur, 1, 7)"
             )
             return cur.rowcount
 
-        starts: dict[str, str] = {}  # budget month -> first deposit date opening it
-        for d in sorted(anchor_dates):
-            starts.setdefault(_anchor_month(d), d)
-        anchors = sorted(starts.items(), key=lambda item: item[1])  # [(month, start_date)]
+        anchors = list(starts.items())  # [(month, opening date)]
 
         changed = 0
         first_start = anchors[0][1]

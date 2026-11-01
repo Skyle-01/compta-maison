@@ -2,7 +2,7 @@ export interface ImportResult {
   account: string;
   rows_total: number;
   rows_new: number;
-  /** Rows valued before the start date of settings.toml, not imported. */
+  /** Rows valued before the start date of settings.toml or of the account, not imported. */
   rows_before_start: number;
   uncategorized_count: number;
   balance_warnings: Record<string, number>;
@@ -12,6 +12,8 @@ export interface ImportResult {
   archived_as: string | null;
   /** French warning when the file starts after a hole in its account's data. */
   gap_warning: string | null;
+  /** French warning when a new account starts late in its budget month (suggests a start date). */
+  start_warning: string | null;
 }
 
 /** One _inputs/ statement of a bulk import (error: why it was skipped). */
@@ -24,6 +26,7 @@ export interface InputFileResult {
   error: string | null;
   rows_before_start: number;
   gap_warning: string | null;
+  start_warning: string | null;
 }
 
 export interface InputsImportResult {
@@ -104,6 +107,8 @@ export interface Account {
   sort_order: number;
   deposit_pattern: string | null;
   aliases: string[];
+  /** ISO date: rows of this account valued earlier are not imported (null: no cutoff). */
+  start_date: string | null;
 }
 
 /** PUT /api/accounts/{code}: creates the account or updates it (its code and type never change). */
@@ -112,6 +117,7 @@ export interface AccountInput {
   type: Account["type"];
   deposit_pattern: string | null;
   aliases: string[];
+  start_date: string | null;
 }
 
 export interface TransactionPage {

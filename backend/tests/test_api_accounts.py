@@ -26,8 +26,19 @@ class TestAccountsApi:
             "sort_order": 6,
             "deposit_pattern": None,
             "aliases": ["AUTRE", "COMPTE BB"],
+            "start_date": None,
         }
         assert client.get("/api/accounts").json()[-1]["code"] == "B"
+
+    def test_start_date_is_saved_and_cleared(self, client):
+        assert _put(client, "B", start_date="2026-08-28").json()["start_date"] == "2026-08-28"
+        assert client.get("/api/accounts").json()[-1]["start_date"] == "2026-08-28"
+        assert _put(client, "B", start_date=None).json()["start_date"] is None
+
+    def test_bad_start_date_is_rejected_in_french(self, client):
+        resp = _put(client, "B", start_date="demain")
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["msg"] == "Date de départ : une date (AAAA-MM-JJ) est attendue"
 
     def test_update_replaces_label_and_aliases_keeping_the_order(self, client):
         _put(client, "B", aliases=["OLD"])

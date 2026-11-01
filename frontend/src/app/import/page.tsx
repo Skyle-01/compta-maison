@@ -81,7 +81,7 @@ export default function ImportPage() {
   // Files that brought new rows, were skipped or start after a hole; the already imported ones are
   // only counted.
   const inputsNotable =
-    inputsResult?.files.filter((f) => f.error || f.rows_new > 0 || f.gap_warning) ?? [];
+    inputsResult?.files.filter((f) => f.error || f.rows_new > 0 || f.gap_warning || f.start_warning) ?? [];
   const inputsUnchanged = (inputsResult?.files.length ?? 0) - inputsNotable.length;
   const inputsBeforeStart = inputsResult?.files.reduce((n, f) => n + f.rows_before_start, 0) ?? 0;
 
@@ -130,6 +130,7 @@ export default function ImportPage() {
                         </span>
                       )}
                       {f.gap_warning && <p className="text-amber-800">{f.gap_warning}</p>}
+                      {f.start_warning && <p className="text-amber-800">{f.start_warning}</p>}
                     </li>
                   ))}
                 </ul>
@@ -201,6 +202,7 @@ export default function ImportPage() {
                 {result.rows_new === 0 && result.rows_total > 0 && " (toutes en double — déjà importées)"}.
               </p>
               {result.gap_warning && <p className="text-amber-800">{result.gap_warning}</p>}
+              {result.start_warning && <p className="text-amber-800">{result.start_warning}</p>}
               {result.rows_before_start > 0 && <BeforeStart count={result.rows_before_start} />}
               <p className="text-zinc-500">
                 Format : {result.profile === "default" ? "par défaut" : result.profile}
@@ -305,7 +307,7 @@ function BeforeStart({ count }: { count: number }) {
   return (
     <p className="text-zinc-500">
       {count} opération(s) antérieure(s) à la date de début (<code>start_date</code> de{" "}
-      <code>settings.toml</code>) non importée(s).
+      <code>settings.toml</code>, ou date de départ du compte) non importée(s).
     </p>
   );
 }

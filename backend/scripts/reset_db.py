@@ -89,7 +89,9 @@ def _import_inputs(db_path: Path, profiles: list[BankProfile], start_date: date 
             print(f"Imported {r.rows_new}/{r.rows_total} new rows from {r.name} -> {r.account} [{r.profile}]")
     before_start = sum(r.rows_before_start for r in results)
     if before_start:
-        print(f"Left out {before_start} rows valued before {start_date}.")
+        print(
+            f"Left out {before_start} rows valued before the start date (books: {start_date}, or the account's)."
+        )
     return sum(r.rows_new for r in results)
 
 

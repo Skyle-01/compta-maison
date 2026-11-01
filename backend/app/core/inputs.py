@@ -10,7 +10,14 @@ from pathlib import Path
 
 from app.core.bank_profiles import BankProfile
 from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
-from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
+from app.core.periods import budget_starts
+from app.db import (
+    account_start_dates,
+    connect,
+    import_transactions,
+    load_account_aliases,
+    resolve_account_code,
+)
 
 
 def archive_filename(filename: str, account: str, profiles: Sequence[BankProfile], today: date) -> str | None:
@@ -65,6 +72,13 @@ class InputFileResult:
     error: str | None = None
     rows_before_start: int = 0
     gap_warning: str | None = None
+    start_warning: str | None = None
+
+
+def effective_start(global_start: date | None, account_start: date | None) -> date | None:
+    """The cutoff of one account's rows: the later of the books' start date and its own."""
+    dates = [d for d in (global_start, account_start) if d is not None]
+    return max(dates, default=None)
 
 
 # Days a statement may start after the account's last operation without being flagged: a weekend
@@ -97,6 +111,30 @@ def gap_warning(last: str | None, rows: list[dict]) -> str | None:
         f"{first:%d/%m/%Y} (début du fichier), soit {(first - previous).days - 1} jours. "
         "Un relevé manque-t-il ?"
     )
+
+
+def start_warning(db_path: Path, last: str | None, rows: list[dict]) -> str | None:
+    """French warning when an account's first import (`last` None: nothing in the DB yet) starts
+    more than GAP_TOLERANCE_DAYS after the opening of its budget month: that month would mix the
+    account's flows with a period it has no data for. Suggests the opening of the next month as
+    the account's start date. Read before inserting, from the salaries already in the DB (so
+    order-dependent when a rebuild imports the account before the salary's). Warn only."""
+    if last is not None or not rows:
+        return None
+    first = date.fromisoformat(min(row["Date valeur"] for row in rows)[:10])
+    with connect(db_path) as conn:
+        starts = [date.fromisoformat(d) for d in budget_starts(conn).values()]
+    opening = max((d for d in starts if d <= first), default=None)
+    if opening is None or (first - opening).days <= GAP_TOLERANCE_DAYS:
+        return None
+    message = (
+        f"Le compte démarre le {first:%d/%m/%Y}, {(first - opening).days} jours après l'ouverture du "
+        f"mois budgétaire ({opening:%d/%m/%Y}) : ce mois sera incomplet pour lui."
+    )
+    following = min((d for d in starts if d > first), default=None)
+    if following:
+        message += f" Date de départ suggérée : {following:%d/%m/%Y} (Réglages, Comptes)."
+    return message
 
 
 @dataclass(frozen=True)
@@ -136,6 +174,7 @@ def account_coverage(
     Import page's bulk import reports them)."""
     with connect(db_path) as conn:
         aliases = load_account_aliases(conn)
+        own_starts = account_start_dates(conn)
         accounts = conn.execute(
             "SELECT code, label FROM accounts WHERE deposit_pattern IS NULL ORDER BY sort_order, code"
         ).fetchall()
@@ -159,7 +198,7 @@ def account_coverage(
             _, rows = parse_statement(path.read_bytes(), profiles)
         except CsvValidationError:
             continue
-        rows, _ = rows_since(rows, start_date)
+        rows, _ = rows_since(rows, effective_start(start_date, own_starts.get(code)))
         if rows:  # sorted by value date
             ranges[code].append(
                 (
@@ -197,7 +236,8 @@ def import_inputs_dir(
     db_path: Path, inputs_dir: Path, profiles: Sequence[BankProfile], start_date: date | None = None
 ) -> list[InputFileResult]:
     """Import every bank CSV in `inputs_dir` into the existing DB, inferring the account from the
-    filename, minus the rows valued before `start_date` (core.settings). Re-importing a file adds
+    filename, minus the rows valued before the account's cutoff: the later of `start_date`
+    (core.settings) and the account's own `start_date`. Re-importing a file adds
     nothing (import_transactions dedupes), so the whole folder can be rescanned after dropping new
     statements in. A file that maps to no known account or fails to parse is reported with its
     error and skipped. The caller recomputes periods, transfers and rules afterwards."""
@@ -205,6 +245,7 @@ def import_inputs_dir(
         return []
     with connect(db_path) as conn:
         aliases = load_account_aliases(conn)
+        own_starts = account_start_dates(conn)
 
     results = []
     for path in sorted(inputs_dir.glob("*.csv")):
@@ -220,10 +261,12 @@ def import_inputs_dir(
         except CsvValidationError as exc:
             results.append(InputFileResult(path.name, account, error=str(exc)))
             continue
-        rows, before_start = rows_since(rows, start_date)
+        rows, before_start = rows_since(rows, effective_start(start_date, own_starts.get(code)))
         for row in rows:
             row["account"] = account
-        gap = gap_warning(last_value_date(db_path, code), rows)  # before the insert
+        last = last_value_date(db_path, code)  # before the insert
+        gap = gap_warning(last, rows)
+        late_start = start_warning(db_path, last, rows)
         new = import_transactions(rows, db_path)
         results.append(
             InputFileResult(
@@ -234,6 +277,7 @@ def import_inputs_dir(
                 profile.name,
                 rows_before_start=before_start,
                 gap_warning=gap,
+                start_warning=late_start,
             )
         )
     return results

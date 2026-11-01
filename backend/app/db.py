@@ -3,6 +3,7 @@ import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 
 DEFAULT_DB_PATH = Path(os.environ.get("COMPTA_DB", str(Path(__file__).resolve().parents[2] / "compta.db")))
@@ -26,7 +27,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     label                TEXT NOT NULL,
     type                 TEXT NOT NULL,                 /* 'checking' | 'savings' */
     sort_order           INTEGER NOT NULL DEFAULT 0,
-    deposit_pattern      TEXT                           /* external savings: libellé substring (case-insensitive) identifying its deposits */
+    deposit_pattern      TEXT,                          /* external savings: libellé substring (case-insensitive) identifying its deposits */
+    start_date           TEXT                           /* ISO date: rows of this account valued earlier are not imported; NULL = none */
 );
 
 CREATE TABLE IF NOT EXISTS account_aliases (
@@ -136,6 +138,22 @@ def upsert_accounts(
         "ON CONFLICT(alias) DO UPDATE SET code = excluded.code",
         [(alias.strip().upper(), code) for alias, code in aliases],
     )
+
+
+def set_account_start_date(conn: sqlite3.Connection, code: str, start_date: date | None) -> None:
+    """Set (or clear) the account's own cutoff; upsert_accounts leaves it alone."""
+    conn.execute(
+        "UPDATE accounts SET start_date = ? WHERE code = ?",
+        (start_date.isoformat() if start_date else None, code),
+    )
+
+
+def account_start_dates(conn: sqlite3.Connection) -> dict[str, date]:
+    """code -> the account's own cutoff, for the accounts that have one."""
+    return {
+        code: date.fromisoformat(start)
+        for code, start in conn.execute("SELECT code, start_date FROM accounts WHERE start_date IS NOT NULL")
+    }
 
 
 ACCOUNT_TYPES = ("checking", "savings")

@@ -23,3 +23,4 @@ Decisions taken with the owner:
 ## Progress
 
 - 2026-11-01: design agreed with the owner (cutoff per account, warning with a suggested date, partial months out of the averages). Nothing implemented yet.
+- 2026-11-02: first half done (items 1 to 3 and their docs: `accounts.start_date`, effective cutoff at import, `start_warning`). Left: partial months (item 4), the Réglages screenshot retake, then the live data (item 6).

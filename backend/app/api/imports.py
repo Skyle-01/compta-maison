@@ -11,14 +11,22 @@ from app.core.categorize import uncategorized_balance
 from app.core.inputs import (
     account_coverage,
     archive_statement,
+    effective_start,
     gap_warning,
     import_inputs_dir,
     last_value_date,
+    start_warning,
 )
 from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
 from app.core.recompute import recompute_all
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date
-from app.db import connect, import_transactions, load_account_aliases, resolve_account_code
+from app.db import (
+    account_start_dates,
+    connect,
+    import_transactions,
+    load_account_aliases,
+    resolve_account_code,
+)
 from app.schemas import AccountCoverage, ImportResult, InputFileResult, InputsImportResult
 
 router = APIRouter(prefix="/api/imports", tags=["imports"])
@@ -74,12 +82,16 @@ def upload_csv(
         profile, rows = parse_statement(content, profiles)
     except CsvValidationError as exc:
         raise HTTPException(422, detail=exc.errors) from exc
-    rows, rows_before_start = rows_since(rows, start_date)
+    with connect(db_path) as conn:
+        own_start = account_start_dates(conn).get(code)
+    rows, rows_before_start = rows_since(rows, effective_start(start_date, own_start))
     for row in rows:
         row["account"] = account
     archived_as = archive_statement(inputs_dir, file.filename or "", content, account, profiles)
 
-    gap = gap_warning(last_value_date(db_path, code), rows)  # before the insert
+    last = last_value_date(db_path, code)  # before the insert
+    gap = gap_warning(last, rows)
+    late_start = start_warning(db_path, last, rows)
     rows_new = import_transactions(rows, db_path)
     recompute_all(db_path)
 
@@ -115,6 +127,7 @@ def upload_csv(
         profile=profile.name,
         archived_as=archived_as,
         gap_warning=gap,
+        start_warning=late_start,
     )
 
 

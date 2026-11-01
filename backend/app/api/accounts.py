@@ -10,6 +10,7 @@ from app.db import (
     account_names,
     claim_names,
     connect,
+    set_account_start_date,
     upsert_accounts,
 )
 from app.schemas import Account, AccountIn
@@ -20,7 +21,8 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 def _accounts(conn: sqlite3.Connection) -> list[Account]:
     aliases = account_aliases_by_code(conn)
     rows = conn.execute(
-        "SELECT code, label, type, sort_order, deposit_pattern FROM accounts ORDER BY sort_order, code"
+        "SELECT code, label, type, sort_order, deposit_pattern, start_date FROM accounts "
+        "ORDER BY sort_order, code"
     ).fetchall()
     return [
         Account(
@@ -30,8 +32,9 @@ def _accounts(conn: sqlite3.Connection) -> list[Account]:
             sort_order=sort_order,
             deposit_pattern=pattern,
             aliases=aliases.get(code, []),
+            start_date=start,
         )
-        for code, label, type_, sort_order, pattern in rows
+        for code, label, type_, sort_order, pattern, start in rows
     ]
 
 
@@ -43,8 +46,9 @@ def list_accounts(db_path: DbPath) -> list[Account]:
 
 @router.put("/{code}")
 def save_account(code: str, body: AccountIn, db_path: DbPath) -> Account:
-    """Create the account, or update its label, aliases and deposit pattern (its code and type never
-    change). Aliases and the deposit pattern decide which operations are transfers: re-derive them."""
+    """Create the account, or update its label, aliases, deposit pattern and start date (its code and
+    type never change). Aliases and the deposit pattern decide which operations are transfers:
+    re-derive them. A moved start date only applies to later imports (rows already in stay)."""
     code = code.strip().upper()
     label = body.label.strip()
     pattern = (body.deposit_pattern or "").strip() or None
@@ -80,6 +84,7 @@ def save_account(code: str, body: AccountIn, db_path: DbPath) -> Account:
         upsert_accounts(
             conn, [(code, label, body.type, sort_order, pattern)], [(name, code) for name in names]
         )
+        set_account_start_date(conn, code, body.start_date)
     recompute_all(db_path)
     with connect(db_path) as conn:
         return next(account for account in _accounts(conn) if account.code == code)

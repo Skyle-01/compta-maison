@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -10,7 +11,7 @@ class ImportResult(BaseModel):
     rows_total: int
     rows_new: int
     rows_before_start: int = Field(
-        0, description="Rows valued before the configured start date, not imported"
+        0, description="Rows valued before the books' or the account's start date, not imported"
     )
     uncategorized_count: int
     balance_warnings: dict[str, float] = Field(
@@ -23,6 +24,10 @@ class ImportResult(BaseModel):
     )
     gap_warning: str | None = Field(
         None, description="French warning when the file starts after a hole in its account's data"
+    )
+    start_warning: str | None = Field(
+        None,
+        description="French warning when a new account starts late in its budget month, with a suggested start date",
     )
 
 
@@ -37,6 +42,7 @@ class InputFileResult(BaseModel):
     gap_warning: str | None = Field(
         None, description="French warning when the file starts after a hole in its account's data"
     )
+    start_warning: str | None = None
 
 
 class InputsImportResult(BaseModel):
@@ -202,6 +208,9 @@ class Account(BaseModel):
         description="External savings only: libellé substring of its deposits"
     )
     aliases: list[str] = Field(description="Other names besides the code and the label (uppercased)")
+    start_date: date | None = Field(
+        description="Rows of this account valued earlier are not imported; null = no cutoff"
+    )
 
 
 class AccountIn(BaseModel):
@@ -211,6 +220,7 @@ class AccountIn(BaseModel):
     type: str = Field(description="'checking' or 'savings'")
     deposit_pattern: str | None = None
     aliases: list[str] = Field(default_factory=list)
+    start_date: date | None = None
 
 
 class RuleIn(BaseModel):
