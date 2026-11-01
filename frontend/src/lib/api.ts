@@ -324,6 +324,8 @@ export interface Dashboard {
   /** The budget month shown, ALL_MONTHS for every month, null when there is no data yet. */
   month: string | null;
   months_available: string[];
+  /** Months of months_available where an imported checking account had not started: left out of the averages. */
+  months_partial: string[];
   income: number;
   expenses: number;
   /** Net money set aside to savings this month. */

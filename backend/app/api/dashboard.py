@@ -13,6 +13,7 @@ from app.core.categorize import (
     transfers_summary,
     uncategorized_balance,
 )
+from app.core.periods import partial_months
 from app.db import connect
 from app.schemas import CategoryAverages, Dashboard
 
@@ -39,6 +40,7 @@ def get_dashboard(db_path: DbPath, month: str | None = None) -> Dashboard:
                 "SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month DESC"
             )
         ]
+        partial = partial_months(conn)
     if month is None and months:
         month = months[0]
     period = None if month == ALL_MONTHS else month
@@ -61,6 +63,7 @@ def get_dashboard(db_path: DbPath, month: str | None = None) -> Dashboard:
     return Dashboard(
         month=month,
         months_available=months,
+        months_partial=sorted(partial, reverse=True),
         income=income,
         expenses=expenses,
         epargne=epargne,

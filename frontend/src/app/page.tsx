@@ -287,6 +287,7 @@ export default function DashboardPage() {
             {data.months_available.map((m) => (
               <option key={m} value={m}>
                 {frenchMonth(m)}
+                {data.months_partial.includes(m) ? " (partiel)" : ""}
               </option>
             ))}
           </select>
@@ -321,6 +322,7 @@ export default function DashboardPage() {
         history={hist}
         current={data.month}
         latest={hist.at(-1)?.month}
+        partial={data.months_partial}
         onSelect={choose}
       />
 

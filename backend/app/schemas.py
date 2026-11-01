@@ -337,6 +337,11 @@ class CategoryAverages(BaseModel):
 class Dashboard(BaseModel):
     month: str | None = Field(description="The budget month shown, 'all' for every month, None if no data")
     months_available: list[str]
+    months_partial: list[str] = Field(
+        default_factory=list,
+        description="Months of months_available where an imported checking account had not started: "
+        "left out of the monthly averages, flagged « partiel » in the UI",
+    )
     income: float
     expenses: float
     epargne: float = Field(default=0.0, description="Net money set aside to savings this month")

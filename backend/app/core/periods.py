@@ -15,6 +15,11 @@ def _anchor_month(date_valeur: str) -> str:
     return date_valeur[:7]
 
 
+# Days a statement may start after the account's last operation, or an account after the opening
+# of a budget month, without being flagged: a weekend plus a bank holiday.
+GAP_TOLERANCE_DAYS = 4
+
+
 def budget_starts(conn: sqlite3.Connection) -> dict[str, str]:
     """Budget month -> the date (ISO) of the first deposit opening it, oldest first. Anchors are
     the credits matching a rule flagged `is_income_anchor`; empty without any. Months before the
@@ -82,3 +87,29 @@ def recompute_budget_months(db_path: Path = DEFAULT_DB_PATH) -> int:
                 )
             changed += cur.rowcount
         return changed
+
+
+def partial_months(conn: sqlite3.Connection) -> set[str]:
+    """Budget months in which an imported checking account had not started: its effective start
+    (its own `start_date`, else its first value date) falls more than GAP_TOLERANCE_DAYS after the
+    month's opening (the paycheck opening it, the 1st for a calendar month). The month then lacks
+    that account's flows (and the salary it receives), so its totals are not comparable with the
+    others and the averages leave it out. Generic: any account added later counts the same way."""
+    starts = [
+        date.fromisoformat(start)
+        for (start,) in conn.execute(
+            "SELECT COALESCE(a.start_date, (SELECT MIN(substr(t.date_valeur, 1, 10)) "
+            "FROM transactions t WHERE t.account_id = a.code)) FROM accounts a WHERE a.type = 'checking'"
+        )
+        if start is not None
+    ]
+    if not starts:
+        return set()
+    openings = budget_starts(conn)
+    latest_start = max(starts)
+    partial = set()
+    for (month,) in conn.execute("SELECT DISTINCT budget_month FROM transactions"):
+        opening = date.fromisoformat(openings.get(month, f"{month}-01"))
+        if (latest_start - opening).days > GAP_TOLERANCE_DAYS:
+            partial.add(month)
+    return partial

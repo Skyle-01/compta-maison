@@ -121,6 +121,7 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
             history={history}
             current={month}
             latest={data.history.at(-1)?.month}
+            partial={data.months_partial}
           />
         </div>
 

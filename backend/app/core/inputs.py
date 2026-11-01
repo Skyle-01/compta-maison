@@ -10,7 +10,7 @@ from pathlib import Path
 
 from app.core.bank_profiles import BankProfile
 from app.core.parsing import CsvValidationError, infer_account, parse_statement, rows_since
-from app.core.periods import budget_starts
+from app.core.periods import GAP_TOLERANCE_DAYS, budget_starts
 from app.db import (
     account_start_dates,
     connect,
@@ -79,11 +79,6 @@ def effective_start(global_start: date | None, account_start: date | None) -> da
     """The cutoff of one account's rows: the later of the books' start date and its own."""
     dates = [d for d in (global_start, account_start) if d is not None]
     return max(dates, default=None)
-
-
-# Days a statement may start after the account's last operation without being flagged: a weekend
-# plus a bank holiday.
-GAP_TOLERANCE_DAYS = 4
 
 
 def last_value_date(db_path: Path, account_code: str) -> str | None:

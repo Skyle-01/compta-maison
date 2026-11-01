@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Response
 from app.api.deps import DbPath
 from app.core.categorize import DEFICIT_GROUP, SAVINGS_GROUP, apply_rules, averaging_window
 from app.core.config_export import category_paths, csv_text
+from app.core.periods import partial_months
 from app.db import connect, euros, real_flow_clause, to_cents
 from app.schemas import CategoryIn, CategoryMoveIn, CategoryOut, CategoryTargetIn
 
@@ -103,7 +104,7 @@ def _reject_non_spending_target(conn, category: CategoryOut) -> None:
     months = [
         m for (m,) in conn.execute("SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month")
     ]
-    window = averaging_window(months, 12)
+    window = averaging_window(months, 12, partial_months(conn))
     if not window:
         return
     marks = ",".join("?" * len(window))

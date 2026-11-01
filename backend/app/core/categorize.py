@@ -1,6 +1,8 @@
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
+from app.core.periods import partial_months
 from app.db import DEFAULT_DB_PATH, connect, euros, real_flow_clause, savings_accounts
 
 UNBALANCED_TOLERANCE_CENTS = 1
@@ -344,11 +346,12 @@ def budget_status(
     }
 
 
-def averaging_window(months: list[str], n_months: int | None) -> list[str]:
+def averaging_window(months: list[str], n_months: int | None, partial: Collection[str] = ()) -> list[str]:
     """The complete budget months to average, oldest first: the last `n_months` (all when None) of
     `months` (sorted) before the latest one, which is still filling until the next paycheck opens
-    a newer month."""
-    complete = months[:-1]
+    a newer month, leaving out the `partial` ones (an account had not started, see
+    periods.partial_months)."""
+    complete = [m for m in months[:-1] if m not in partial]
     if n_months is None:
         return complete
     return complete[-n_months:] if n_months > 0 else []
@@ -357,7 +360,7 @@ def averaging_window(months: list[str], n_months: int | None) -> list[str]:
 def category_averages(
     db_path: Path = DEFAULT_DB_PATH, n_months: int | None = None, month: str | None = None
 ) -> dict[str, Any]:
-    """Average monthly spending and income (euros) per category over the complete budget months of
+    """Average monthly spending and income (euros) per category over the complete, non-partial budget months of
     `averaging_window`, plus the values of the displayed `month` (None: no comparison) for the gaps.
 
     Each real leaf takes one side from its net over the whole window (a one-off refund month never
@@ -373,7 +376,7 @@ def category_averages(
         all_months = [
             m for (m,) in conn.execute("SELECT DISTINCT budget_month FROM transactions ORDER BY budget_month")
         ]
-        window = set(averaging_window(all_months, n_months))
+        window = set(averaging_window(all_months, n_months, partial_months(conn)))
         categories = conn.execute(
             "SELECT id, name, parent_id, budget_target_cents FROM categories ORDER BY parent_id, id"
         ).fetchall()

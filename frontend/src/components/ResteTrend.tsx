@@ -86,10 +86,12 @@ function TrendTooltip({
   active,
   payload,
   latest,
+  partial,
 }: {
   active?: boolean;
   payload?: ReadonlyArray<{ payload?: MonthTotals }>;
   latest?: string;
+  partial: string[];
 }) {
   const m = payload?.[0]?.payload;
   if (!active || !m) return null;
@@ -103,6 +105,12 @@ function TrendTooltip({
       <div className="mb-1 font-medium text-zinc-900">
         {frenchMonth(m.month)}
         {m.month === latest && <span className="font-normal text-zinc-500"> (en cours)</span>}
+        {partial.includes(m.month) && (
+          <span className="font-normal text-zinc-500">
+            {" "}
+            (partiel : un compte n&apos;avait pas démarré)
+          </span>
+        )}
       </div>
       <table className="tabular-nums">
         <tbody>
@@ -132,12 +140,15 @@ export default function ResteTrend({
   history,
   current,
   latest,
+  partial = [],
   onSelect,
 }: {
   history: MonthTotals[];
   current: string;
   /** The latest budget month overall, still filling until the next paycheck. */
   latest?: string;
+  /** Months where an account had not started: flagged in the tooltip, left out of the averages. */
+  partial?: string[];
   onSelect?: (month: string) => void;
 }) {
   if (history.length < 2) return null;
@@ -192,6 +203,7 @@ export default function ResteTrend({
                 active={props.active}
                 payload={props.payload as ReadonlyArray<{ payload?: MonthTotals }>}
                 latest={latest}
+                partial={partial}
               />
             )}
           />
