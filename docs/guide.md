@@ -87,6 +87,7 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 
 ![La page Réglages](img/settings.png)
 
+- **Comptes** : la liste des comptes, avec ✎ pour modifier le libellé, les alias et le motif de dépôt d'un compte, et un formulaire pour en ajouter un. Le code et le type ne changent plus après la création. Un relevé est rattaché à un compte par son nom de fichier : le code, le libellé ou un alias (par exemple le numéro de compte de la banque) doit s'y retrouver. Un nom ne peut désigner qu'un seul compte. Enregistrer un compte recalcule les virements, car les noms des comptes servent à les reconnaître.
 - **Virements internes** : les débuts de libellé qui signalent un virement (par défaut `VIR`). `*` accepte n'importe quel libellé.
 - **Virements manuels** : les opérations appariées à la main, par paires, avec « Auto » pour rendre la main à la détection.
 - **Sauvegarde** : « Enregistrer la configuration » écrit les comptes, catégories, règles et décisions manuelles dans `_config/`, pour pouvoir reconstruire la base.

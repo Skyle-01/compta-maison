@@ -10,9 +10,8 @@ from pathlib import Path
 
 from app.core.config_export import PATH_SEP
 from app.core.recompute import recompute_all
-from app.db import connect, replace_transfer_markers, to_cents, upsert_accounts
+from app.db import ACCOUNT_TYPES, claim_names, connect, replace_transfer_markers, to_cents, upsert_accounts
 
-ACCOUNT_TYPES = ("checking", "savings")
 ALIAS_SEP = "|"
 
 
@@ -52,9 +51,9 @@ def import_accounts(conn, rows: list[dict]) -> int:
             )
         )
         names = [code] + [a.strip() for a in (row.get("aliases") or "").split(ALIAS_SEP)]
-        for name in {n.upper() for n in [*names, row["label"]] if n}:
-            if owner.setdefault(name, code) != code:
-                raise ValueError(f"accounts.csv line {line_no}: {name!r} already names account {owner[name]}")
+        clash = claim_names(owner, code, [*names, row["label"]])
+        if clash:
+            raise ValueError(f"accounts.csv line {line_no}: {clash[0]!r} already names account {clash[1]}")
         aliases.extend((name, code) for name in names if name)
     upsert_accounts(conn, accounts, aliases)
     return len(accounts)

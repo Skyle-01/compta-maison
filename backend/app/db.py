@@ -138,6 +138,27 @@ def upsert_accounts(
     )
 
 
+ACCOUNT_TYPES = ("checking", "savings")
+
+
+def account_aliases_by_code(conn: sqlite3.Connection) -> dict[str, list[str]]:
+    """code -> its aliases besides the code itself (always an alias), alphabetical."""
+    by_code: dict[str, list[str]] = {}
+    for alias, code in conn.execute("SELECT alias, code FROM account_aliases ORDER BY alias"):
+        if alias != code:
+            by_code.setdefault(code, []).append(alias)
+    return by_code
+
+
+def claim_names(owner: dict[str, str], code: str, names: list[str]) -> tuple[str, str] | None:
+    """Record `names` (uppercased, blanks dropped) as account `code`'s in `owner` (name -> code). Returns
+    (name, other_code) for the first one another account already has: a name designates one account."""
+    for name in dict.fromkeys(n.strip().upper() for n in names if n.strip()):
+        if owner.setdefault(name, code) != code:
+            return name, owner[name]
+    return None
+
+
 def get_transfer_markers(conn: sqlite3.Connection) -> list[str]:
     """The configured transfer markers, in the order they were saved (may be empty)."""
     return [m for (m,) in conn.execute("SELECT marker FROM transfer_markers ORDER BY rowid")]

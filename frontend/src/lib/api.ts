@@ -102,6 +102,16 @@ export interface Account {
   label: string;
   type: "checking" | "savings";
   sort_order: number;
+  deposit_pattern: string | null;
+  aliases: string[];
+}
+
+/** PUT /api/accounts/{code}: creates the account or updates it (its code and type never change). */
+export interface AccountInput {
+  label: string;
+  type: Account["type"];
+  deposit_pattern: string | null;
+  aliases: string[];
 }
 
 export interface TransactionPage {
@@ -480,6 +490,8 @@ export const api = {
   },
 
   listAccounts: (): Promise<Account[]> => request("/api/accounts"),
+  saveAccount: (code: string, a: AccountInput): Promise<Account> =>
+    request(`/api/accounts/${encodeURIComponent(code)}`, json("PUT", a)),
 
   listCategories: (): Promise<Category[]> => request("/api/categories"),
   createCategory: (c: { name: string; parent_id: number | null }): Promise<Category> =>

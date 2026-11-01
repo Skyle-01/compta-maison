@@ -198,6 +198,19 @@ class Account(BaseModel):
     label: str
     type: str = Field(description="'checking' or 'savings'")
     sort_order: int
+    deposit_pattern: str | None = Field(
+        description="External savings only: libellé substring of its deposits"
+    )
+    aliases: list[str] = Field(description="Other names besides the code and the label (uppercased)")
+
+
+class AccountIn(BaseModel):
+    """PUT /api/accounts/{code}: creates the account or updates it (its type never changes)."""
+
+    label: str = Field(min_length=1)
+    type: str = Field(description="'checking' or 'savings'")
+    deposit_pattern: str | None = None
+    aliases: list[str] = Field(default_factory=list)
 
 
 class RuleIn(BaseModel):

@@ -5,6 +5,7 @@ import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
+  type Account,
   type ConfigExportResult,
   type Transaction,
   frenchDate,
@@ -16,6 +17,7 @@ import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers
 // Section order on the page; the ids are URL fragments (e.g. /settings#virements-manuels).
 // Categories, rules and manual assignments live on the Catégories page.
 const SECTIONS = [
+  { id: "comptes", label: "Comptes" },
   { id: "virements-internes", label: "Virements internes" },
   { id: "virements-manuels", label: "Virements manuels" },
   { id: "sauvegarde", label: "Sauvegarde" },
@@ -68,10 +70,186 @@ export default function SettingsPage() {
         </ul>
       </nav>
 
+      <AccountsSection />
       <TransferMarkersSection />
       <ManualTransfersSection />
       <BackupSection />
     </div>
+  );
+}
+
+const ACCOUNT_TYPE_LABEL: Record<Account["type"], string> = {
+  checking: "Compte courant",
+  savings: "Épargne",
+};
+
+type AccountDraft = { code: string; label: string; type: Account["type"]; aliases: string; pattern: string };
+
+const NEW_ACCOUNT: AccountDraft = { code: "", label: "", type: "checking", aliases: "", pattern: "" };
+
+/** Create an account or edit one's label, aliases and deposit pattern (its code and type are fixed
+ *  once created). Saving re-derives the transfers, since names and patterns decide which are. */
+function AccountsSection() {
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [draft, setDraft] = useState<AccountDraft>(NEW_ACCOUNT);
+  const [editing, setEditing] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .listAccounts()
+      .then(setAccounts)
+      .catch((e) => setError(errorMessage(e)));
+  }, []);
+
+  useEffect(load, [load]);
+
+  function edit(a: Account) {
+    setDraft({
+      code: a.code,
+      label: a.label,
+      type: a.type,
+      aliases: a.aliases.join("\n"),
+      pattern: a.deposit_pattern ?? "",
+    });
+    setEditing(true);
+    setSaved(null);
+    setError(null);
+  }
+
+  function reset() {
+    setDraft(NEW_ACCOUNT);
+    setEditing(false);
+  }
+
+  async function save() {
+    setSaved(null);
+    setError(null);
+    try {
+      const a = await api.saveAccount(draft.code, {
+        label: draft.label,
+        type: draft.type,
+        deposit_pattern: draft.type === "savings" ? draft.pattern : null,
+        aliases: draft.aliases.split("\n"),
+      });
+      setSaved(`Compte ${a.code} enregistré, virements recalculés. Pensez à « Enregistrer la configuration » (section Sauvegarde).`);
+      reset();
+      load();
+      notifyUncategorizedChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
+  return (
+    <section id="comptes" className={SECTION_CLASS}>
+      <h2 className="text-base font-semibold">Comptes</h2>
+      <SectionError message={error} onClose={() => setError(null)} />
+      <p className="text-sm text-zinc-500">
+        Un relevé est rattaché à un compte par son nom de fichier : le code, le libellé ou un alias
+        (une ligne par alias, par exemple le numéro de compte de la banque) doit s&apos;y retrouver. Les
+        libellés de virement sont lus avec le libellé et les alias. Un nom ne peut désigner qu&apos;un seul
+        compte. Le code et le type ne changent plus après la création. Un motif de dépôt (épargne
+        externe, sans relevé) repère ses versements dans les libellés des comptes courants, sans
+        distinction de casse.
+      </p>
+
+      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-zinc-50 text-left text-zinc-500">
+            <tr>
+              <th className="px-3 py-2 font-medium">Code</th>
+              <th className="px-3 py-2 font-medium">Libellé</th>
+              <th className="px-3 py-2 font-medium">Type</th>
+              <th className="px-3 py-2 font-medium">Alias / motif de dépôt</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((a) => (
+              <tr key={a.code} className="border-t border-zinc-100 align-top">
+                <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">{a.code}</td>
+                <td className="px-3 py-1.5">{a.label}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{ACCOUNT_TYPE_LABEL[a.type]}</td>
+                <td className="px-3 py-1.5 text-zinc-500">
+                  {[...a.aliases, ...(a.deposit_pattern ? [`dépôts : ${a.deposit_pattern}`] : [])].join(" · ")}
+                </td>
+                <td className="whitespace-nowrap px-3 py-1.5 text-right">
+                  <button
+                    onClick={() => edit(a)}
+                    className="text-zinc-600 hover:text-zinc-900"
+                    title="Modifier ce compte"
+                  >
+                    ✎
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-zinc-500">Code</span>
+          <input
+            value={draft.code}
+            onChange={(e) => setDraft({ ...draft, code: e.target.value })}
+            disabled={editing}
+            className="w-40 rounded border border-zinc-300 px-2 py-1 font-mono text-xs disabled:bg-zinc-100"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-zinc-500">Libellé</span>
+          <input
+            value={draft.label}
+            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+            className="w-48 rounded border border-zinc-300 px-2 py-1"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-zinc-500">Type</span>
+          <select
+            value={draft.type}
+            onChange={(e) => setDraft({ ...draft, type: e.target.value as Account["type"] })}
+            disabled={editing}
+            className="rounded border border-zinc-300 px-2 py-1.5 disabled:bg-zinc-100"
+          >
+            <option value="checking">{ACCOUNT_TYPE_LABEL.checking}</option>
+            <option value="savings">{ACCOUNT_TYPE_LABEL.savings}</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-zinc-500">Alias (un par ligne)</span>
+          <textarea
+            value={draft.aliases}
+            onChange={(e) => setDraft({ ...draft, aliases: e.target.value })}
+            rows={2}
+            className="w-56 rounded border border-zinc-300 px-2 py-1 font-mono text-xs"
+          />
+        </label>
+        {draft.type === "savings" && (
+          <label className="flex flex-col gap-1">
+            <span className="text-zinc-500">Motif de dépôt (épargne externe)</span>
+            <input
+              value={draft.pattern}
+              onChange={(e) => setDraft({ ...draft, pattern: e.target.value })}
+              className="w-56 rounded border border-zinc-300 px-2 py-1"
+            />
+          </label>
+        )}
+        <button onClick={save} className="btn-primary">
+          {editing ? "Enregistrer le compte" : "Ajouter le compte"}
+        </button>
+        {editing && (
+          <button onClick={reset} className="btn-secondary">
+            Annuler
+          </button>
+        )}
+        {saved && <p className="w-full text-xs text-zinc-500">{saved}</p>}
+      </div>
+    </section>
   );
 }
 

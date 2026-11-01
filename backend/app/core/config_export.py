@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from app.db import connect, euros, get_transfer_markers
+from app.db import account_aliases_by_code, connect, euros, get_transfer_markers
 
 # Full category paths use this separator (matches CategoryOut.path); the CSV importer splits on it.
 PATH_SEP = " / "
@@ -97,10 +97,7 @@ def account_rows(conn: sqlite3.Connection) -> list[list]:
     accounts = conn.execute(
         "SELECT code, label, type, sort_order, deposit_pattern FROM accounts ORDER BY sort_order, code"
     ).fetchall()
-    aliases_by_code: dict[str, list[str]] = {}
-    for alias, code in conn.execute("SELECT alias, code FROM account_aliases ORDER BY alias"):
-        if alias != code:
-            aliases_by_code.setdefault(code, []).append(alias)
+    aliases_by_code = account_aliases_by_code(conn)
     return [
         [code, label, type_, order, pattern or "", "|".join(aliases_by_code.get(code, []))]
         for code, label, type_, order, pattern in accounts
