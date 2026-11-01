@@ -355,3 +355,39 @@ class TestProfileParsing:
         ).encode("cp1252")
         rows = parse_csv(content, [profile, DEFAULT_PROFILE])
         assert (rows[0]["Debit"], rows[0]["Date valeur"]) == (5.0, "2026-06-02")
+
+
+class TestPostalSignedExport:
+    """A postal-style export: account preamble, one signed amount column, integer amounts, a tail of
+    empty `;;` lines, Windows-1252, no value date, a filename that is the account number."""
+
+    profiles = [
+        parse_bank_profiles(
+            _toml(
+                name="ccp-signe",
+                date_operation="Date",
+                libelle="Libellé",
+                amount="Montant(EUROS)",
+                delimiter=";",
+                filename_pattern=r"^(?P<account>\d+C\d{3})",
+            )
+        )[0],
+        DEFAULT_PROFILE,
+    ]
+    content = (
+        "Numéro Compte   ;000000C000;\nType         ;CCP;\nSolde (EUROS)   ;100,00;\n;;\n"
+        "Date;Libellé;Montant(EUROS)\n"
+        "01/10/2026;ACHAT CB MAGASIN   30.09.26  ;-50\n"
+        "30/09/2026;VIREMENT DE EMPLOYEUR   ;1200,00\n" + ";;\n" * 5
+    ).encode("cp1252")
+
+    def test_parses_preamble_integer_amount_and_empty_tail(self):
+        profile, rows = parse_statement(self.content, self.profiles)
+        assert profile.name == "ccp-signe"
+        assert [(r["Date valeur"], r["Debit"], r["Credit"]) for r in rows] == [
+            ("2026-09-30", 0.0, 1200.0),
+            ("2026-10-01", 50.0, 0.0),
+        ]
+
+    def test_account_from_the_number_filename(self):
+        assert infer_account("0000000C0001234567890123.csv", self.profiles) == "0000000C000"
