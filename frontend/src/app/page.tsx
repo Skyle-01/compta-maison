@@ -17,7 +17,6 @@ import {
   leafFilters,
   treeLabel,
 } from "@/lib/api";
-import AveragesSection from "@/components/AveragesSection";
 import BudgetSection from "@/components/BudgetSection";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
@@ -327,8 +326,6 @@ export default function DashboardPage() {
       />
 
       <BudgetSection budget={data.budget} all={all} />
-
-      <AveragesSection data={data} />
 
       {data.transfers.count > 0 && (
         <p className="text-sm text-zinc-500">

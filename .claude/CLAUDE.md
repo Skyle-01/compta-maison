@@ -31,9 +31,9 @@ backend/
   requirements.txt     # runtime deps, exact pins (fastapi, uvicorn, python-multipart)
   requirements-dev.txt # -r requirements.txt + pytest, httpx2 (TestClient transport), ruff
   pyproject.toml       # ruff config only (line-length 110; E4/E7/E9/F/I/UP/B/FAST)
-frontend/              # Next.js App Router; src/app/{page,import,transactions,a-classer,categories,settings,rapport}
-  src/app/page.tsx     # dashboard: hero, 4 reconciling cards + deltas, ResteTrend, BudgetSection, « Moyennes mensuelles » (components/AveragesSection, own fetch), MoneyFlowChart Sankey, balance tree (TreeNode)
-  src/components/      # Nav (« À classer (N) » + « Dernière opération »), CategoryPicker (leaf-only typeahead), SignedAmount, AveragesSection (dashboard only), and the dashboard pieces the report reuses: ResteTrend, BudgetSection (+ TONE_TEXT), MoneyFlowChart, Gap
+frontend/              # Next.js App Router; src/app/{page,import,statistiques,transactions,a-classer,categories,settings,rapport}
+  src/app/page.tsx     # dashboard: hero, 4 reconciling cards + deltas, ResteTrend, BudgetSection, MoneyFlowChart Sankey, balance tree (TreeNode)
+  src/components/      # Nav (« À classer (N) » + « Dernière opération »), CategoryPicker (leaf-only typeahead), SignedAmount, AveragesSection (Statistiques page only), and the dashboard pieces the report reuses: ResteTrend, BudgetSection (+ TONE_TEXT), MoneyFlowChart, Gap
   src/lib/api.ts       # typed fetch client (+ frenchMonth/frenchDate/signedAmount/suggestPattern/errorMessage); /api/* proxied to :8000 via next.config.ts rewrites
   src/lib/*.ts         # pure, vitest-tested helpers (tests sit next to them): moneyFlow + flowLayout (Sankey), budget, averages, report, trend, manualTransfers, categorySearch, triage, ruleForm (shared rule editor state), categoryTree
 docs/guide.md          # French user guide, rendered by the « Aide » page (frontend/src/app/aide, react-markdown + rehype-slug); each page's « ? » (components/HelpLink) targets a heading listed in lib/guide.ts GUIDE_ANCHORS, guide.test.ts checks them
@@ -128,6 +128,6 @@ Gotchas:
 
 ## Current State (2026-10-09)
 - Single schema (no migrations, early dev); UI in French; `dev.ps1` starts backend + frontend.
-- Pages: dashboard (cards, Reste chart, Budget, « Moyennes mensuelles », Sankey, balance tree, « Tous les mois », « Rapport PDF » → `/rapport`), Import, Transactions (per-row categorisation editor, transfer pairing, CSV export), « À classer » (grouped triage, nav counter), Catégories (tree with rules, manual assignments, moves, targets, search), Réglages (transfer markers, manual transfers, « Sauvegarde »). Behaviour: `.claude/rules/frontend-pages.md`.
+- Pages: dashboard (cards, Reste chart, Budget, Sankey, balance tree, « Tous les mois », « Rapport PDF » → `/rapport`), Statistiques (« Moyennes mensuelles »), Import, Transactions (per-row categorisation editor, transfer pairing, CSV export), « À classer » (grouped triage, nav counter), Catégories (tree with rules, manual assignments, moves, targets, search), Réglages (transfer markers, manual transfers, « Sauvegarde »). Behaviour: `.claude/rules/frontend-pages.md`.
 - **Tooling**: pinned `requirements.txt` + `requirements-dev.txt`, ruff, `.gitattributes` (LF), GitHub Actions CI (backend on 3.11/3.14: ruff + pytest; frontend: `npm ci`, lint, vitest, build). CI green (also locally on Windows).
 - **Public repo hygiene**: the repo was restarted as **Skyle-01/compta-maison** from a single anonymised commit (the old `Skyle-01/compta`, which holds real data, is archived - never push there). `data/` is a fictional example, personal config lives in the gitignored `_config/`, tests use fictional accounts (`PERSO`/`JOINT`/`LIVRET`/`LOCATIF`/`ENFANT`) and labels (`EMPLOYEUR`). Never commit real names, account numbers or merchant/location details. GPL-3.0-or-later; switching the repo to public is the owner's call.

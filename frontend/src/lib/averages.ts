@@ -1,4 +1,4 @@
-/** Pure helpers for the dashboard « Moyennes mensuelles » section. */
+/** Pure helpers for the « Moyennes mensuelles » section of the Statistiques page. */
 import { type AverageNode, type AveragePeriod, type CategoryAverages, frenchMonth } from "./api";
 
 export const AVERAGE_PERIODS: { value: AveragePeriod; label: string }[] = [
