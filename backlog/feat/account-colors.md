@@ -15,7 +15,7 @@ With several accounts, rows in Transactions and the account details in the dashb
 2. A small `lib/accountColors.ts` (palette, default by position) with a vitest next to it; a dot component reused by the three pages.
 3. Réglages « Comptes »: colour picker (the palette as swatches).
 4. `docs/guide.md` and `.claude/rules/frontend-pages.md`; retake screenshots; CLAUDE.md (Account definition).
-5. Lowest priority of the five items: much of the need is covered once the account filter exists (`transactions-account-filter.md`).
+5. Lowest priority of the five items: much of the need is covered now that the Transactions account filter exists (shipped 2026-11-02).
 
 ## Progress
 
