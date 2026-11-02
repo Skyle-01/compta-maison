@@ -633,6 +633,31 @@ class TestCategoryAverages:
         variable = self._group(avg, "variable")
         assert (_find(variable, "courses")["expenses"], _find(variable, "bar")["expenses"]) == (100, 60)
 
+    def test_splits_over_several_months_move_the_part_and_keep_the_cards(self, seeded_db):
+        self._seed(seeded_db)
+        before = category_averages(seeded_db, 3, "2026-05")
+        with connect(seeded_db) as conn:
+            # A manual operation with a 2nd part in bar: 90 of March's 300 and 40 of May's 100.
+            for date, part in (("2026-03-06", 9000), ("2026-05-06", 4000)):
+                tx_id = conn.execute(
+                    "SELECT id FROM transactions WHERE date_valeur = ? AND libelle = 'SUPERMARCHE'", (date,)
+                ).fetchone()[0]
+                conn.execute(
+                    "UPDATE transactions SET category_manual = 1, rule_id = NULL WHERE id = ?", (tx_id,)
+                )
+                conn.execute(
+                    "INSERT INTO transaction_splits (transaction_id, category_id, amount_cents) VALUES (?, ?, ?)",
+                    (tx_id, cat_id(seeded_db, "bar"), part),
+                )
+        after = category_averages(seeded_db, 3, "2026-05")
+        variable = self._group(after, "variable")
+        courses, bar = _find(variable, "courses"), _find(variable, "bar")
+        # courses: (300 − 90 + 20 + 100 − 40 − 30) / 3, bar: (60 + 90 + 40) / 3.
+        assert (courses["expenses"], bar["expenses"]) == (round(260 / 3, 2), round(190 / 3, 2))
+        assert (courses["month_expenses"], bar["month_expenses"]) == (60, 100)  # May alone
+        assert variable["expenses"] == self._group(before, "variable")["expenses"] == 150
+        assert after["totals"] == before["totals"] and after["offset"] == before["offset"]
+
     def test_no_complete_month(self, seeded_db):
         import_rows(seeded_db, ("2026-06-06", "2026-06-06", "SUPERMARCHE", 80, 0, "JOINT"))
         apply_rules(seeded_db)
