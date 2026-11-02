@@ -63,7 +63,7 @@ def reject_populated_parent(conn, parent_id: int | None) -> None:
     has transactions or rules attached directly (it would become a group carrying them)."""
     if parent_id is None:
         return
-    has_tx = conn.execute("SELECT 1 FROM transactions WHERE category_id = ?", (parent_id,)).fetchone()
+    has_tx = conn.execute("SELECT 1 FROM transaction_parts WHERE category_id = ?", (parent_id,)).fetchone()
     has_rule = conn.execute("SELECT 1 FROM label_rules WHERE category_id = ?", (parent_id,)).fetchone()
     if has_tx or has_rule:
         raise HTTPException(
@@ -110,7 +110,7 @@ def _reject_non_spending_target(conn, category: CategoryOut) -> None:
     marks = ",".join("?" * len(window))
     debit, credit = conn.execute(
         "WITH RECURSIVE sub(id) AS (SELECT ? UNION ALL SELECT c.id FROM categories c JOIN sub s ON c.parent_id = s.id) "
-        "SELECT COALESCE(SUM(debit_cents), 0), COALESCE(SUM(credit_cents), 0) FROM transactions "
+        "SELECT COALESCE(SUM(debit_cents), 0), COALESCE(SUM(credit_cents), 0) FROM transaction_parts "
         f"WHERE category_id IN (SELECT id FROM sub) AND {real_flow_clause()} AND budget_month IN ({marks})",
         (category.id, *window),
     ).fetchone()
@@ -176,6 +176,10 @@ def create_category(category: CategoryIn, db_path: DbPath) -> CategoryOut:
                 "UPDATE transactions SET category_id = ? WHERE category_id = ?",
                 (child_id, category.parent_id),
             ).rowcount
+            conn.execute(  # 2nd parts follow, like the operations
+                "UPDATE transaction_splits SET category_id = ? WHERE category_id = ?",
+                (child_id, category.parent_id),
+            )
             # A budget target stays on the parent: a group's target covers its whole subtree.
         result = _get_one(conn, child_id)
     if moved:
@@ -266,6 +270,8 @@ def move_to_category(category_id: int, move: CategoryMoveIn, db_path: DbPath) ->
                         f"{', '.join(map(str, automatic))} suivent leur règle"
                     ],
                 )
+            # A moved operation goes whole into the target: its split (if any) is dropped.
+            conn.execute(f"DELETE FROM transaction_splits WHERE transaction_id IN ({marks})", tx_ids)
             conn.execute(
                 f"UPDATE transactions SET category_id = ? WHERE id IN ({marks})", (category_id, *tx_ids)
             )
@@ -337,6 +343,10 @@ def delete_category(category_id: int, db_path: DbPath) -> None:
                 "UPDATE transactions SET category_id = ? WHERE category_id = ? AND category_manual = 1",
                 (parent_id, category_id),
             )
+            conn.execute(
+                "UPDATE transaction_splits SET category_id = ? WHERE category_id = ?",
+                (parent_id, category_id),
+            )
             # Its target too (one per branch: the parent holds one only if the child has none).
             conn.execute(
                 "UPDATE categories SET budget_target_cents = COALESCE("
@@ -345,6 +355,13 @@ def delete_category(category_id: int, db_path: DbPath) -> None:
             )
         else:
             # Drop: transactions fall back to auto + uncategorised; rules cascade-delete with the row.
+            # A split whose 1st part was here goes with it (a split row keeps a 1st category); one
+            # whose 2nd part was here is removed by the FK cascade, the operation staying whole.
+            conn.execute(
+                "DELETE FROM transaction_splits WHERE transaction_id IN "
+                "(SELECT id FROM transactions WHERE category_id = ?)",
+                (category_id,),
+            )
             conn.execute("UPDATE transactions SET category_manual = 0 WHERE category_id = ?", (category_id,))
         conn.execute(
             "DELETE FROM categories WHERE id = ?", (category_id,)

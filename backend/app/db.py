@@ -83,6 +83,29 @@ CREATE TABLE IF NOT EXISTS transactions (
     import_hash       TEXT UNIQUE NOT NULL
 );
 
+/* The 2nd part of an operation split across two categories; part 1 is the row itself minus this
+   amount. A split row always has a non-null category_id and a real-flow kind (core/transfers.py
+   drops the split of a row that becomes a transfer). */
+CREATE TABLE IF NOT EXISTS transaction_splits (
+    transaction_id INTEGER PRIMARY KEY REFERENCES transactions(id) ON DELETE CASCADE,
+    category_id    INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    amount_cents   INTEGER NOT NULL                          /* > 0 and < the operation's amount */
+);
+
+/* One row per category part of every operation (two for a split one, else one): what the
+   per-category aggregates read. The split amount comes off the debit or the credit, whichever
+   the operation carries. */
+CREATE VIEW IF NOT EXISTS transaction_parts AS
+SELECT t.id AS transaction_id, 1 AS part, t.category_id, t.budget_month, t.kind,
+       t.debit_cents - CASE WHEN t.debit_cents > 0 THEN COALESCE(s.amount_cents, 0) ELSE 0 END AS debit_cents,
+       t.credit_cents - CASE WHEN t.debit_cents > 0 THEN 0 ELSE COALESCE(s.amount_cents, 0) END AS credit_cents
+FROM transactions t LEFT JOIN transaction_splits s ON s.transaction_id = t.id
+UNION ALL
+SELECT s.transaction_id, 2, s.category_id, t.budget_month, t.kind,
+       CASE WHEN t.debit_cents > 0 THEN s.amount_cents ELSE 0 END,
+       CASE WHEN t.debit_cents > 0 THEN 0 ELSE s.amount_cents END
+FROM transaction_splits s JOIN transactions t ON t.id = s.transaction_id;
+
 CREATE INDEX IF NOT EXISTS idx_transactions_budget_month ON transactions(budget_month);
 CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);

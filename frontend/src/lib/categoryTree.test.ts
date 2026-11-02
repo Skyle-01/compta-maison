@@ -4,6 +4,8 @@ import {
   averageNets,
   buildTree,
   contentsByCategory,
+  heldBy,
+  partInLeaf,
   movedMessage,
   reparentOptions,
   searchTree,
@@ -52,6 +54,10 @@ function tx(id: number, category_id: number, fields: Partial<Transaction> = {}):
     rule_pattern: null,
     transfer_group_id: null,
     kind_manual: false,
+    split_category_id: null,
+    split_category: null,
+    split_amount: null,
+    total: null,
     ...fields,
   };
 }
@@ -84,6 +90,26 @@ describe("contentsByCategory", () => {
     expect(contents.get(5)).toEqual({ rules: 0, ruleOperations: 0, manual: 1 });
   });
 
+});
+
+describe("split operations", () => {
+  const split = tx(30, 2, { debit: 63.82, split_category_id: 4, split_category: "Bar", split_amount: 20 });
+
+  it("is held by both categories", () => {
+    expect(heldBy(split, 2)).toBe(true);
+    expect(heldBy(split, 4)).toBe(true);
+    expect(heldBy(split, 5)).toBe(false);
+    const contents = contentsByCategory(TREE, [], [split]);
+    expect(contents.get(2)?.manual).toBe(1);
+    expect(contents.get(4)?.manual).toBe(1);
+    expect(contents.get(1)?.manual).toBe(2); // each part counts in its group
+  });
+
+  it("shows each leaf its part, and the whole as the total", () => {
+    expect(partInLeaf(split, 4)).toEqual({ debit: 20, credit: 0, total: 63.82 });
+    expect(partInLeaf(split, 2)).toEqual({ debit: 43.82, credit: 0, total: 63.82 });
+    expect(partInLeaf(tx(31, 2, { debit: 5 }), 2)).toEqual({ debit: 5, credit: 0, total: null });
+  });
 });
 
 describe("targets", () => {

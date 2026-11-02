@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import AccountDot from "@/components/AccountDot";
 import SignedAmount from "@/components/SignedAmount";
-import { frenchDate, type Account, type Transaction, type TransferMode } from "@/lib/api";
+import { formatEuro, frenchDate, type Account, type Transaction, type TransferMode } from "@/lib/api";
 
 /** A row the user declared "not a transfer": say so, with a way back to automatic detection. */
 function NotTransferBadge({ tx, onAuto }: { tx: Transaction; onAuto: () => void }) {
@@ -96,7 +96,15 @@ export default function TransactionRow({
           editor
         ) : tx.category_id ? (
           <div className="flex flex-wrap items-center gap-2">
-            <span>{tx.category}</span>
+            <span>
+              {tx.category}
+              {tx.split_category && (
+                <span title={`${formatEuro(tx.split_amount ?? 0)} dans ${tx.split_category}`}>
+                  {" + "}
+                  {tx.split_category}
+                </span>
+              )}
+            </span>
             <NotTransferBadge tx={tx} onAuto={backToAuto} />
             {tx.category_manual ? (
               <span className="text-xs text-zinc-500" title="Assigné manuellement">

@@ -15,7 +15,7 @@ import {
 } from "@/lib/api";
 import { conflictsMessage } from "@/lib/triage";
 import { emptyRuleForm, type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
-import CategoryEditor, { type EditMode } from "./CategoryEditor";
+import CategoryEditor, { type EditMode, type SplitForm } from "./CategoryEditor";
 import Filters from "./Filters";
 import SelectionBar from "./SelectionBar";
 import TransactionRow from "./TransactionRow";
@@ -43,6 +43,7 @@ export default function TransactionsPage() {
   const [editMode, setEditMode] = useState<EditMode>("manual");
   const [form, setForm] = useState<RuleForm>(emptyRuleForm());
   const edit = (patch: Partial<RuleForm>) => setForm((f) => ({ ...f, ...patch }));
+  const [split, setSplit] = useState<SplitForm | null>(null);
   // Last live-preview result, keyed by the pattern and account it counted (see the preview effect below).
   const [matchResult, setMatchResult] = useState<{ key: string; count: number } | null>(null);
   // Rows ticked for a manual transfer decision (kept across pages/months; at most two).
@@ -133,6 +134,11 @@ export default function TransactionsPage() {
       pattern: suggestPattern(tx.libelle),
       description: tx.note ?? "",
     });
+    setSplit(
+      tx.split_category_id == null
+        ? null
+        : { category_id: tx.split_category_id, amount: String(tx.split_amount ?? "").replace(".", ",") },
+    );
     setMatchResult(null);
   }
 
@@ -141,11 +147,13 @@ export default function TransactionsPage() {
     setError(null);
     try {
       if (editMode === "manual") {
+        // A category_id drops any split server-side, so a split is always sent along with it.
         await api.updateTransaction(tx.id, {
           category_id: form.category_id,
           note: form.description.trim() || null,
+          ...(split && { split_category_id: split.category_id, split_amount: Number(split.amount.replace(",", ".")) }),
         });
-        setFlash("Opération classée.");
+        setFlash(split ? "Opération scindée." : "Opération classée.");
       } else {
         const rule = ruleFormToPayload(form);
         const pattern = rule.pattern;
@@ -196,7 +204,12 @@ export default function TransactionsPage() {
     transferAction(() => api.setTransferMode(tx.id, mode), message);
   const selectedRows = [...selected.values()];
 
-  const submitDisabled = form.category_id == null || (editMode === "rule" && !form.pattern.trim());
+  const splitIncomplete =
+    editMode === "manual" &&
+    split !== null &&
+    (split.category_id == null || !(Number(split.amount.replace(",", ".")) > 0));
+  const submitDisabled =
+    form.category_id == null || (editMode === "rule" && !form.pattern.trim()) || splitIncomplete;
 
   return (
     <div className="space-y-4">
@@ -272,6 +285,8 @@ export default function TransactionsPage() {
                       onEdit={edit}
                       mode={editMode}
                       onModeChange={setEditMode}
+                      split={split}
+                      onSplitChange={setSplit}
                       matchCount={matchCount}
                       submitDisabled={submitDisabled}
                       onSubmit={() => submitEditor(tx)}

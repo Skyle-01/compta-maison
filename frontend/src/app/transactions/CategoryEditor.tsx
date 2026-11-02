@@ -5,6 +5,9 @@ import type { RuleForm } from "@/lib/ruleForm";
 
 export type EditMode = "manual" | "rule";
 
+/** The 2nd part of an operation split across two categories: its leaf and its amount in euros (as typed). */
+export type SplitForm = { category_id: number | null; amount: string };
+
 /** The inline categorisation editor of one row: a leaf, then either this operation or a rule. */
 export default function CategoryEditor({
   tx,
@@ -13,6 +16,8 @@ export default function CategoryEditor({
   onEdit,
   mode,
   onModeChange,
+  split,
+  onSplitChange,
   matchCount,
   submitDisabled,
   onSubmit,
@@ -24,6 +29,9 @@ export default function CategoryEditor({
   onEdit: (patch: Partial<RuleForm>) => void;
   mode: EditMode;
   onModeChange: (mode: EditMode) => void;
+  /** The 2nd part of a split (manual mode), null = no split; amount kept as typed. */
+  split: SplitForm | null;
+  onSplitChange: (split: SplitForm | null) => void;
   /** Rows the typed pattern would claim; null while unknown. */
   matchCount: number | null;
   submitDisabled: boolean;
@@ -59,6 +67,42 @@ export default function CategoryEditor({
           Règle (opérations similaires)
         </label>
       </div>
+      {mode === "manual" && tx.kind !== "transfer" && (
+        <div className="text-xs text-zinc-600">
+          {split === null ? (
+            <button
+              onClick={() => onSplitChange({ category_id: null, amount: "" })}
+              className="text-zinc-600 hover:text-zinc-900"
+              title="Répartir l'opération entre deux catégories"
+            >
+              Scinder
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <span>Deuxième part :</span>
+              <input
+                value={split.amount}
+                onChange={(e) => onSplitChange({ ...split, amount: e.target.value })}
+                inputMode="decimal"
+                placeholder="montant"
+                aria-label="Montant de la deuxième part"
+                className="w-20 rounded border border-zinc-300 px-1 py-0.5 text-right"
+              />
+              <span>€ dans</span>
+              <CategoryPicker
+                categories={categories}
+                value={split.category_id}
+                onChange={(category_id) => onSplitChange({ ...split, category_id })}
+                highlight={split.category_id == null}
+                placeholder="- catégorie -"
+              />
+              <button onClick={() => onSplitChange(null)} className="text-zinc-600 hover:text-zinc-900">
+                Annuler le split
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {mode === "rule" && (
         <div className="space-y-1.5">
           <div className="flex items-center gap-2">

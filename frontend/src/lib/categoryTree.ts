@@ -27,6 +27,22 @@ export function buildTree(cats: Category[]): CategoryTreeNode[] {
  *  the sum of its leaves'. */
 export type Contents = { rules: number; ruleOperations: number; manual: number };
 
+/** True when `tx` is held by category `id`: its (1st) category, or the 2nd part of a split. */
+export const heldBy = (tx: Transaction, id: number): boolean =>
+  tx.category_id === id || tx.split_category_id === id;
+
+/** The amount a leaf holds of a manual operation: the whole, or one part of a split (`total` is then
+ *  the whole, for the « sur N € » marker). */
+export function partInLeaf(
+  tx: Transaction,
+  leafId: number,
+): { debit: number; credit: number; total: number | null } {
+  if (tx.split_category_id == null || tx.split_amount == null) return { debit: tx.debit, credit: tx.credit, total: null };
+  const total = tx.debit > 0 ? tx.debit : tx.credit;
+  const part = leafId === tx.split_category_id ? tx.split_amount : Math.round((total - tx.split_amount) * 100) / 100;
+  return { debit: tx.debit > 0 ? part : 0, credit: tx.debit > 0 ? 0 : part, total };
+}
+
 export function contentsByCategory(
   tree: CategoryTreeNode[],
   rules: Rule[],
@@ -42,7 +58,7 @@ export function contentsByCategory(
           contents.ruleOperations += r.operation_count;
         }
       for (const tx of manual)
-        if (tx.category_id === node.id) contents.manual += 1;
+        if (heldBy(tx, node.id)) contents.manual += 1;
     } else {
       for (const child of node.children) {
         const c = visit(child);
@@ -132,7 +148,7 @@ export function searchTree(
     if (node.children.length === 0) {
       const holdsMatch =
         rules.some((r) => r.category_id === node.id && ruleMatches(r, q)) ||
-        manual.some((tx) => tx.category_id === node.id && manualMatches(tx, q));
+        manual.some((tx) => heldBy(tx, node.id) && manualMatches(tx, q));
       if (holdsMatch) {
         result.open.add(node.id);
         shown = true;

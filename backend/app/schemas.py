@@ -103,6 +103,16 @@ class Transaction(BaseModel):
     )
     transfer_group_id: int | None = Field(default=None, description="Shared by the two legs of a transfer")
     kind_manual: bool = Field(default=False, description="True when the user decided the transfer status")
+    split_category_id: int | None = Field(
+        default=None, description="Category of the 2nd part of an operation split across two categories"
+    )
+    split_category: str | None = Field(default=None, description="Name of the 2nd part's category")
+    split_amount: float | None = Field(default=None, description="Amount of the 2nd part (euros, > 0)")
+    total: float | None = Field(
+        default=None,
+        description="The whole operation's amount, set only when debit/credit show one part of a split "
+        "(a list filtered by category)",
+    )
 
 
 class TransactionPage(BaseModel):
@@ -115,6 +125,10 @@ class TransactionPatch(BaseModel):
     # caller can update the category, the note, or both in one PATCH.
     category_id: int | None = None
     note: str | None = None
+    # Split: a leaf category + the amount (euros) of the 2nd part, the 1st part keeping the rest.
+    # split_category_id null removes the split; sending category_id also drops any existing split.
+    split_category_id: int | None = None
+    split_amount: float | None = None
 
 
 class TransactionsBulkPatch(BaseModel):

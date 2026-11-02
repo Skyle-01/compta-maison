@@ -269,6 +269,21 @@ def import_overrides(
                     (category_id, id_),
                 )
                 touched = True
+                # The 2nd part only goes with a 1st category applied on this very row (a split row
+                # always has one); optional columns, an unknown path or a bad amount skips it.
+                split_id = path_to_id.get(row.get("split_category") or "")
+                split_cents = int(row["split_cents"]) if row.get("split_cents") else 0
+                total = conn.execute(
+                    "SELECT MAX(debit_cents, credit_cents) FROM transactions WHERE id = ?", (id_,)
+                ).fetchone()[0]
+                if split_id is not None and split_id != category_id and 0 < split_cents < total:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO transaction_splits (transaction_id, category_id, amount_cents) "
+                        "VALUES (?, ?, ?)",
+                        (id_, split_id, split_cents),
+                    )
+                elif row.get("split_category"):
+                    print(f"Skipping split override on {row['import_hash']!r}: unknown path or bad amount")
         # note column is optional (older exports predate it); row.get tolerates its absence.
         if row.get("note"):
             conn.execute("UPDATE transactions SET note = ? WHERE id = ?", (row["note"], id_))
@@ -330,6 +345,7 @@ def import_csv(
     overrides = _read_csv(overrides_csv) if overrides_csv else []
 
     with connect(db_path) as conn:
+        conn.execute("DELETE FROM transaction_splits")  # the categories they point at go next
         conn.execute("UPDATE transactions SET category_id = NULL, category_manual = 0, rule_id = NULL")
         conn.execute("DELETE FROM label_rules")
         conn.execute("DELETE FROM categories")

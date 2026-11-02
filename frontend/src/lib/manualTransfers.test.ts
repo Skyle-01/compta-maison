@@ -22,6 +22,10 @@ function tx(id: number, fields: Partial<Transaction>): Transaction {
     rule_pattern: null,
     transfer_group_id: null,
     kind_manual: true,
+    split_category_id: null,
+    split_category: null,
+    split_amount: null,
+    total: null,
     ...fields,
   };
 }

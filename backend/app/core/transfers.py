@@ -275,6 +275,12 @@ def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
                 (pattern,),
             )
             marked += cur.rowcount
+
+        # A transfer has no category by design: a row that just became one (here or through a manual
+        # decision, which ends by calling this) loses its split, keeping its 1st category.
+        conn.execute(
+            "DELETE FROM transaction_splits WHERE transaction_id IN (SELECT id FROM transactions WHERE kind = 'transfer')"
+        )
         return marked
 
 

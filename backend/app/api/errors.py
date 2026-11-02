@@ -33,6 +33,8 @@ FIELD_LABELS = {
     "parent_id": "Catégorie parente",
     "pattern": "Motif",
     "rule_ids": "Règles",
+    "split_amount": "Montant de la deuxième part",
+    "split_category_id": "Catégorie de la deuxième part",
     "transaction_ids": "Opérations",
 }
 

@@ -140,7 +140,7 @@ def category_tree(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> 
         ).fetchall()
         query = (
             "SELECT category_id, COALESCE(SUM(credit_cents), 0), COALESCE(SUM(debit_cents), 0) "
-            f"FROM transactions WHERE category_id IS NOT NULL AND {real_flow_clause()}"
+            f"FROM transaction_parts WHERE category_id IS NOT NULL AND {real_flow_clause()}"
         )
         params: tuple = ()
         if month:
@@ -306,12 +306,12 @@ def budget_status(
         params: tuple = (month,) if month else ()
         nets = conn.execute(
             "SELECT category_id, COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0) "
-            f"FROM transactions WHERE category_id IS NOT NULL AND {real_flow_clause()}{month_clause} "
+            f"FROM transaction_parts WHERE category_id IS NOT NULL AND {real_flow_clause()}{month_clause} "
             "GROUP BY category_id",
             params,
         ).fetchall()
         expenses = conn.execute(
-            "SELECT category_id, COALESCE(SUM(debit_cents), 0) FROM transactions "
+            "SELECT category_id, COALESCE(SUM(debit_cents), 0) FROM transaction_parts "
             f"WHERE kind = 'expense'{month_clause} GROUP BY category_id",
             params,
         ).fetchall()
@@ -417,7 +417,7 @@ def category_averages(
         ).fetchall()
         flows = conn.execute(
             "SELECT category_id, budget_month, COALESCE(SUM(credit_cents), 0), COALESCE(SUM(debit_cents), 0) "
-            f"FROM transactions WHERE {real_flow_clause()} GROUP BY category_id, budget_month"
+            f"FROM transaction_parts WHERE {real_flow_clause()} GROUP BY category_id, budget_month"
         ).fetchall()
         savings_rows = [
             (code, label, _savings_month_nets(conn, code, pattern, None))

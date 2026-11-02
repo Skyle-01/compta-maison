@@ -1,17 +1,21 @@
 import { useState } from "react";
 import SignedAmount from "@/components/SignedAmount";
-import { frenchDate, type Transaction } from "@/lib/api";
+import { formatEuro, frenchDate, type Transaction } from "@/lib/api";
+import { partInLeaf } from "@/lib/categoryTree";
 
 /** One manual assignment of a leaf: tick to move it, edit its note, or clear the assignment.
  *  `onSaveNote` resolves false when the save failed (the editor stays open). */
 export default function ManualRow({
   tx,
+  leafId,
   selected,
   onToggleSelected,
   onSaveNote,
   onRemove,
 }: {
   tx: Transaction;
+  /** The leaf listing this row: a split operation shows that leaf's part. */
+  leafId: number;
   selected: boolean;
   onToggleSelected: () => void;
   onSaveNote: (note: string) => Promise<boolean>;
@@ -19,6 +23,7 @@ export default function ManualRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [note, setNote] = useState("");
+  const part = partInLeaf(tx, leafId);
 
   async function save() {
     if (await onSaveNote(note)) setEditing(false);
@@ -40,7 +45,12 @@ export default function ManualRow({
       </td>
       <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">{tx.account_id ?? tx.account}</td>
       <td className="whitespace-nowrap py-1 pr-3 text-right">
-        <SignedAmount tx={tx} />
+        <SignedAmount tx={part} />
+        {part.total != null && (
+          <span className="block text-xs text-zinc-500" title="Opération scindée entre deux catégories">
+            scindée, sur {formatEuro(part.total)}
+          </span>
+        )}
       </td>
       <td className="py-1 pr-3 text-zinc-500">
         {editing ? (

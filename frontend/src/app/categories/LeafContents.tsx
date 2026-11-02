@@ -108,6 +108,7 @@ export default function LeafContents({
                 <ManualRow
                   key={tx.id}
                   tx={tx}
+                  leafId={leafId}
                   selected={selectedTx.has(tx.id)}
                   onToggleSelected={() => actions.toggleTxSelected(tx.id)}
                   onSaveNote={(note) => actions.saveNote(tx.id, note)}

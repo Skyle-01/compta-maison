@@ -10,7 +10,7 @@ from app.core.categorize import apply_rules
 from app.core.config_export import category_paths
 from app.core.transfers import pair_manually, set_transfer_mode, transfer_candidates
 from app.core.triage import conflicted_operations, uncategorized_groups
-from app.db import connect, euros, real_flow_clause
+from app.db import connect, euros, real_flow_clause, to_cents
 from app.schemas import (
     CategorySuggestion,
     ConflictedOperation,
@@ -30,21 +30,44 @@ router = APIRouter(prefix="/api/transactions", tags=["transactions"])
 _SELECT = (
     "SELECT t.id, t.date_operation, t.date_valeur, t.budget_month, t.libelle, "
     "t.debit_cents, t.credit_cents, t.account, t.account_id, t.kind, t.category_id, c.name, "
-    "t.category_manual, t.note, t.rule_id, lr.pattern, t.transfer_group_id, t.kind_manual "
+    "t.category_manual, t.note, t.rule_id, lr.pattern, t.transfer_group_id, t.kind_manual, "
+    "s.category_id, sc.name, s.amount_cents "
     "FROM transactions t LEFT JOIN categories c ON c.id = t.category_id "
-    "LEFT JOIN label_rules lr ON lr.id = t.rule_id"
+    "LEFT JOIN label_rules lr ON lr.id = t.rule_id "
+    "LEFT JOIN transaction_splits s ON s.transaction_id = t.id "
+    "LEFT JOIN categories sc ON sc.id = s.category_id"
 )
 
 
-def _to_model(row: tuple) -> Transaction:
+def _parts(
+    category_id: int | None, debit: int, credit: int, split_category: int | None, split_cents: int | None
+) -> list[tuple[int | None, int, int]]:
+    """(category, debit, credit) of each part of an operation, in cents: the 1st part keeps what
+    the 2nd one (taken off the debit, or the credit of a credit) leaves."""
+    if split_category is None or split_cents is None:
+        return [(category_id, debit, credit)]
+    if debit > 0:
+        return [(category_id, debit - split_cents, 0), (split_category, split_cents, 0)]
+    return [(category_id, 0, credit - split_cents), (split_category, 0, split_cents)]
+
+
+def _to_model(row: tuple, part_category: int | None = None) -> Transaction:
+    """`part_category` (the list's category filter) makes a split operation show that part's amount
+    instead of the whole, `total` then carrying the whole."""
+    debit, credit, total = row[5], row[6], None
+    if row[20] is not None and part_category is not None:
+        (_, debit, credit) = next(
+            p for p in _parts(row[10], row[5], row[6], row[18], row[20]) if p[0] == part_category
+        )
+        total = euros(max(row[5], row[6]))
     return Transaction(
         id=row[0],
         date_operation=row[1],
         date_valeur=row[2],
         budget_month=row[3],
         libelle=row[4],
-        debit=euros(row[5]),
-        credit=euros(row[6]),
+        debit=euros(debit),
+        credit=euros(credit),
         account=row[7],
         account_id=row[8],
         kind=row[9],
@@ -56,6 +79,10 @@ def _to_model(row: tuple) -> Transaction:
         rule_pattern=row[15],
         transfer_group_id=row[16],
         kind_manual=bool(row[17]),
+        split_category_id=row[18],
+        split_category=row[19],
+        split_amount=euros(row[20]) if row[20] is not None else None,
+        total=total,
     )
 
 
@@ -80,7 +107,8 @@ def _filter_clause(
         where.append("t.account_id = ?")
         params.append(account)
     if category_id is not None:
-        where.append("t.category_id = ?")
+        # Either part of a split operation matches (the list then shows that part's amount).
+        where.append("t.id IN (SELECT transaction_id FROM transaction_parts WHERE category_id = ?)")
         params.append(category_id)
     if libelle_contains:
         # Case-sensitive substring, mirroring the rule engine's instr() (core/categorize.py).
@@ -138,7 +166,7 @@ def list_transactions(
             f"{_SELECT} WHERE {clause} ORDER BY t.date_valeur DESC, t.id DESC LIMIT ? OFFSET ?",
             [*params, limit, offset],
         ).fetchall()
-    return TransactionPage(items=[_to_model(r) for r in rows], total=total)
+    return TransactionPage(items=[_to_model(r, category_id) for r in rows], total=total)
 
 
 @router.get("/uncategorized-groups")
@@ -232,10 +260,12 @@ def export_transactions(
         paths = category_paths(conn)
         rows = conn.execute(
             "SELECT t.date_operation, t.date_valeur, t.budget_month, t.account_id, t.libelle, "
-            "t.debit_cents, t.credit_cents, t.kind, t.category_id, t.note "
-            f"FROM transactions t WHERE {clause} ORDER BY t.date_valeur, t.id",
+            "t.debit_cents, t.credit_cents, t.kind, t.category_id, t.note, s.category_id, s.amount_cents "
+            "FROM transactions t LEFT JOIN transaction_splits s ON s.transaction_id = t.id "
+            f"WHERE {clause} ORDER BY t.date_valeur, t.id",
             params,
         ).fetchall()
+    # One line per part of a split operation; under a category filter only the matching part.
     out = [
         [
             _french_date(date_operation),
@@ -243,10 +273,10 @@ def export_transactions(
             budget_month,
             account_id or "",
             libelle,
-            _french_amount(debit_cents),
-            _french_amount(credit_cents),
+            _french_amount(part_debit),
+            _french_amount(part_credit),
             _KIND_LABELS.get(kind, kind),
-            paths.get(category_id, "") if category_id else "",
+            paths.get(part_category, "") if part_category else "",
             note or "",
         ]
         for (
@@ -258,9 +288,15 @@ def export_transactions(
             debit_cents,
             credit_cents,
             kind,
-            category_id,
+            category_id_1,
             note,
+            split_category,
+            split_cents,
         ) in rows
+        for part_category, part_debit, part_credit in _parts(
+            category_id_1, debit_cents, credit_cents, split_category, split_cents
+        )
+        if category_id is None or part_category == category_id
     ]
     return csv_response(out, EXPORT_HEADER, f"transactions_{month or 'tout'}.csv")
 
@@ -305,6 +341,38 @@ def _check_leaf(conn: sqlite3.Connection, category_id: int) -> None:
     reject_group_target(conn, category_id)
 
 
+def _set_split(conn: sqlite3.Connection, transaction_id: int, category_id: int, amount: float | None) -> None:
+    """Give an operation a 2nd part (leaf `category_id`, `amount` euros), its 1st part keeping the
+    rest. Manual by nature, like any hand assignment. 422 unless the operation is a real flow with
+    a 1st category and the amount is strictly between 0 and the operation's."""
+    first_category, kind, debit, credit = conn.execute(
+        "SELECT category_id, kind, debit_cents, credit_cents FROM transactions WHERE id = ?",
+        (transaction_id,),
+    ).fetchone()
+    if kind == "transfer":
+        raise HTTPException(422, detail=["Un virement ne se scinde pas : il n'a pas de catégorie"])
+    if first_category is None:
+        raise HTTPException(422, detail=["Choisissez d'abord la catégorie de l'opération, puis scindez-la"])
+    if amount is None:
+        raise HTTPException(422, detail=["Indiquez le montant de la deuxième part"])
+    _check_leaf(conn, category_id)
+    if category_id == first_category:
+        raise HTTPException(422, detail=["Les deux parts doivent avoir des catégories différentes"])
+    cents, total = to_cents(amount), max(debit, credit)
+    if not 0 < cents < total:
+        raise HTTPException(
+            422,
+            detail=[f"La deuxième part doit être comprise entre 0 et {total / 100:.2f} €".replace(".", ",")],
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO transaction_splits (transaction_id, category_id, amount_cents) VALUES (?, ?, ?)",
+        (transaction_id, category_id, cents),
+    )
+    conn.execute(
+        "UPDATE transactions SET category_manual = 1, rule_id = NULL WHERE id = ?", (transaction_id,)
+    )
+
+
 @router.patch("")
 def patch_transactions(patch: TransactionsBulkPatch, db_path: DbPath) -> list[Transaction]:
     """Set (or clear) the manual category and note of several operations at once: a whole group
@@ -317,6 +385,8 @@ def patch_transactions(patch: TransactionsBulkPatch, db_path: DbPath) -> list[Tr
             raise HTTPException(404, detail=[f"Opérations introuvables : {', '.join(map(str, missing))}"])
         if patch.category_id is not None:
             _check_leaf(conn, patch.category_id)
+        # A bulk assignment sets one category and clears any split.
+        conn.execute(f"DELETE FROM transaction_splits WHERE transaction_id IN ({marks})", ids)
         conn.execute(
             f"UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL, note = ? "
             f"WHERE id IN ({marks})",
@@ -342,10 +412,17 @@ def patch_transaction(
         if "category_id" in fields:
             if patch.category_id is not None:
                 _check_leaf(conn, patch.category_id)
+            # The 1st category changes (or clears): any split is dropped, a new one can come with it.
+            conn.execute("DELETE FROM transaction_splits WHERE transaction_id = ?", (transaction_id,))
             conn.execute(
                 "UPDATE transactions SET category_id = ?, category_manual = ?, rule_id = NULL WHERE id = ?",
                 (patch.category_id, int(patch.category_id is not None), transaction_id),
             )
+        if "split_category_id" in fields:
+            if patch.split_category_id is None:
+                conn.execute("DELETE FROM transaction_splits WHERE transaction_id = ?", (transaction_id,))
+            else:
+                _set_split(conn, transaction_id, patch.split_category_id, patch.split_amount)
         if "note" in fields:
             conn.execute("UPDATE transactions SET note = ? WHERE id = ?", (patch.note, transaction_id))
 

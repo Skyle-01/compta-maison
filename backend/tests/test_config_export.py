@@ -299,10 +299,10 @@ def test_export_overrides_csv(seeded_db, client, tmp_path):
     body = (_export(seeded_db, tmp_path) / "overrides.csv").read_text(encoding="utf-8-sig")
     assert body.splitlines()[0] == (
         "import_hash;category_path;kind;libelle;note;transfer_pair;"
-        "account_id;date_operation;debit_cents;credit_cents"
+        "account_id;date_operation;debit_cents;credit_cents;split_category;split_cents"
     )
     line = next(line for line in body.splitlines()[1:] if "MYSTERY SHOP" in line)
-    assert ";variable / courses;;MYSTERY SHOP;;;JOINT;2026-06-08;1000;0" in line  # manual, no kind, no note
+    assert ";variable / courses;;MYSTERY SHOP;;;JOINT;2026-06-08;1000;0;;" in line  # manual, no kind, no note
 
 
 def test_overrides_round_trip(seeded_db, client, tmp_path):

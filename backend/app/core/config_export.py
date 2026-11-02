@@ -33,6 +33,8 @@ OVERRIDES_HEADER = [
     "date_operation",
     "debit_cents",
     "credit_cents",
+    "split_category",
+    "split_cents",
 ]
 
 # Every file export_config writes; nothing else in the config dir (bank_profiles.toml,
@@ -146,8 +148,10 @@ def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[
     and rebuilt under the filename alias."""
     rows = conn.execute(
         "SELECT t.import_hash, t.category_id, t.category_manual, t.kind, t.kind_manual, t.libelle, "
-        "t.note, p.import_hash, t.account_id, t.date_operation, t.debit_cents, t.credit_cents "
+        "t.note, p.import_hash, t.account_id, t.date_operation, t.debit_cents, t.credit_cents, "
+        "s.category_id, s.amount_cents "
         "FROM transactions t "
+        "LEFT JOIN transaction_splits s ON s.transaction_id = t.id "
         "LEFT JOIN transactions p ON t.kind_manual = 1 AND p.kind_manual = 1 "
         "AND p.transfer_group_id = t.transfer_group_id AND p.id != t.id "
         "WHERE t.category_manual = 1 OR t.kind_manual = 1 ORDER BY t.date_valeur, t.id"
@@ -164,6 +168,8 @@ def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[
             date_operation,
             debit_cents,
             credit_cents,
+            path_by_id.get(split_category, "") if split_category else "",
+            split_cents if split_category else "",
         ]
         for (
             import_hash,
@@ -178,6 +184,8 @@ def override_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[
             date_operation,
             debit_cents,
             credit_cents,
+            split_category,
+            split_cents,
         ) in rows
     ]
 

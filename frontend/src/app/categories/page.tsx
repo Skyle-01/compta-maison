@@ -21,6 +21,7 @@ import {
   buildTree,
   type CategoryTreeNode,
   contentsByCategory,
+  heldBy,
   manualMatches,
   movedMessage,
   ruleMatches,
@@ -255,7 +256,7 @@ export default function CategoriesPage() {
     const leafRules = rules
       .filter((r) => r.category_id === node.id && (!filtered || ruleMatches(r, q)))
       .sort((a, b) => a.id - b.id);
-    const leafManual = manual.filter((tx) => tx.category_id === node.id && (!filtered || manualMatches(tx, q)));
+    const leafManual = manual.filter((tx) => heldBy(tx, node.id) && (!filtered || manualMatches(tx, q)));
     return (
       <LeafContents
         leafId={node.id}

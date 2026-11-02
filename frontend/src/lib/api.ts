@@ -90,6 +90,13 @@ export interface Transaction {
   transfer_group_id: number | null;
   /** True when the user decided the transfer status (pair, unpair, single-row transfer). */
   kind_manual: boolean;
+  /** 2nd part of an operation split across two categories (the 1st part is `category_id`, taking the rest). */
+  split_category_id: number | null;
+  split_category: string | null;
+  /** Amount of the 2nd part, in euros. */
+  split_amount: number | null;
+  /** The whole operation's amount, set only when debit/credit show one part (a list filtered by category). */
+  total: number | null;
 }
 
 /** Manual transfer decision on one row: this row alone is a transfer / not a transfer / automatic. */
@@ -483,10 +490,16 @@ export const api = {
   },
 
   /** Partial update of a transaction: pass category_id and/or note. Only the keys present in
-   *  `patch` are applied server-side, so { note } leaves the category untouched and vice-versa. */
+   *  `patch` are applied server-side, so { note } leaves the category untouched and vice-versa.
+   *  A category_id drops any split; split_category_id + split_amount (euros) set the 2nd part, null removes it. */
   updateTransaction(
     id: number,
-    patch: { category_id?: number | null; note?: string | null },
+    patch: {
+      category_id?: number | null;
+      note?: string | null;
+      split_category_id?: number | null;
+      split_amount?: number | null;
+    },
   ): Promise<Transaction> {
     return request(`/api/transactions/${id}`, json("PATCH", patch));
   },
