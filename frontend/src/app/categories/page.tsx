@@ -330,7 +330,7 @@ export default function CategoriesPage() {
           </p>
           <p>
             <strong className="font-medium text-zinc-700">⚙ Une règle</strong> classe toutes les opérations
-            dont le libellé contient son motif (sous-chaîne ; la plus petite priorité l&apos;emporte ; ⚓ = ancre
+            dont le libellé contient son motif (sous-chaîne ; deux règles de catégories différentes qui correspondent font un conflit ; ⚓ = ancre
             de revenu) : la déplacer emporte toutes ses opérations.{" "}
             <strong className="font-medium text-zinc-700">✎ Une opération classée à la main</strong> se
             déplace seule, avec sa description. Une opération suivie par une règle ne se déplace pas seule :
