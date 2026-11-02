@@ -1,4 +1,4 @@
-import { frenchMonth, transactionsExportUrl } from "@/lib/api";
+import { frenchMonth, transactionsExportUrl, type Account } from "@/lib/api";
 
 export default function Filters({
   onlyUncategorized,
@@ -6,12 +6,18 @@ export default function Filters({
   month,
   months,
   onMonthChange,
+  account,
+  accounts,
+  onAccountChange,
 }: {
   onlyUncategorized: boolean;
   onOnlyUncategorizedChange: (checked: boolean) => void;
   month: string;
   months: string[];
   onMonthChange: (month: string) => void;
+  account: string;
+  accounts: Account[];
+  onAccountChange: (code: string) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
@@ -35,8 +41,25 @@ export default function Filters({
           </option>
         ))}
       </select>
+      <select
+        className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
+        value={account}
+        onChange={(e) => onAccountChange(e.target.value)}
+        aria-label="Compte"
+      >
+        <option value="">Tous les comptes</option>
+        {accounts.map((a) => (
+          <option key={a.code} value={a.code}>
+            {a.label}
+          </option>
+        ))}
+      </select>
       <a
-        href={transactionsExportUrl({ month: month || undefined, uncategorized: onlyUncategorized })}
+        href={transactionsExportUrl({
+          month: month || undefined,
+          account: account || undefined,
+          uncategorized: onlyUncategorized,
+        })}
         download
         className="btn-secondary"
       >

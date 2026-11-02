@@ -5,6 +5,7 @@ import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
+  type Account,
   type Category,
   type Transaction,
   type TransferMode,
@@ -25,6 +26,8 @@ export default function TransactionsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [month, setMonth] = useState("");
   const [months, setMonths] = useState<string[]>([]);
+  const [account, setAccount] = useState("");
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [ready, setReady] = useState(false);
   const [onlyUncategorized, setOnlyUncategorized] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -51,6 +54,11 @@ export default function TransactionsPage() {
     const urlMonth = params.get("month");
     const urlUncategorized = Boolean(params.get("uncategorized"));
     api.listCategories().then(setCategories).catch((e) => setError(errorMessage(e)));
+    // External savings accounts (a deposit pattern) have no operations of their own to filter on.
+    api
+      .listAccounts()
+      .then((all) => setAccounts(all.filter((a) => !a.deposit_pattern)))
+      .catch((e) => setError(errorMessage(e)));
     api
       .dashboard()
       .then((d) => {
@@ -69,6 +77,7 @@ export default function TransactionsPage() {
     api
       .listTransactions({
         month: month || undefined,
+        account: account || undefined,
         uncategorized: onlyUncategorized,
         limit: PAGE_SIZE,
         offset,
@@ -78,7 +87,7 @@ export default function TransactionsPage() {
         setTotal(page.total);
       })
       .catch((e) => setError(errorMessage(e)));
-  }, [ready, month, onlyUncategorized, offset]);
+  }, [ready, month, account, onlyUncategorized, offset]);
 
   useEffect(load, [load]);
 
@@ -195,6 +204,12 @@ export default function TransactionsPage() {
           months={months}
           onMonthChange={(m) => {
             setMonth(m);
+            setOffset(0);
+          }}
+          account={account}
+          accounts={accounts}
+          onAccountChange={(code) => {
+            setAccount(code);
             setOffset(0);
           }}
         />
