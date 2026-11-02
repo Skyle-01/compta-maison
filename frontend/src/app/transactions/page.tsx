@@ -56,10 +56,9 @@ export default function TransactionsPage() {
     const urlMonth = params.get("month");
     const urlUncategorized = Boolean(params.get("uncategorized"));
     api.listCategories().then(setCategories).catch((e) => setError(errorMessage(e)));
-    // External savings accounts (a deposit pattern) have no operations of their own to filter on.
     api
       .listAccounts()
-      .then((all) => setAccounts(all.filter((a) => !a.deposit_pattern)))
+      .then(setAccounts)
       .catch((e) => setError(errorMessage(e)));
     api
       .dashboard()
@@ -219,7 +218,8 @@ export default function TransactionsPage() {
             setOffset(0);
           }}
           account={account}
-          accounts={accounts}
+          // External savings accounts (a deposit pattern) have no operations of their own to filter on.
+          accounts={accounts.filter((a) => !a.deposit_pattern)}
           onAccountChange={(code) => {
             setAccount(code);
             setOffset(0);
@@ -257,6 +257,7 @@ export default function TransactionsPage() {
               <TransactionRow
                 key={tx.id}
                 tx={tx}
+                accounts={accounts}
                 checked={selected.has(tx.id)}
                 checkDisabled={!selected.has(tx.id) && selected.size >= 2}
                 onToggle={() => toggleSelected(tx)}

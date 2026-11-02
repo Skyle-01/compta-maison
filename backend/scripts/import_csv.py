@@ -12,10 +12,12 @@ from pathlib import Path
 from app.core.config_export import PATH_SEP
 from app.core.recompute import recompute_all
 from app.db import (
+    ACCOUNT_COLORS,
     ACCOUNT_TYPES,
     claim_names,
     connect,
     replace_transfer_markers,
+    set_account_color,
     set_account_start_date,
     to_cents,
     upsert_accounts,
@@ -34,8 +36,9 @@ def _read_csv(path: Path) -> list[dict]:
 def import_accounts(conn, rows: list[dict]) -> int:
     """Upsert accounts from accounts.csv rows; returns how many were loaded.
 
-    Columns: code;label;type;sort_order;deposit_pattern;aliases;start_date (other columns are ignored).
+    Columns: code;label;type;sort_order;deposit_pattern;aliases;start_date;color (other columns are ignored).
     `start_date` (optional, ISO date) is the account's own cutoff: rows valued earlier are not imported.
+    `color` (optional) is a palette name (db.ACCOUNT_COLORS); empty = the default by position.
     `type` is checking|savings; `deposit_pattern` (optional) marks an external savings account;
     `aliases` is a `|`-separated list of the account's other names, besides its label: the account
     part of a statement filename, a former bank name seen in transfer labels (see db.account_names).
@@ -43,6 +46,7 @@ def import_accounts(conn, rows: list[dict]) -> int:
     accounts: list[tuple] = []
     aliases: list[tuple[str, str]] = []
     start_dates: dict[str, date | None] = {}
+    colors: dict[str, str | None] = {}
     owner: dict[str, str] = {}  # every name (code, label, alias), uppercased -> its account
     for line_no, row in enumerate(rows, start=2):
         code = row["code"].upper()
@@ -54,6 +58,12 @@ def import_accounts(conn, rows: list[dict]) -> int:
             raise ValueError(
                 f"accounts.csv line {line_no}: start_date must be an ISO date (2026-08-28), got {row['start_date']!r}"
             ) from None
+        color = row.get("color") or None
+        if color is not None and color not in ACCOUNT_COLORS:
+            raise ValueError(
+                f"accounts.csv line {line_no}: color must be one of {ACCOUNT_COLORS}, got {color!r}"
+            )
+        colors[code] = color
         if row["type"] not in ACCOUNT_TYPES:
             raise ValueError(
                 f"accounts.csv line {line_no}: type must be one of {ACCOUNT_TYPES}, got {row['type']!r}"
@@ -75,6 +85,8 @@ def import_accounts(conn, rows: list[dict]) -> int:
     upsert_accounts(conn, accounts, aliases)
     for code, start_date in start_dates.items():
         set_account_start_date(conn, code, start_date)
+    for code, color in colors.items():
+        set_account_color(conn, code, color)
     return len(accounts)
 
 

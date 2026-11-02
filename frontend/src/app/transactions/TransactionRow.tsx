@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import AccountDot from "@/components/AccountDot";
 import SignedAmount from "@/components/SignedAmount";
-import { frenchDate, type Transaction, type TransferMode } from "@/lib/api";
+import { frenchDate, type Account, type Transaction, type TransferMode } from "@/lib/api";
 
 /** A row the user declared "not a transfer": say so, with a way back to automatic detection. */
 function NotTransferBadge({ tx, onAuto }: { tx: Transaction; onAuto: () => void }) {
@@ -17,6 +18,7 @@ function NotTransferBadge({ tx, onAuto }: { tx: Transaction; onAuto: () => void 
 
 export default function TransactionRow({
   tx,
+  accounts,
   checked,
   checkDisabled,
   onToggle,
@@ -25,6 +27,7 @@ export default function TransactionRow({
   editor,
 }: {
   tx: Transaction;
+  accounts: Account[];
   checked: boolean;
   checkDisabled: boolean;
   onToggle: () => void;
@@ -49,7 +52,10 @@ export default function TransactionRow({
       <td className="max-w-md truncate px-3 py-1.5" title={tx.libelle}>
         {tx.libelle}
       </td>
-      <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{tx.account}</td>
+      <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">
+        <AccountDot accounts={accounts} code={tx.account_id} />
+        {tx.account_id ?? tx.account}
+      </td>
       <td className="whitespace-nowrap px-3 py-1.5 text-right">
         <SignedAmount tx={tx} />
       </td>

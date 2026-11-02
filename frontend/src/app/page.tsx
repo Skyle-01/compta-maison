@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import HelpLink from "@/components/HelpLink";
 import Link from "next/link";
+import AccountDot from "@/components/AccountDot";
 import {
   ALL_MONTHS,
   api,
   errorMessage,
+  type Account,
   type CategoryNode,
   type Dashboard,
   type Transaction,
@@ -23,6 +25,7 @@ import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { reportLink } from "@/lib/report";
+import { useAccounts } from "@/lib/useAccounts";
 
 /** A muted "▲ 1 234 € vs avril" delta line under a stat. `goodIsUp` colours the change green/red
  *  by whether an increase is good (revenus, reste) or bad (dépenses). */
@@ -112,7 +115,17 @@ function HeroSummary({ data }: { data: Dashboard }) {
   );
 }
 
-function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; month?: string }) {
+function TreeNode({
+  node,
+  depth,
+  month,
+  accounts,
+}: {
+  node: CategoryNode;
+  depth: number;
+  month?: string;
+  accounts: Account[];
+}) {
   const hasActivity = node.credit !== 0 || node.debit !== 0;
   const [open, setOpen] = useState(false);
   const [txns, setTxns] = useState<Transaction[] | null>(null);
@@ -153,6 +166,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
           {expandable && (
             <span className="mr-1 inline-block w-3 text-zinc-500">{open ? "▾" : "▸"}</span>
           )}
+          {node.synthetic && <AccountDot accounts={accounts} code={node.account_id} />}
           {treeLabel(node.name)}
         </span>
         <span className={node.balance >= 0 ? "text-green-700" : "text-red-700"}>
@@ -172,6 +186,7 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
               style={childIndent}
             >
               <span className="min-w-0 truncate pr-2">
+                <AccountDot accounts={accounts} code={t.account_id} />
                 <span className="text-zinc-500">{frenchDate(t.date_valeur)}</span> {t.libelle}
               </span>
               <SignedAmount tx={t} />
@@ -183,13 +198,14 @@ function TreeNode({ node, depth, month }: { node: CategoryNode; depth: number; m
           </div>
         ))}
       {node.children.map((child) => (
-        <TreeNode key={child.id ?? child.name} node={child} depth={depth + 1} month={month} />
+        <TreeNode key={child.id ?? child.name} node={child} depth={depth + 1} month={month} accounts={accounts} />
       ))}
     </>
   );
 }
 
 export default function DashboardPage() {
+  const accounts = useAccounts();
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -369,7 +385,7 @@ export default function DashboardPage() {
         <details className="rounded-lg border border-zinc-200 bg-white">
           <summary className="cursor-pointer px-4 py-3 font-medium">Détail par catégorie</summary>
           <div className="border-t border-zinc-100 px-4 pb-3 pt-1">
-            <TreeNode key={data.month} node={data.by_category} depth={0} month={month} />
+            <TreeNode key={data.month} node={data.by_category} depth={0} month={month} accounts={accounts} />
           </div>
         </details>
       </section>

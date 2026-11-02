@@ -1,7 +1,8 @@
 import Link from "next/link";
+import AccountDot from "@/components/AccountDot";
 import CategoryPicker from "@/components/CategoryPicker";
 import SignedAmount from "@/components/SignedAmount";
-import { type Category, type ConflictedOperation, frenchDate, type Transaction } from "@/lib/api";
+import { type Account, type Category, type ConflictedOperation, frenchDate, type Transaction } from "@/lib/api";
 import { operations, ruleLink } from "@/lib/triage";
 
 /** « Conflit de règles »: operations matched by rules of different categories, left without a
@@ -10,11 +11,13 @@ import { operations, ruleLink } from "@/lib/triage";
 export default function RuleConflicts({
   conflicts,
   categories,
+  accounts,
   pathOf,
   onClass,
 }: {
   conflicts: ConflictedOperation[];
   categories: Category[];
+  accounts: Account[];
   pathOf: (categoryId: number) => string;
   onClass: (tx: Transaction, category: Category) => void;
 }) {
@@ -34,7 +37,10 @@ export default function RuleConflicts({
               <span className="min-w-0 flex-1 truncate" title={t.libelle}>
                 {t.libelle}
               </span>
-              <span className="whitespace-nowrap text-xs text-zinc-500">{t.account_id}</span>
+              <span className="whitespace-nowrap text-xs text-zinc-500">
+                <AccountDot accounts={accounts} code={t.account_id} />
+                {t.account_id}
+              </span>
               <SignedAmount tx={t} />
               <CategoryPicker
                 categories={categories}

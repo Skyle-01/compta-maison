@@ -131,7 +131,7 @@ class TestAccountStartDate:
         with connect(tmp_path / "fresh.db") as conn:
             import_accounts(conn, rows)
             assert account_start_dates(conn) == {"PERSO": date(2026, 8, 28)}
-            assert {code: start for code, *_, start in account_rows(conn)} == {
+            assert {code: start for code, *_, start, _color in account_rows(conn)} == {
                 "JOINT": "",
                 "PERSO": "2026-08-28",
             }
@@ -143,6 +143,24 @@ class TestAccountStartDate:
             connect(tmp_path / "fresh.db") as conn,
             pytest.raises(ValueError, match="line 2: start_date must be an ISO date"),
         ):
+            import_accounts(conn, rows)
+
+
+class TestAccountColor:
+    def test_csv_color_is_loaded_and_exported(self, tmp_path):
+        init_db(tmp_path / "fresh.db")
+        rows = [
+            {"code": "PERSO", "label": "Compte perso", "type": "checking", "color": "teal"},
+            {"code": "JOINT", "label": "Compte joint", "type": "checking"},
+        ]
+        with connect(tmp_path / "fresh.db") as conn:
+            import_accounts(conn, rows)
+            assert {code: color for code, *_, color in account_rows(conn)} == {"JOINT": "", "PERSO": "teal"}
+
+    def test_unknown_color_names_the_line(self, tmp_path):
+        init_db(tmp_path / "fresh.db")
+        rows = [{"code": "PERSO", "label": "Compte perso", "type": "checking", "color": "mauve"}]
+        with connect(tmp_path / "fresh.db") as conn, pytest.raises(ValueError, match="line 2: color must be"):
             import_accounts(conn, rows)
 
 

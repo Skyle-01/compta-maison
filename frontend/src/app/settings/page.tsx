@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import AccountDot from "@/components/AccountDot";
 import HelpLink from "@/components/HelpLink";
 import {
   api,
@@ -12,6 +13,7 @@ import {
   notifyUncategorizedChanged,
 } from "@/lib/api";
 import SignedAmount from "@/components/SignedAmount";
+import { ACCOUNT_COLORS } from "@/lib/accountColors";
 import { groupManualTransfers, type ManualTransfer } from "@/lib/manualTransfers";
 
 // Section order on the page; the ids are URL fragments (e.g. /settings#virements-manuels).
@@ -90,9 +92,19 @@ type AccountDraft = {
   aliases: string;
   pattern: string;
   startDate: string;
+  /** A palette name, "" for the default by position. */
+  color: string;
 };
 
-const NEW_ACCOUNT: AccountDraft = { code: "", label: "", type: "checking", aliases: "", pattern: "", startDate: "" };
+const NEW_ACCOUNT: AccountDraft = {
+  code: "",
+  label: "",
+  type: "checking",
+  aliases: "",
+  pattern: "",
+  startDate: "",
+  color: "",
+};
 
 /** Create an account or edit one's label, aliases and deposit pattern (its code and type are fixed
  *  once created). Saving re-derives the transfers, since names and patterns decide which are. */
@@ -120,6 +132,7 @@ function AccountsSection() {
       aliases: a.aliases.join("\n"),
       pattern: a.deposit_pattern ?? "",
       startDate: a.start_date ?? "",
+      color: a.color ?? "",
     });
     setEditing(true);
     setSaved(null);
@@ -141,6 +154,7 @@ function AccountsSection() {
         deposit_pattern: draft.type === "savings" ? draft.pattern : null,
         aliases: draft.aliases.split("\n"),
         start_date: draft.type === "checking" && draft.startDate ? draft.startDate : null,
+        color: draft.color || null,
       });
       setSaved(`Compte ${a.code} enregistré, virements recalculés. Pensez à « Enregistrer la configuration » (section Sauvegarde).`);
       reset();
@@ -163,7 +177,8 @@ function AccountsSection() {
         externe, sans relevé) repère ses versements dans les libellés des comptes courants, sans
         distinction de casse. Une date de départ (compte courant) écarte les opérations valorisées avant
         elle à l&apos;import : choisissez la date du salaire qui ouvre le premier mois du compte. Elle ne
-        retire pas les lignes déjà importées (reconstruisez la base pour cela).
+        retire pas les lignes déjà importées (reconstruisez la base pour cela). La pastille de couleur
+        distingue le compte dans les listes d&apos;opérations ; sans choix, elle suit l&apos;ordre des comptes.
       </p>
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
@@ -181,7 +196,10 @@ function AccountsSection() {
           <tbody>
             {accounts.map((a) => (
               <tr key={a.code} className="border-t border-zinc-100 align-top">
-                <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">{a.code}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">
+                  <AccountDot accounts={accounts} code={a.code} />
+                  {a.code}
+                </td>
                 <td className="px-3 py-1.5">{a.label}</td>
                 <td className="whitespace-nowrap px-3 py-1.5 text-zinc-500">{ACCOUNT_TYPE_LABEL[a.type]}</td>
                 <td className="px-3 py-1.5 text-zinc-500">
@@ -244,6 +262,32 @@ function AccountsSection() {
             className="w-56 rounded border border-zinc-300 px-2 py-1 font-mono text-xs"
           />
         </label>
+        <fieldset className="flex flex-col gap-1">
+          <legend className="mb-1 text-zinc-500">Couleur</legend>
+          <div className="flex items-center gap-1.5 py-1">
+            {ACCOUNT_COLORS.map((c) => (
+              <button
+                key={c.name}
+                type="button"
+                onClick={() => setDraft({ ...draft, color: c.name })}
+                title={c.label}
+                aria-label={c.label}
+                aria-pressed={draft.color === c.name}
+                className={`h-5 w-5 rounded-full ${c.dot} ${
+                  draft.color === c.name ? "ring-2 ring-zinc-900 ring-offset-1" : ""
+                }`}
+              />
+            ))}
+            <button
+              type="button"
+              onClick={() => setDraft({ ...draft, color: "" })}
+              className="ml-1 text-xs text-zinc-600 hover:text-zinc-900"
+              title="Couleur selon la position du compte"
+            >
+              {draft.color ? "Par défaut" : "Par défaut ✓"}
+            </button>
+          </div>
+        </fieldset>
         {draft.type === "checking" && (
           <label className="flex flex-col gap-1">
             <span className="text-zinc-500">Date de départ</span>

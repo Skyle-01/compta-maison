@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { leafCategories, searchCategories } from "@/lib/categorySearch";
 import { ruleFormToPayload } from "@/lib/ruleForm";
+import { useAccounts } from "@/lib/useAccounts";
 import { classedMessage, conflictsMessage, defaultMode, nextActiveIndex, operations, pairedMessage } from "@/lib/triage";
 import GroupEditor, { type Draft } from "./GroupEditor";
 import GroupSummary from "./GroupSummary";
@@ -46,6 +47,7 @@ export default function TriagePage() {
   const [groups, setGroups] = useState<UncategorizedGroup[] | null>(null);
   const [conflicts, setConflicts] = useState<ConflictedOperation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const accounts = useAccounts();
   const [months, setMonths] = useState<string[]>([]);
   const [month, setMonth] = useState("");
   const [active, setActive] = useState(0);
@@ -313,7 +315,13 @@ export default function TriagePage() {
       {error && <p className="text-sm text-red-700">{error}</p>}
 
       {conflicts.length > 0 && (
-        <RuleConflicts conflicts={conflicts} categories={categories} pathOf={pathOf} onClass={classConflicted} />
+        <RuleConflicts
+          conflicts={conflicts}
+          categories={categories}
+          accounts={accounts}
+          pathOf={pathOf}
+          onClass={classConflicted}
+        />
       )}
 
       {groups && groups.length === 0 && conflicts.length === 0 && (
@@ -355,8 +363,10 @@ export default function TriagePage() {
                       onSubmit={submit}
                       onToggleExpanded={() => toggleExpanded(g.key)}
                     />
-                    {g.transfer_candidates.length > 0 && <TransferCandidates group={g} busy={busy} onPair={pair} />}
-                    {expanded.has(g.key) && <OperationsTable transactions={g.transactions} />}
+                    {g.transfer_candidates.length > 0 && (
+                      <TransferCandidates group={g} accounts={accounts} busy={busy} onPair={pair} />
+                    )}
+                    {expanded.has(g.key) && <OperationsTable transactions={g.transactions} accounts={accounts} />}
                   </div>
                 )}
               </div>

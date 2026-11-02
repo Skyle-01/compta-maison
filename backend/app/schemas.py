@@ -211,6 +211,7 @@ class Account(BaseModel):
     start_date: date | None = Field(
         description="Rows of this account valued earlier are not imported; null = no cutoff"
     )
+    color: str | None = Field(description="A palette name (db.ACCOUNT_COLORS); null = default by position")
 
 
 class AccountIn(BaseModel):
@@ -221,6 +222,7 @@ class AccountIn(BaseModel):
     deposit_pattern: str | None = None
     aliases: list[str] = Field(default_factory=list)
     start_date: date | None = None
+    color: str | None = None
 
 
 class RuleIn(BaseModel):

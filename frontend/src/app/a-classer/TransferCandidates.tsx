@@ -1,13 +1,16 @@
+import AccountDot from "@/components/AccountDot";
 import SignedAmount from "@/components/SignedAmount";
-import { frenchDate, type Transaction, type UncategorizedGroup } from "@/lib/api";
+import { type Account, frenchDate, type Transaction, type UncategorizedGroup } from "@/lib/api";
 
 /** The active group's possible internal transfers: one line per (operation, partner) pair. */
 export default function TransferCandidates({
   group: g,
+  accounts,
   busy,
   onPair,
 }: {
   group: UncategorizedGroup;
+  accounts: Account[];
   busy: boolean;
   onPair: (op: Transaction, partner: Transaction) => void;
 }) {
@@ -28,7 +31,10 @@ export default function TransferCandidates({
                 <td className="max-w-md truncate py-1 pr-3" title={partner.libelle}>
                   {partner.libelle}
                 </td>
-                <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">{partner.account_id}</td>
+                <td className="whitespace-nowrap py-1 pr-3 text-zinc-500">
+                  <AccountDot accounts={accounts} code={partner.account_id} />
+                  {partner.account_id}
+                </td>
                 <td className="whitespace-nowrap py-1 pr-3 text-right">
                   <SignedAmount tx={partner} />
                 </td>

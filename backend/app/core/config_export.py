@@ -18,7 +18,7 @@ from app.db import account_aliases_by_code, connect, euros, get_transfer_markers
 # Full category paths use this separator (matches CategoryOut.path); the CSV importer splits on it.
 PATH_SEP = " / "
 
-ACCOUNTS_HEADER = ["code", "label", "type", "sort_order", "deposit_pattern", "aliases", "start_date"]
+ACCOUNTS_HEADER = ["code", "label", "type", "sort_order", "deposit_pattern", "aliases", "start_date", "color"]
 # categories.csv columns (the config dir, _backups/ snapshots, data/).
 CATEGORIES_HEADER = ["path", "budget_target"]
 RULES_HEADER = ["category_path", "pattern", "is_income_anchor", "description", "account"]
@@ -95,13 +95,22 @@ def category_paths(conn: sqlite3.Connection) -> dict[int, str]:
 def account_rows(conn: sqlite3.Connection) -> list[list]:
     """accounts.csv rows, aliases `|`-joined (the code, always an alias, left out)."""
     accounts = conn.execute(
-        "SELECT code, label, type, sort_order, deposit_pattern, start_date FROM accounts "
+        "SELECT code, label, type, sort_order, deposit_pattern, start_date, color FROM accounts "
         "ORDER BY sort_order, code"
     ).fetchall()
     aliases_by_code = account_aliases_by_code(conn)
     return [
-        [code, label, type_, order, pattern or "", "|".join(aliases_by_code.get(code, [])), start or ""]
-        for code, label, type_, order, pattern, start in accounts
+        [
+            code,
+            label,
+            type_,
+            order,
+            pattern or "",
+            "|".join(aliases_by_code.get(code, [])),
+            start or "",
+            color or "",
+        ]
+        for code, label, type_, order, pattern, start, color in accounts
     ]
 
 

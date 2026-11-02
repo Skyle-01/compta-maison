@@ -81,8 +81,8 @@ def test_writes_the_config_files(seeded_db, client, tmp_path):
     def read(name: str) -> list[str]:
         return (_config(tmp_path) / name).read_text(encoding="utf-8-sig").splitlines()
 
-    assert read("accounts.csv")[0] == "code;label;type;sort_order;deposit_pattern;aliases;start_date"
-    assert "ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;;" in read("accounts.csv")
+    assert read("accounts.csv")[0] == "code;label;type;sort_order;deposit_pattern;aliases;start_date;color"
+    assert "ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;;;" in read("accounts.csv")
     assert "variable / sortie / bar;" in read("categories.csv")
     assert "fixe / salaire;EMPLOYEUR;1;;" in read("rules.csv")
     assert any(

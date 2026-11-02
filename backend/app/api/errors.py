@@ -16,6 +16,7 @@ FIELD_LABELS = {
     "aliases": "Alias",
     "budget_target": "Objectif",
     "category_id": "Catégorie",
+    "color": "Couleur",
     "deposit_pattern": "Motif de dépôt",
     "start_date": "Date de départ",
     "description": "Description",

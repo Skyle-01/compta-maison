@@ -5,11 +5,13 @@ from fastapi import APIRouter, HTTPException
 from app.api.deps import DbPath
 from app.core.recompute import recompute_all
 from app.db import (
+    ACCOUNT_COLORS,
     ACCOUNT_TYPES,
     account_aliases_by_code,
     account_names,
     claim_names,
     connect,
+    set_account_color,
     set_account_start_date,
     upsert_accounts,
 )
@@ -21,7 +23,7 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 def _accounts(conn: sqlite3.Connection) -> list[Account]:
     aliases = account_aliases_by_code(conn)
     rows = conn.execute(
-        "SELECT code, label, type, sort_order, deposit_pattern, start_date FROM accounts "
+        "SELECT code, label, type, sort_order, deposit_pattern, start_date, color FROM accounts "
         "ORDER BY sort_order, code"
     ).fetchall()
     return [
@@ -33,8 +35,9 @@ def _accounts(conn: sqlite3.Connection) -> list[Account]:
             deposit_pattern=pattern,
             aliases=aliases.get(code, []),
             start_date=start,
+            color=color,
         )
-        for code, label, type_, sort_order, pattern, start in rows
+        for code, label, type_, sort_order, pattern, start, color in rows
     ]
 
 
@@ -46,8 +49,8 @@ def list_accounts(db_path: DbPath) -> list[Account]:
 
 @router.put("/{code}")
 def save_account(code: str, body: AccountIn, db_path: DbPath) -> Account:
-    """Create the account, or update its label, aliases, deposit pattern and start date (its code and
-    type never change). Aliases and the deposit pattern decide which operations are transfers:
+    """Create the account, or update its label, aliases, deposit pattern, start date and colour (its
+    code and type never change). Aliases and the deposit pattern decide which operations are transfers:
     re-derive them. A moved start date only applies to later imports (rows already in stay)."""
     code = code.strip().upper()
     label = body.label.strip()
@@ -60,6 +63,8 @@ def save_account(code: str, body: AccountIn, db_path: DbPath) -> Account:
         raise HTTPException(
             status_code=422, detail="Le motif de dépôt est réservé aux comptes d'épargne externes"
         )
+    if body.color is not None and body.color not in ACCOUNT_COLORS:
+        raise HTTPException(status_code=422, detail=f"Couleur : une de {', '.join(ACCOUNT_COLORS)} attendue")
     aliases = [a for a in body.aliases if a.strip()]
 
     with connect(db_path) as conn:
@@ -85,6 +90,7 @@ def save_account(code: str, body: AccountIn, db_path: DbPath) -> Account:
             conn, [(code, label, body.type, sort_order, pattern)], [(name, code) for name in names]
         )
         set_account_start_date(conn, code, body.start_date)
+        set_account_color(conn, code, body.color)
     recompute_all(db_path)
     with connect(db_path) as conn:
         return next(account for account in _accounts(conn) if account.code == code)

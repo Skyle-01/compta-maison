@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     type                 TEXT NOT NULL,                 /* 'checking' | 'savings' */
     sort_order           INTEGER NOT NULL DEFAULT 0,
     deposit_pattern      TEXT,                          /* external savings: libellé substring (case-insensitive) identifying its deposits */
-    start_date           TEXT                           /* ISO date: rows of this account valued earlier are not imported; NULL = none */
+    start_date           TEXT,                          /* ISO date: rows of this account valued earlier are not imported; NULL = none */
+    color                TEXT                           /* ACCOUNT_COLORS name; NULL = a default picked by position (frontend) */
 );
 
 CREATE TABLE IF NOT EXISTS account_aliases (
@@ -148,6 +149,11 @@ def set_account_start_date(conn: sqlite3.Connection, code: str, start_date: date
     )
 
 
+def set_account_color(conn: sqlite3.Connection, code: str, color: str | None) -> None:
+    """Set (or clear) the account's colour; upsert_accounts leaves it alone."""
+    conn.execute("UPDATE accounts SET color = ? WHERE code = ?", (color, code))
+
+
 def account_start_dates(conn: sqlite3.Connection) -> dict[str, date]:
     """code -> the account's own cutoff, for the accounts that have one."""
     return {
@@ -157,6 +163,9 @@ def account_start_dates(conn: sqlite3.Connection) -> dict[str, date]:
 
 
 ACCOUNT_TYPES = ("checking", "savings")
+# The palette an account colour is picked from (names only; frontend/src/lib/accountColors.ts maps
+# them to classes and keeps the same order, which sets the default colour by position).
+ACCOUNT_COLORS = ("blue", "orange", "violet", "teal", "pink", "amber", "lime", "slate")
 
 
 def account_aliases_by_code(conn: sqlite3.Connection) -> dict[str, list[str]]:

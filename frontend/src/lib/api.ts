@@ -109,6 +109,8 @@ export interface Account {
   aliases: string[];
   /** ISO date: rows of this account valued earlier are not imported (null: no cutoff). */
   start_date: string | null;
+  /** A palette name (lib/accountColors.ts); null: the default by position. */
+  color: string | null;
 }
 
 /** PUT /api/accounts/{code}: creates the account or updates it (its code and type never change). */
@@ -118,6 +120,7 @@ export interface AccountInput {
   deposit_pattern: string | null;
   aliases: string[];
   start_date: string | null;
+  color: string | null;
 }
 
 export interface TransactionPage {

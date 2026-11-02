@@ -27,8 +27,25 @@ class TestAccountsApi:
             "deposit_pattern": None,
             "aliases": ["AUTRE", "COMPTE BB"],
             "start_date": None,
+            "color": None,
         }
         assert client.get("/api/accounts").json()[-1]["code"] == "B"
+
+    def test_color_is_saved_and_cleared(self, client):
+        assert _put(client, "B", color="teal").json()["color"] == "teal"
+        assert client.get("/api/accounts").json()[-1]["color"] == "teal"
+        assert _put(client, "B", color=None).json()["color"] is None
+
+    def test_wrong_color_type_is_labelled_in_french(self, client):
+        resp = _put(client, "B", color=3)
+        assert resp.status_code == 422
+        assert resp.json()["detail"][0]["msg"].startswith("Couleur : ")
+
+    def test_unknown_color_is_rejected_in_french(self, client):
+        resp = _put(client, "B", color="mauve")
+        assert resp.status_code == 422
+        assert resp.json()["detail"].startswith("Couleur : une de blue, orange")
+        assert "B" not in {a["code"] for a in client.get("/api/accounts").json()}
 
     def test_start_date_is_saved_and_cleared(self, client):
         assert _put(client, "B", start_date="2026-08-28").json()["start_date"] == "2026-08-28"
