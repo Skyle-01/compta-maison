@@ -4,7 +4,10 @@ import {
   defaultMode,
   nextActiveIndex,
   pairedMessage,
+  conflictsMessage,
   previewMessage,
+  queryFromSearch,
+  ruleLink,
   suggestionReason,
 } from "./triage";
 
@@ -33,21 +36,34 @@ describe("messages", () => {
     expect(suggestionReason(4, "BOULANGERIE")).toBe("comme 4 opérations « BOULANGERIE » déjà classées");
     expect(suggestionReason(1, null)).toBe("comme 1 opération similaire déjà classée");
   });
-  it("previews a rule and warns about rows taken from other rules", () => {
+  it("previews a rule and warns about the conflicts it would create", () => {
     const paths: Record<number, string> = { 2: "Variable / Courses" };
     const pathOf = (id: number) => paths[id];
-    expect(previewMessage({ uncategorized: 3, reclassified: [] }, pathOf)).toBe(
+    expect(previewMessage({ uncategorized: 3, conflicts: [] }, pathOf)).toBe(
       "classerait 3 opérations sans catégorie",
     );
-    expect(previewMessage({ uncategorized: 0, reclassified: [] }, pathOf)).toBe(
+    expect(previewMessage({ uncategorized: 0, conflicts: [] }, pathOf)).toBe(
       "aucune opération sans catégorie ne correspond",
     );
     expect(
       previewMessage(
-        { uncategorized: 3, reclassified: [{ rule_id: 9, pattern: "LECLERC", category_id: 2, count: 2 }] },
+        { uncategorized: 3, conflicts: [{ rule_id: 9, pattern: "LECLERC", category_id: 2, count: 2 }] },
         pathOf,
       ),
-    ).toBe("3 sans catégorie + 2 déjà classées par la règle « LECLERC » (Variable / Courses) seraient reclassées");
+    ).toBe(
+      "classerait 3 opérations sans catégorie ; 2 opérations correspondent aussi à la règle « LECLERC » (Variable / Courses)",
+    );
+  });
+  it("words a conflict in the singular and the plural", () => {
+    const pathOf = () => "Variable / Courses";
+    expect(conflictsMessage([{ rule_id: 9, pattern: "LECLERC", category_id: 2, count: 1 }], pathOf)).toBe(
+      "1 opération correspond aussi à la règle « LECLERC » (Variable / Courses)",
+    );
+  });
+  it("links a rule to the Catégories search and reads the link back", () => {
+    expect(ruleLink("CARTE & CO")).toBe("/categories?q=CARTE%20%26%20CO");
+    expect(queryFromSearch("?q=CARTE%20%26%20CO")).toBe("CARTE & CO");
+    expect(queryFromSearch("")).toBe("");
   });
 });
 

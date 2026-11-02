@@ -6,6 +6,7 @@ import {
   api,
   errorMessage,
   type Category,
+  type ConflictedOperation,
   frenchMonth,
   notifyUncategorizedChanged,
   type RulePreview,
@@ -14,10 +15,11 @@ import {
   type UncategorizedGroup,
 } from "@/lib/api";
 import { leafCategories, searchCategories } from "@/lib/categorySearch";
-import { DEFAULT_RULE_PRIORITY, ruleFormToPayload } from "@/lib/ruleForm";
-import { classedMessage, defaultMode, nextActiveIndex, operations, pairedMessage } from "@/lib/triage";
+import { ruleFormToPayload } from "@/lib/ruleForm";
+import { classedMessage, conflictsMessage, defaultMode, nextActiveIndex, operations, pairedMessage } from "@/lib/triage";
 import GroupEditor, { type Draft } from "./GroupEditor";
 import GroupSummary from "./GroupSummary";
+import RuleConflicts from "./RuleConflicts";
 import OperationsTable from "./OperationsTable";
 import Shortcuts from "./Shortcuts";
 import TransferCandidates from "./TransferCandidates";
@@ -31,7 +33,6 @@ const draftFor = (g: UncategorizedGroup): Draft => ({
   highlight: 0,
   mode: defaultMode(g),
   pattern: g.pattern,
-  priority: String(DEFAULT_RULE_PRIORITY),
   description: "",
 });
 
@@ -42,6 +43,7 @@ const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(ma
 
 export default function TriagePage() {
   const [groups, setGroups] = useState<UncategorizedGroup[] | null>(null);
+  const [conflicts, setConflicts] = useState<ConflictedOperation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [months, setMonths] = useState<string[]>([]);
   const [month, setMonth] = useState("");
@@ -67,10 +69,13 @@ export default function TriagePage() {
    *  one now at `fallback`. */
   const load = useCallback(
     (followingKey: string | null, fallback: number) =>
-      api.uncategorizedGroups(month || undefined).then((next) => {
-        setGroups(next);
-        setActive(nextActiveIndex(next.map((g) => g.key), followingKey, fallback));
-      }),
+      Promise.all([api.uncategorizedGroups(month || undefined), api.ruleConflicts(month || undefined)]).then(
+        ([next, conflicted]) => {
+          setGroups(next);
+          setConflicts(conflicted);
+          setActive(nextActiveIndex(next.map((g) => g.key), followingKey, fallback));
+        },
+      ),
     [month],
   );
 
@@ -104,14 +109,13 @@ export default function TriagePage() {
 
   // Debounced rule preview: rows the rule would classify, and rows it would take from other rules.
   const pattern = d?.mode === "rule" ? d.pattern.trim() : "";
-  const priority = Number(d?.priority) || DEFAULT_RULE_PRIORITY;
-  const previewQuery = pattern ? `${pattern}\u0000${priority}\u0000${candidate?.id ?? ""}` : "";
+  const previewQuery = pattern ? `${pattern}\u0000${candidate?.id ?? ""}` : "";
   useEffect(() => {
     if (!previewQuery) return;
-    const [p, prio, categoryId] = previewQuery.split("\u0000");
+    const [p, categoryId] = previewQuery.split("\u0000");
     const timer = setTimeout(() => {
       api
-        .previewRule(p, Number(prio), categoryId ? Number(categoryId) : null)
+        .previewRule(p, categoryId ? Number(categoryId) : null)
         .then((result) => setPreview({ query: previewQuery, result }))
         .catch(() => setPreview(null));
     }, 250);
@@ -160,16 +164,30 @@ export default function TriagePage() {
         ruleFormToPayload({
           category_id: category.id,
           pattern,
-          priority: d.priority,
           is_income_anchor: false,
           description: d.description,
         }),
       );
       const after = await api.uncategorizedCount();
       return {
-        message: `Règle « ${pattern} » créée : ${classedMessage(before - after, path)}`,
+        message:
+          `Règle « ${pattern} » créée : ${classedMessage(before - after, path)}` +
+          (rule.conflicts.length ? ` ⚠ ${conflictsMessage(rule.conflicts, pathOf)}` : ""),
         key: current.key,
         undo: () => api.deleteRule(rule.id),
+      };
+    });
+  }
+
+  /** Class a conflicted operation by hand; « Annuler » hands it back to the rules (a conflict again). */
+  function classConflicted(tx: Transaction, category: Category) {
+    if (busy) return;
+    return act(current?.key ?? null, async () => {
+      await api.updateTransaction(tx.id, { category_id: category.id });
+      return {
+        message: classedMessage(1, shortPath(category)),
+        key: current?.key ?? "",
+        undo: () => api.updateTransaction(tx.id, { category_id: null }),
       };
     });
   }
@@ -290,7 +308,11 @@ export default function TriagePage() {
 
       {error && <p className="text-sm text-red-700">{error}</p>}
 
-      {groups && groups.length === 0 && (
+      {conflicts.length > 0 && (
+        <RuleConflicts conflicts={conflicts} categories={categories} pathOf={pathOf} onClass={classConflicted} />
+      )}
+
+      {groups && groups.length === 0 && conflicts.length === 0 && (
         <p className="rounded-lg border border-zinc-200 bg-white px-3 py-6 text-center text-sm text-zinc-500">
           Aucune opération à classer{month ? " ce mois-ci" : ""}.
         </p>

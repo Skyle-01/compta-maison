@@ -9,10 +9,12 @@ from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.config_export import category_paths
 from app.core.transfers import pair_manually, set_transfer_mode, transfer_candidates
-from app.core.triage import uncategorized_groups
+from app.core.triage import conflicted_operations, uncategorized_groups
 from app.db import connect, euros, real_flow_clause
 from app.schemas import (
     CategorySuggestion,
+    ConflictedOperation,
+    ConflictRule,
     Transaction,
     TransactionPage,
     TransactionPatch,
@@ -169,6 +171,21 @@ def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list
             ],
         )
         for g in groups
+    ]
+
+
+@router.get("/rule-conflicts")
+def list_rule_conflicts(db_path: DbPath, month: str | None = None) -> list[ConflictedOperation]:
+    """Operations matched by rules of different categories, left uncategorised, with the rules in
+    cause (the « Conflit de règles » group of « À classer »)."""
+    found = conflicted_operations(db_path, month)
+    by_id = {t.id: t for t in _load(db_path, [i for i, _ in found])}
+    return [
+        ConflictedOperation(
+            transaction=by_id[i],
+            rules=[ConflictRule(rule_id=r, pattern=p, category_id=c) for r, p, c in rules],
+        )
+        for i, rules in found
     ]
 
 

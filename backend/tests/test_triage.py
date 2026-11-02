@@ -1,6 +1,7 @@
 from app.core.categorize import apply_rules
 from app.core.triage import (
     SuggestionIndex,
+    conflicted_operations,
     default_pattern,
     is_generic,
     label_key,
@@ -169,21 +170,16 @@ class TestUncategorizedGroups:
 
 
 class TestRulePreview:
-    def test_counts_uncategorized_and_rows_taken_from_weaker_rules(self, seeded_db):
+    def test_counts_uncategorized_and_the_rules_it_would_conflict_with(self, seeded_db):
         _import(
             seeded_db,
-            ("2026-06-01", "2026-06-01", "CARTE LECLERC DRIVE", 40, 0, "PERSO"),  # LECLERC, priority 3
+            ("2026-06-01", "2026-06-01", "CARTE LECLERC DRIVE", 40, 0, "PERSO"),  # LECLERC
             ("2026-06-02", "2026-06-02", "CARTE LECLERC DRIVE", 20, 0, "PERSO"),
             ("2026-06-03", "2026-06-03", "CARTE DRIVE PIZZA", 15, 0, "PERSO"),  # uncategorised
         )
-        uncategorized, lost = rule_preview(seeded_db, "DRIVE", 1)
+        uncategorized, overlaps = rule_preview(seeded_db, "DRIVE")
         assert uncategorized == 1
-        assert [(r.pattern, r.count) for r in lost] == [("LECLERC", 2)]
-
-    def test_tie_or_lower_number_keeps_the_existing_rule(self, seeded_db):
-        _import(seeded_db, ("2026-06-01", "2026-06-01", "CARTE LECLERC DRIVE", 40, 0, "PERSO"))
-        assert rule_preview(seeded_db, "DRIVE", 3) == (0, [])
-        assert rule_preview(seeded_db, "DRIVE", 100) == (0, [])
+        assert [(r.pattern, r.count) for r in overlaps] == [("LECLERC", 2)]
 
     def test_same_category_and_manual_rows_not_reported(self, seeded_db):
         _import(
@@ -192,10 +188,31 @@ class TestRulePreview:
             ("2026-06-02", "2026-06-02", "CARTE LECLERC DRIVE", 20, 0, "PERSO"),
         )
         courses = cat_id(seeded_db, "courses")
-        assert rule_preview(seeded_db, "DRIVE", 1, category_id=courses) == (0, [])
+        assert rule_preview(seeded_db, "DRIVE", category_id=courses) == (0, [])
         with connect(seeded_db) as conn:
             conn.execute(
                 "UPDATE transactions SET category_manual = 1, rule_id = NULL WHERE debit_cents = 4000"
             )
-        _, lost = rule_preview(seeded_db, "DRIVE", 1)
-        assert [(r.pattern, r.count) for r in lost] == [("LECLERC", 1)]
+        _, overlaps = rule_preview(seeded_db, "DRIVE")
+        assert [(r.pattern, r.count) for r in overlaps] == [("LECLERC", 1)]
+
+    def test_the_edited_rule_is_left_out(self, seeded_db):
+        _import(seeded_db, ("2026-06-01", "2026-06-01", "CARTE LECLERC DRIVE", 40, 0, "PERSO"))
+        with connect(seeded_db) as conn:
+            leclerc = conn.execute("SELECT id FROM label_rules WHERE pattern = 'LECLERC'").fetchone()[0]
+        bar = cat_id(seeded_db, "bar")
+        assert rule_preview(seeded_db, "LECLERC", bar, rule_id=leclerc) == (0, [])
+        assert [r.pattern for r in rule_preview(seeded_db, "LECLERC", bar)[1]] == ["LECLERC"]
+
+    def test_conflicted_rows_are_neither_counted_nor_grouped(self, seeded_db):
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'DRIVE')",
+                (cat_id(seeded_db, "bar"),),
+            )
+        _import(seeded_db, ("2026-06-01", "2026-06-01", "CARTE LECLERC DRIVE", 40, 0, "PERSO"))
+        apply_rules(seeded_db)
+        assert rule_preview(seeded_db, "CARTE")[0] == 0
+        assert uncategorized_groups(seeded_db) == []
+        [(_, rules)] = conflicted_operations(seeded_db)
+        assert sorted(pattern for _, pattern, _ in rules) == ["DRIVE", "LECLERC"]

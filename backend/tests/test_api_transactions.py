@@ -184,26 +184,23 @@ class TestTriage:
         assert bakery["count"] == 1
         assert bakery["suggestion"] == {"category_id": courses, "count": 1, "token": None}
 
-    def test_rule_preview_reports_rows_other_rules_lose(self, seeded_db, client):
+    def test_rule_preview_reports_the_rules_it_would_conflict_with(self, seeded_db, client):
         _upload(client, content=TRIAGE_CSV)
-        resp = client.get("/api/rules/preview", params={"pattern": "CARTE", "priority": 1})
+        resp = client.get("/api/rules/preview", params={"pattern": "CARTE"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["uncategorized"] == 3
         courses = _category_id(client, "courses")
-        assert body["reclassified"] == [
+        assert body["conflicts"] == [
             {
-                "rule_id": body["reclassified"][0]["rule_id"],
+                "rule_id": body["conflicts"][0]["rule_id"],
                 "pattern": "LECLERC",
                 "category_id": courses,
                 "count": 1,
             }
         ]
-        same = client.get(
-            "/api/rules/preview", params={"pattern": "CARTE", "priority": 1, "category_id": courses}
-        )
-        assert same.json()["reclassified"] == []
-        assert client.get("/api/rules/preview", params={"pattern": "CARTE"}).json()["reclassified"] == []
+        same = client.get("/api/rules/preview", params={"pattern": "CARTE", "category_id": courses})
+        assert same.json()["conflicts"] == []
 
     def test_groups_carry_transfer_candidates(self, db, client):
         import_rows(

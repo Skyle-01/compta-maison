@@ -226,9 +226,15 @@ class AccountIn(BaseModel):
 class RuleIn(BaseModel):
     category_id: int
     pattern: str = Field(min_length=1)
-    priority: int = 100
     is_income_anchor: bool = False
     description: str | None = None
+
+
+class RuleConflict(BaseModel):
+    rule_id: int
+    pattern: str
+    category_id: int
+    count: int = Field(description="Operations matched by both this rule and the pattern compared with it")
 
 
 class RuleOut(RuleIn):
@@ -238,18 +244,28 @@ class RuleOut(RuleIn):
     )
     debit: float = Field(default=0, description="Sum of those operations' debits, in euros")
     credit: float = Field(default=0, description="Sum of those operations' credits, in euros")
-
-
-class RuleLoss(BaseModel):
-    rule_id: int
-    pattern: str
-    category_id: int
-    count: int = Field(description="Operations this existing rule would lose to the new one")
+    conflicts: list[RuleConflict] = Field(
+        default_factory=list,
+        description="Set on create/update: other rules, of another category, matching operations of this pattern",
+    )
 
 
 class RulePreview(BaseModel):
     uncategorized: int = Field(description="Uncategorised operations the new rule would classify")
-    reclassified: list[RuleLoss]
+    conflicts: list[RuleConflict] = Field(
+        description="Other rules, of another category, matching operations the new pattern matches"
+    )
+
+
+class ConflictRule(BaseModel):
+    rule_id: int
+    pattern: str
+    category_id: int
+
+
+class ConflictedOperation(BaseModel):
+    transaction: Transaction
+    rules: list[ConflictRule] = Field(description="The rules matching it, of 2+ different categories")
 
 
 class BudgetLeaf(BaseModel):

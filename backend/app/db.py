@@ -48,7 +48,6 @@ CREATE TABLE IF NOT EXISTS label_rules (
     id               INTEGER PRIMARY KEY,
     category_id      INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     pattern          TEXT NOT NULL,
-    priority         INTEGER NOT NULL DEFAULT 100,
     is_income_anchor INTEGER NOT NULL DEFAULT 0,
     description      TEXT
 );

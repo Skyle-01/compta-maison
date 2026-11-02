@@ -6,6 +6,7 @@ from app.core.categorize import (
     budget_status,
     category_averages,
     category_tree,
+    find_conflicts,
     income_and_expenses,
     monthly_totals,
     transfers_summary,
@@ -91,16 +92,51 @@ class TestApplyRules:
             ).fetchone()
         assert row == (cat_id(seeded_db, "bar"), 1)
 
-    def test_lowest_priority_wins(self, seeded_db):
-        # 'bar' gets priority 0, beating the 'courses' SUPERMARCHE rule (priority 2)
+    def test_rules_of_different_categories_conflict(self, seeded_db):
         with connect(seeded_db) as conn:
             conn.execute(
-                "INSERT INTO label_rules (category_id, pattern, priority) VALUES (?, 'SUPERMARCHE', 0)",
+                "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'SUPERMARCHE')",
                 (cat_id(seeded_db, "bar"),),
             )
         import_rows(seeded_db, ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "JOINT"))
         apply_rules(seeded_db)
-        assert _categories(seeded_db)["SUPERMARCHE"] == "bar"
+        assert _categories(seeded_db)["SUPERMARCHE"] is None
+        with connect(seeded_db) as conn:
+            found = find_conflicts(conn)
+        [rules] = found.values()
+        assert [(pattern, category_id) for _, pattern, category_id in rules] == [
+            ("SUPERMARCHE", cat_id(seeded_db, "courses")),
+            ("SUPERMARCHE", cat_id(seeded_db, "bar")),
+        ]
+
+    def test_rules_of_the_same_category_do_not_conflict(self, seeded_db):
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'SUPER')",
+                (cat_id(seeded_db, "courses"),),
+            )
+        import_rows(seeded_db, ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "JOINT"))
+        apply_rules(seeded_db)
+        assert _categories(seeded_db)["SUPERMARCHE"] == "courses"
+        with connect(seeded_db) as conn:
+            assert find_conflicts(conn) == {}
+
+    def test_a_manual_assignment_wins_over_a_conflict(self, seeded_db):
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "INSERT INTO label_rules (category_id, pattern) VALUES (?, 'SUPERMARCHE')",
+                (cat_id(seeded_db, "bar"),),
+            )
+        import_rows(seeded_db, ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "JOINT"))
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "UPDATE transactions SET category_id = ?, category_manual = 1",
+                (cat_id(seeded_db, "courses"),),
+            )
+        apply_rules(seeded_db)
+        assert _categories(seeded_db)["SUPERMARCHE"] == "courses"
+        with connect(seeded_db) as conn:
+            assert find_conflicts(conn) == {}
 
 
 class TestCategoryTree:

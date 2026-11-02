@@ -1,4 +1,4 @@
-import type { RulePreview, Transaction, UncategorizedGroup } from "./api";
+import type { RuleConflict, RulePreview, Transaction, UncategorizedGroup } from "./api";
 
 /** Pure helpers of the « À classer » page: default mode, next active group, messages. */
 
@@ -43,16 +43,32 @@ export function suggestionReason(count: number, token: string | null): string {
   return `comme ${count} opération${s}${token ? ` « ${token} »` : ` similaire${s}`} déjà classée${s}`;
 }
 
-/** The rule preview line, warning about rows taken from existing rules: « 3 sans catégorie +
- *  2 déjà classées par la règle « LECLERC » (Variable / Courses) seraient reclassées ». */
+/** « 2 opérations correspondent aussi à la règle « LECLERC » (Variable / Courses) »: the rules of
+ *  another category a pattern overlaps (those operations would be left without a category). */
+export function conflictsMessage(conflicts: RuleConflict[], pathOf: (categoryId: number) => string): string {
+  return conflicts
+    .map(
+      (c) =>
+        `${c.count} opération${c.count > 1 ? "s correspondent" : " correspond"} aussi à la règle « ${c.pattern} » (${pathOf(c.category_id)})`,
+    )
+    .join(" ; ");
+}
+
+/** The rule preview line: what the rule would classify, then the conflicts it would create. */
 export function previewMessage(preview: RulePreview, pathOf: (categoryId: number) => string): string {
-  if (preview.reclassified.length === 0) {
-    return preview.uncategorized === 0
+  const classed =
+    preview.uncategorized === 0
       ? "aucune opération sans catégorie ne correspond"
       : `classerait ${operations(preview.uncategorized)} sans catégorie`;
-  }
-  const losses = preview.reclassified.map(
-    (r) => `${r.count} déjà classée${r.count > 1 ? "s" : ""} par la règle « ${r.pattern} » (${pathOf(r.category_id)})`,
-  );
-  return `${preview.uncategorized} sans catégorie + ${losses.join(" + ")} seraient reclassées`;
+  return preview.conflicts.length === 0 ? classed : `${classed} ; ${conflictsMessage(preview.conflicts, pathOf)}`;
+}
+
+/** Link to a rule in Catégories: the page opens with its pattern in the search box. */
+export function ruleLink(pattern: string): string {
+  return `/categories?q=${encodeURIComponent(pattern)}`;
+}
+
+/** The search text of a Catégories URL (`?q=`), empty when absent. */
+export function queryFromSearch(search: string): string {
+  return new URLSearchParams(search).get("q") ?? "";
 }

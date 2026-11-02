@@ -140,17 +140,18 @@ export interface Rule {
   id: number;
   category_id: number;
   pattern: string;
-  priority: number;
   is_income_anchor: boolean;
   description: string | null;
   /** Operations this rule classifies (manual assignments excluded), and their totals. */
   operation_count: number;
   debit: number;
   credit: number;
+  /** Filled on create/update only: other rules, of another category, matching operations of this pattern. */
+  conflicts: RuleConflict[];
 }
 
 /** A rule as created or updated (the counts are the server's). */
-export type RuleInput = Omit<Rule, "id" | "operation_count" | "debit" | "credit">;
+export type RuleInput = Omit<Rule, "id" | "operation_count" | "debit" | "credit" | "conflicts">;
 
 /** What the already categorised operations suggest for an uncategorised group. */
 export interface CategorySuggestion {
@@ -187,18 +188,25 @@ export interface TransferCandidate {
   partner: Transaction;
 }
 
-/** Rows an existing rule would lose to a new one. */
-export interface RuleLoss {
+/** An existing rule of another category matching `count` operations the compared pattern matches too. */
+export interface RuleConflict {
   rule_id: number;
   pattern: string;
   category_id: number;
   count: number;
 }
 
+/** An operation matched by rules of different categories: left uncategorised until classed by hand. */
+export interface ConflictedOperation {
+  transaction: Transaction;
+  rules: { rule_id: number; pattern: string; category_id: number }[];
+}
+
 export interface RulePreview {
   /** Uncategorised operations the new rule would classify. */
   uncategorized: number;
-  reclassified: RuleLoss[];
+  /** Other rules, of another category, matching operations the new pattern matches. */
+  conflicts: RuleConflict[];
 }
 
 export interface CategoryNode {
@@ -487,6 +495,11 @@ export const api = {
     return request(`/api/transactions/uncategorized-groups${month ? `?month=${month}` : ""}`);
   },
 
+  /** Operations matched by rules of different categories (the « Conflit de règles » group). */
+  ruleConflicts(month?: string): Promise<ConflictedOperation[]> {
+    return request(`/api/transactions/rule-conflicts${month ? `?month=${month}` : ""}`);
+  },
+
   /** Number of uncategorised non-transfer operations (the nav's « À classer (N) »). */
   async uncategorizedCount(): Promise<number> {
     return (await api.listTransactions({ uncategorized: true, limit: 1 })).total;
@@ -516,10 +529,12 @@ export const api = {
     request(`/api/categories/${categoryId}/move`, json("POST", move)),
 
   listRules: (): Promise<Rule[]> => request("/api/rules"),
-  /** What a rule about to be created would classify, and the rows existing rules would lose. */
-  previewRule(pattern: string, priority: number, categoryId: number | null): Promise<RulePreview> {
-    const search = new URLSearchParams({ pattern, priority: String(priority) });
+  /** What a rule about to be saved would classify, and the rules it would conflict with
+   *  (`ruleId`: the rule being edited, left out of the comparison). */
+  previewRule(pattern: string, categoryId: number | null, ruleId?: number): Promise<RulePreview> {
+    const search = new URLSearchParams({ pattern });
     if (categoryId != null) search.set("category_id", String(categoryId));
+    if (ruleId != null) search.set("rule_id", String(ruleId));
     return request(`/api/rules/preview?${search}`);
   },
   pairTransfer(ids: [number, number]): Promise<Transaction[]> {

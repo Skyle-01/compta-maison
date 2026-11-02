@@ -10,7 +10,6 @@ export type Draft = {
   highlight: number;
   mode: TriageMode;
   pattern: string;
-  priority: string;
   description: string;
 };
 
@@ -118,22 +117,14 @@ export default function GroupEditor({
                   aria-label="Motif de la règle"
                   className="w-64 rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs"
                 />
-                <input
-                  value={d.priority}
-                  onChange={(e) => update({ priority: e.target.value })}
-                  inputMode="numeric"
-                  title="Priorité : le plus petit nombre l'emporte"
-                  aria-label="Priorité"
-                  className="w-14 rounded border border-zinc-300 bg-white px-2 py-1 text-xs"
-                />
               </div>
               <p
-                className={`text-xs ${currentPreview?.reclassified.length ? "text-amber-800" : "text-zinc-500"}`}
+                className={`text-xs ${currentPreview?.conflicts.length ? "text-amber-800" : "text-zinc-500"}`}
               >
                 {!pattern
                   ? "Saisissez un motif."
                   : currentPreview
-                    ? `${currentPreview.reclassified.length ? "⚠ " : ""}${previewMessage(currentPreview, pathOf)}`
+                    ? `${currentPreview.conflicts.length ? "⚠ " : ""}${previewMessage(currentPreview, pathOf)}`
                     : "…"}
                 {g.pattern_generic && d.pattern === g.pattern && " · ⚠ motif trop générique"}
               </p>

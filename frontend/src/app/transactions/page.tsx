@@ -10,8 +10,10 @@ import {
   type Transaction,
   type TransferMode,
   notifyUncategorizedChanged,
+  shortPath,
   suggestPattern,
 } from "@/lib/api";
+import { conflictsMessage } from "@/lib/triage";
 import { emptyRuleForm, type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
 import CategoryEditor, { type EditMode } from "./CategoryEditor";
 import Filters from "./Filters";
@@ -145,10 +147,16 @@ export default function TransactionsPage() {
         const rule = ruleFormToPayload(form);
         const pattern = rule.pattern;
         if (!pattern) return;
-        await api.createRule(rule);
+        const created = await api.createRule(rule);
         const n = matchCount;
         setFlash(
-          `Règle « ${pattern} » créée${n != null ? ` — ${n} opération(s) classée(s)` : ""}.`,
+          `Règle « ${pattern} » créée${n != null ? ` — ${n} opération(s) classée(s)` : ""}.` +
+            (created.conflicts.length
+              ? ` ⚠ ${conflictsMessage(created.conflicts, (id) => {
+                  const c = categories.find((x) => x.id === id);
+                  return c ? shortPath(c) : `#${id}`;
+                })}.`
+              : ""),
         );
       }
       setEditingTxId(null);

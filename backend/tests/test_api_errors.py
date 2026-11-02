@@ -13,12 +13,10 @@ class TestFrenchValidationErrors:
         assert (error["type"], error["loc"]) == ("greater_than", ["body", "budget_target"])  # shape kept
 
     def test_rule_fields(self, seeded_db, client):
-        resp = client.post(
-            "/api/rules", json={"category_id": _category_id(client, "bar"), "pattern": "", "priority": 1.5}
-        )
+        resp = client.post("/api/rules", json={"category_id": "bar", "pattern": ""})
         assert [e["msg"] for e in resp.json()["detail"]] == [
+            "Catégorie : un nombre entier est attendu",
             "Motif : ne peut pas être vide",
-            "Priorité : un nombre entier est attendu",
         ]
 
     def test_without_a_field(self, client):

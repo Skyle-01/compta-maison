@@ -71,9 +71,6 @@ export default function RuleRow({
         </button>
         <span className="font-mono text-xs">{rule.pattern}</span>
         {rule.is_income_anchor && <span title="Ancre de revenu : ouvre un mois budgétaire">⚓</span>}
-        <span className="text-xs text-zinc-500" title="Priorité : le plus petit nombre l'emporte">
-          prio {rule.priority}
-        </span>
         {rule.description && <span className="truncate text-zinc-500">{rule.description}</span>}
         <span className="ml-auto flex items-center gap-3 whitespace-nowrap">
           {rule.operation_count === 0 ? (

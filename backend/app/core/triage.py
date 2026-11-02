@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core.categorize import find_conflicts
 from app.db import DEFAULT_DB_PATH, connect, real_flow_clause
 
 # Bank vocabulary and French glue words: they say how money moved, not to whom, so they never
@@ -240,7 +241,12 @@ def uncategorized_groups(
         query += " AND budget_month = ?"
         params = (month,)
     with connect(db_path) as conn:
-        rows = conn.execute(query + " ORDER BY date_valeur DESC, id DESC", params).fetchall()
+        conflicted = find_conflicts(conn)  # listed apart, see conflicted_operations
+        rows = [
+            row
+            for row in conn.execute(query + " ORDER BY date_valeur DESC, id DESC", params)
+            if row[0] not in conflicted
+        ]
         categorised = conn.execute(
             f"SELECT libelle, category_id FROM transactions WHERE category_id IS NOT NULL AND {real_flow_clause()}"
         ).fetchall()
@@ -271,7 +277,7 @@ def uncategorized_groups(
 
 
 @dataclass(frozen=True)
-class LostRows:
+class RuleOverlap:
     rule_id: int
     pattern: str
     category_id: int
@@ -279,24 +285,48 @@ class LostRows:
 
 
 def rule_preview(
-    db_path: Path, pattern: str, priority: int, category_id: int | None = None
-) -> tuple[int, list[LostRows]]:
-    """What a new rule `pattern` at `priority` would claim: the uncategorised non-transfer rows
-    it matches, and per existing rule the rule-classified rows it would take over (that rule has
-    a larger priority number; on a tie the older rule keeps them). Rules already pointing at
-    `category_id` are left out: their rows would not change category."""
+    db_path: Path, pattern: str, category_id: int | None = None, rule_id: int | None = None
+) -> tuple[int, list[RuleOverlap]]:
+    """What a rule `pattern` on `category_id` would do: the uncategorised non-transfer rows it
+    would classify (rows already in conflict stay out), and per other rule of another category
+    the non-manual real-flow operations both match, which would become a conflict. `rule_id` is
+    the rule being edited, left out of the comparison."""
     with connect(db_path) as conn:
-        uncategorized = conn.execute(
-            f"SELECT COUNT(*) FROM transactions WHERE category_id IS NULL AND {real_flow_clause()} "
-            "AND instr(libelle, ?) > 0",
-            (pattern,),
-        ).fetchone()[0]
-        lost = conn.execute(
+        conflicted = find_conflicts(conn)
+        uncategorized = [
+            row[0]
+            for row in conn.execute(
+                f"SELECT id FROM transactions WHERE category_id IS NULL AND {real_flow_clause()} "
+                "AND instr(libelle, ?) > 0",
+                (pattern,),
+            )
+            if row[0] not in conflicted
+        ]
+        overlaps = conn.execute(
             "SELECT lr.id, lr.pattern, lr.category_id, COUNT(*) FROM transactions t "
-            "JOIN label_rules lr ON lr.id = t.rule_id "
+            "JOIN label_rules lr ON instr(t.libelle, lr.pattern) > 0 "
             f"WHERE t.category_manual = 0 AND {real_flow_clause('t.kind')} AND instr(t.libelle, ?) > 0 "
-            "AND lr.priority > ? AND lr.category_id IS NOT ? "
+            "AND lr.id IS NOT ? AND lr.category_id IS NOT ? "
             "GROUP BY lr.id ORDER BY COUNT(*) DESC, lr.id",
-            (pattern, priority, category_id),
+            (pattern, rule_id, category_id),
         ).fetchall()
-    return uncategorized, [LostRows(*row) for row in lost]
+    return len(uncategorized), [RuleOverlap(*row) for row in overlaps]
+
+
+def conflicted_operations(
+    db_path: Path = DEFAULT_DB_PATH, month: str | None = None
+) -> list[tuple[int, list[tuple[int, str, int]]]]:
+    """(transaction id, rules in cause) of the operations in conflict (optionally of one budget
+    month), newest first."""
+    with connect(db_path) as conn:
+        conflicts = find_conflicts(conn)
+        if not conflicts:
+            return []
+        ids = ",".join(str(i) for i in conflicts)
+        query = f"SELECT id FROM transactions WHERE id IN ({ids})"
+        params: tuple = ()
+        if month:
+            query += " AND budget_month = ?"
+            params = (month,)
+        ordered = conn.execute(query + " ORDER BY date_valeur DESC, id DESC", params).fetchall()
+    return [(row[0], conflicts[row[0]]) for row in ordered]

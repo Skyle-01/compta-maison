@@ -27,6 +27,7 @@ import {
   searchTree,
   undoMoves,
 } from "@/lib/categoryTree";
+import { conflictsMessage, queryFromSearch } from "@/lib/triage";
 import { fold } from "@/lib/categorySearch";
 import { type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
 import CategoryRow from "./CategoryRow";
@@ -69,6 +70,8 @@ export default function CategoriesPage() {
   const [toast, setToast] = useState<Toast | null>(null);
 
   const [query, setQuery] = useState("");
+  // Conflicts the last saved rule created (a warning, the rule is saved anyway).
+  const [warning, setWarning] = useState<string | null>(null);
   const [openLeaves, setOpenLeaves] = useState<Set<number>>(new Set());
   const [openRules, setOpenRules] = useState<Set<number>>(new Set());
 
@@ -94,7 +97,13 @@ export default function CategoriesPage() {
   );
 
   useEffect(() => {
-    load().catch((e) => setError(errorMessage(e)));
+    load()
+      .then(() => {
+        // A link from « À classer » (?q=<rule pattern>) opens the page on that search.
+        const fromUrl = queryFromSearch(window.location.search);
+        if (fromUrl) setQuery(fromUrl);
+      })
+      .catch((e) => setError(errorMessage(e)));
   }, [load]);
 
   useEffect(() => {
@@ -106,6 +115,7 @@ export default function CategoriesPage() {
   /** Run a change, then reload; false (and the message shown) when it failed. */
   async function run(action: () => Promise<unknown>): Promise<boolean> {
     setError(null);
+    setWarning(null);
     try {
       await action();
       // Rule and category changes, and clearing a manual assignment, move the « À classer » count.
@@ -189,17 +199,28 @@ export default function CategoriesPage() {
     }
   }
 
+  function warnOfConflicts(rule: Rule) {
+    if (!rule.conflicts.length) return;
+    const pathOf = (id: number) => {
+      const c = categories.find((x) => x.id === id);
+      return c ? shortPath(c) : `#${id}`;
+    };
+    setWarning(
+      `Règle « ${rule.pattern} » enregistrée, mais ${conflictsMessage(rule.conflicts, pathOf)} : ces opérations restent sans catégorie, à classer dans « À classer ».`,
+    );
+  }
+
   const leafActions: LeafActions = {
     toggleRuleSelected: (id) => setSelRules((s) => toggled(s, id)),
     toggleTxSelected: (id) => setSelTx((s) => toggled(s, id)),
     toggleRuleOpen: (id) => setOpenRules((s) => toggled(s, id)),
     async createRule(form: RuleForm) {
       if (form.category_id == null || !form.pattern.trim()) return false;
-      return run(() => api.createRule(ruleFormToPayload(form)));
+      return run(async () => warnOfConflicts(await api.createRule(ruleFormToPayload(form))));
     },
     async updateRule(id: number, form: RuleForm) {
       if (form.category_id == null || !form.pattern.trim()) return false;
-      return run(() => api.updateRule(id, ruleFormToPayload(form)));
+      return run(async () => warnOfConflicts(await api.updateRule(id, ruleFormToPayload(form))));
     },
     deleteRule(rule) {
       if (confirm(`Supprimer la règle « ${rule.pattern} » ?`)) run(() => api.deleteRule(rule.id));
@@ -233,7 +254,7 @@ export default function CategoriesPage() {
     const filtered = search != null && !search.whole.has(node.id);
     const leafRules = rules
       .filter((r) => r.category_id === node.id && (!filtered || ruleMatches(r, q)))
-      .sort((a, b) => a.priority - b.priority || a.id - b.id);
+      .sort((a, b) => a.id - b.id);
     const leafManual = manual.filter((tx) => tx.category_id === node.id && (!filtered || manualMatches(tx, q)));
     return (
       <LeafContents
@@ -329,6 +350,12 @@ export default function CategoriesPage() {
             ✕
           </button>
         </div>
+      )}
+
+      {warning && (
+        <p role="status" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          ⚠ {warning}
+        </p>
       )}
 
       <div className="sticky top-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-6 py-2 backdrop-blur">

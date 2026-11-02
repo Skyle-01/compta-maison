@@ -97,12 +97,12 @@ def seeded_db(db):
         bar = add("bar", sortie)
 
         conn.executemany(
-            "INSERT INTO label_rules (category_id, pattern, priority, is_income_anchor) VALUES (?, ?, ?, ?)",
+            "INSERT INTO label_rules (category_id, pattern, is_income_anchor) VALUES (?, ?, ?)",
             [
-                (salaire, "EMPLOYEUR", 1, 1),
-                (courses, "SUPERMARCHE", 2, 0),
-                (courses, "LECLERC", 3, 0),
-                (bar, "ANGELUS", 4, 0),
+                (salaire, "EMPLOYEUR", 1),
+                (courses, "SUPERMARCHE", 0),
+                (courses, "LECLERC", 0),
+                (bar, "ANGELUS", 0),
             ],
         )
     return db

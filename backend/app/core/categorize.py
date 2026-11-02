@@ -1,3 +1,5 @@
+import sqlite3
+from collections import defaultdict
 from collections.abc import Collection
 from pathlib import Path
 from typing import Any
@@ -8,24 +10,47 @@ from app.db import DEFAULT_DB_PATH, connect, euros, real_flow_clause, savings_ac
 UNBALANCED_TOLERANCE_CENTS = 1
 
 
+def find_conflicts(conn: sqlite3.Connection) -> dict[int, list[tuple[int, str, int]]]:
+    """Real-flow, non-manual operations matched by rules of 2+ different categories:
+    {transaction_id: [(rule_id, pattern, category_id), ...]}, rules by id. Two rules on the same
+    category are not a conflict."""
+    rows = conn.execute(
+        "SELECT t.id, r.id, r.pattern, r.category_id FROM transactions t "
+        "JOIN label_rules r ON instr(t.libelle, r.pattern) > 0 "
+        f"WHERE t.category_manual = 0 AND {real_flow_clause('t.kind')} ORDER BY t.id, r.id"
+    ).fetchall()
+    matches: dict[int, list[tuple[int, str, int]]] = defaultdict(list)
+    for transaction_id, rule_id, pattern, category_id in rows:
+        matches[transaction_id].append((rule_id, pattern, category_id))
+    return {
+        transaction_id: rules
+        for transaction_id, rules in matches.items()
+        if len({category_id for _, _, category_id in rules}) > 1
+    }
+
+
 def apply_rules(db_path: Path = DEFAULT_DB_PATH) -> None:
     """Re-categorise all non-manual transactions from label_rules.
 
     Patterns are plain substrings matched case-sensitively against libelle
-    (instr mirrors str.contains(regex=False)). Rules are applied by ascending
-    priority (ties broken by id); the first matching rule wins.
+    (instr mirrors str.contains(regex=False)). The matching rule of lowest id wins, except on a
+    real-flow operation matched by rules of different categories (a conflict, see find_conflicts):
+    it stays uncategorised rather than pick a winner.
     """
     with connect(db_path) as conn:
         conn.execute("UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE category_manual = 0")
-        rules = conn.execute(
-            "SELECT id, category_id, pattern FROM label_rules ORDER BY priority, id"
-        ).fetchall()
+        rules = conn.execute("SELECT id, category_id, pattern FROM label_rules ORDER BY id").fetchall()
         for rule_id, category_id, pattern in rules:
             conn.execute(
                 "UPDATE transactions SET category_id = ?, rule_id = ? "
                 "WHERE category_manual = 0 AND category_id IS NULL AND instr(libelle, ?) > 0",
                 (category_id, rule_id, pattern),
             )
+        conflicted = list(find_conflicts(conn))
+        conn.executemany(
+            "UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE id = ?",
+            [(transaction_id,) for transaction_id in conflicted],
+        )
 
 
 def uncategorized_balance(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> dict[str, Any]:

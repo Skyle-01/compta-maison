@@ -78,13 +78,6 @@ export default function CategoryEditor({
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <input
-              type="number"
-              title="Priorité - le plus petit nombre l'emporte"
-              value={form.priority}
-              onChange={(e) => onEdit({ priority: e.target.value })}
-              className="w-16 rounded border border-zinc-300 px-1 py-0.5"
-            />
             <label className="flex items-center gap-1 text-zinc-600">
               <input
                 type="checkbox"

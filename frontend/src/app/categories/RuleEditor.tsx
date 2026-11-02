@@ -27,13 +27,6 @@ export default function RuleEditor({
         highlight
         placeholder="Catégorie…"
       />
-      <input
-        type="number"
-        title="Priorité : le plus petit nombre l'emporte"
-        value={value.priority}
-        onChange={(e) => onChange({ ...value, priority: e.target.value })}
-        className="w-20 rounded border border-zinc-300 px-2 py-1"
-      />
       <label className="flex items-center gap-1.5 text-sm">
         <input
           type="checkbox"

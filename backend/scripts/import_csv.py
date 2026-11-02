@@ -174,12 +174,11 @@ def import_rules(conn, rows: list[dict], path_to_id: dict[str, int]) -> int:
             print(f"Skipping rule for unknown category path: {row['category_path']!r}")
             continue
         conn.execute(
-            "INSERT INTO label_rules (category_id, pattern, priority, is_income_anchor, description) "
-            "VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO label_rules (category_id, pattern, is_income_anchor, description) "
+            "VALUES (?, ?, ?, ?)",
             (
                 category_id,
                 row["pattern"],
-                int(row["priority"]) if row["priority"] else 100,
                 1 if row["is_income_anchor"] == "1" else 0,
                 row["description"] or None,
             ),

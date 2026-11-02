@@ -84,7 +84,7 @@ def test_writes_the_config_files(seeded_db, client, tmp_path):
     assert read("accounts.csv")[0] == "code;label;type;sort_order;deposit_pattern;aliases;start_date"
     assert "ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;;" in read("accounts.csv")
     assert "variable / sortie / bar;" in read("categories.csv")
-    assert "fixe / salaire;EMPLOYEUR;1;1;" in read("rules.csv")
+    assert "fixe / salaire;EMPLOYEUR;1;" in read("rules.csv")
     assert any(
         ";variable / courses;;MYSTERY SHOP;à vérifier;;JOINT;" in line for line in read("overrides.csv")
     )
@@ -106,9 +106,7 @@ def test_backs_up_the_previous_config_and_the_db(seeded_db, client, tmp_path):
     _upload(client)
     _write_preserved(tmp_path)
     export_config(seeded_db, _config(tmp_path))
-    client.post(
-        "/api/rules", json={"category_id": _category_id(client, "bar"), "pattern": "PUB", "priority": 9}
-    )
+    client.post("/api/rules", json={"category_id": _category_id(client, "bar"), "pattern": "PUB"})
     previous = {name: (_config(tmp_path) / name).read_bytes() for name in CONFIG_FILES}
 
     body = client.post("/api/config/export").json()
@@ -176,7 +174,6 @@ def test_round_trip_through_reset_db_defaults(seeded_db, client, tmp_path, monke
         json={
             "category_id": _category_id(client, "bar"),
             "pattern": "GUINNESS",
-            "priority": 9,
             "description": "pub du vendredi",
         },
     )
@@ -213,9 +210,9 @@ def test_export_categories_csv(seeded_db, tmp_path):
 
 def test_export_rules_csv(seeded_db, tmp_path):
     body = (_export(seeded_db, tmp_path) / "rules.csv").read_text(encoding="utf-8-sig")
-    assert body.splitlines()[0] == "category_path;pattern;priority;is_income_anchor;description"
-    assert "fixe / salaire;EMPLOYEUR;1;1;" in body
-    assert "variable / sortie / bar;ANGELUS;4;0;" in body
+    assert body.splitlines()[0] == "category_path;pattern;is_income_anchor;description"
+    assert "fixe / salaire;EMPLOYEUR;1;" in body
+    assert "variable / sortie / bar;ANGELUS;0;" in body
 
 
 def test_round_trip(seeded_db, client, tmp_path):
@@ -224,9 +221,9 @@ def test_round_trip(seeded_db, client, tmp_path):
             paths = sorted(c.path for c in _load_all(conn))
             cat_paths = category_paths(conn)
             rules = sorted(
-                (cat_paths[cid], pattern, priority, anchor, description)
-                for cid, pattern, priority, anchor, description in conn.execute(
-                    "SELECT category_id, pattern, priority, is_income_anchor, description FROM label_rules"
+                (cat_paths[cid], pattern, anchor, description)
+                for cid, pattern, anchor, description in conn.execute(
+                    "SELECT category_id, pattern, is_income_anchor, description FROM label_rules"
                 )
             )
         return paths, rules
@@ -237,7 +234,6 @@ def test_round_trip(seeded_db, client, tmp_path):
         json={
             "category_id": _category_id(client, "bar"),
             "pattern": "GUINNESS",
-            "priority": 9,
             "is_income_anchor": False,
             "description": "pub du vendredi",
         },

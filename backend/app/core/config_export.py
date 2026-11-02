@@ -21,7 +21,7 @@ PATH_SEP = " / "
 ACCOUNTS_HEADER = ["code", "label", "type", "sort_order", "deposit_pattern", "aliases", "start_date"]
 # categories.csv columns (the config dir, _backups/ snapshots, data/).
 CATEGORIES_HEADER = ["path", "budget_target"]
-RULES_HEADER = ["category_path", "pattern", "priority", "is_income_anchor", "description"]
+RULES_HEADER = ["category_path", "pattern", "is_income_anchor", "description"]
 OVERRIDES_HEADER = [
     "import_hash",
     "category_path",
@@ -120,12 +120,11 @@ def category_rows(conn: sqlite3.Connection) -> list[list[str]]:
 def rule_rows(conn: sqlite3.Connection, path_by_id: dict[int, str]) -> list[list]:
     """Every rule as rules.csv rows, keyed by category path."""
     rows = conn.execute(
-        "SELECT category_id, pattern, priority, is_income_anchor, description FROM label_rules "
-        "ORDER BY priority, id"
+        "SELECT category_id, pattern, is_income_anchor, description FROM label_rules ORDER BY id"
     ).fetchall()
     return [
-        [path_by_id.get(category_id, ""), pattern, priority, is_income_anchor, description or ""]
-        for category_id, pattern, priority, is_income_anchor, description in rows
+        [path_by_id.get(category_id, ""), pattern, is_income_anchor, description or ""]
+        for category_id, pattern, is_income_anchor, description in rows
     ]
 
 

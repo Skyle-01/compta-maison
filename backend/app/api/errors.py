@@ -30,7 +30,6 @@ FIELD_LABELS = {
     "note": "Note",
     "parent_id": "Catégorie parente",
     "pattern": "Motif",
-    "priority": "Priorité",
     "rule_ids": "Règles",
     "transaction_ids": "Opérations",
 }

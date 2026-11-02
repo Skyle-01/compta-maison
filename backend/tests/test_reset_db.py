@@ -129,6 +129,7 @@ class TestResetDb:
             encoding="utf-8",
         )
         (config / "categories.csv").write_text("path\nVariable\nVariable / Courses\n", encoding="utf-8")
+        # A legacy file with the dropped priority column still loads (the column is ignored).
         (config / "rules.csv").write_text(
             "category_path;pattern;priority;is_income_anchor;description\n"
             "Variable / Courses;SUPERMARCHE;1;0;\n",

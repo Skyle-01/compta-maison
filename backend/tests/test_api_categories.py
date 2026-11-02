@@ -12,7 +12,7 @@ def _targets(db_path) -> dict[str, int | None]:
         return dict(conn.execute("SELECT name, budget_target_cents FROM categories").fetchall())
 
 
-RULES_HEADER_ONLY = "category_path;pattern;priority;is_income_anchor;description\n"
+RULES_HEADER_ONLY = "category_path;pattern;is_income_anchor;description\n"
 
 
 class TestCategories:
@@ -172,14 +172,52 @@ class TestRules:
         uncategorized = client.get("/api/transactions", params={"uncategorized": True}).json()
         assert uncategorized["total"] == 1
 
-    def test_priority_decides_winner(self, seeded_db, client):
+    def test_conflicting_rule_leaves_the_operation_uncategorised(self, seeded_db, client):
         _upload(client)
         bar = _category_id(client, "bar")
-        # Lower priority number than the seeded SUPERMARCHE rule (2) -> wins
-        client.post("/api/rules", json={"category_id": bar, "pattern": "SUPERMARCHE", "priority": 0})
+        courses = _category_id(client, "courses")
+        created = client.post("/api/rules", json={"category_id": bar, "pattern": "SUPERMARCHE"}).json()
+        assert [(c["pattern"], c["category_id"], c["count"]) for c in created["conflicts"]] == [
+            ("SUPERMARCHE", courses, 1)
+        ]
         items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]
         groceries = next(t for t in items if "SUPERMARCHE" in t["libelle"])
-        assert groceries["category"] == "bar"
+        assert groceries["category"] is None
+        # Listed apart, not among the « À classer » groups.
+        [conflict] = client.get("/api/transactions/rule-conflicts").json()
+        assert conflict["transaction"]["id"] == groceries["id"]
+        assert [(r["pattern"], r["category_id"]) for r in conflict["rules"]] == [
+            ("SUPERMARCHE", courses),
+            ("SUPERMARCHE", bar),
+        ]
+        groups = client.get("/api/transactions/uncategorized-groups").json()
+        assert groceries["id"] not in [t["id"] for g in groups for t in g["transactions"]]
+        # Classing it by hand settles it.
+        client.patch(f"/api/transactions/{groceries['id']}", json={"category_id": courses})
+        assert client.get("/api/transactions/rule-conflicts").json() == []
+
+    def test_two_rules_on_the_same_category_do_not_conflict(self, seeded_db, client):
+        _upload(client)
+        courses = _category_id(client, "courses")
+        created = client.post("/api/rules", json={"category_id": courses, "pattern": "SUPERMARCHE"}).json()
+        assert created["conflicts"] == []
+        items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]
+        assert next(t for t in items if "SUPERMARCHE" in t["libelle"])["category"] == "courses"
+        assert client.get("/api/transactions/rule-conflicts").json() == []
+
+    def test_editing_a_rule_does_not_conflict_with_itself(self, seeded_db, client):
+        _upload(client)
+        rule = next(r for r in client.get("/api/rules").json() if r["pattern"] == "SUPERMARCHE")
+        bar = _category_id(client, "bar")
+        edited = client.put(
+            f"/api/rules/{rule['id']}", json={"category_id": bar, "pattern": "SUPERMARCHE"}
+        ).json()
+        assert edited["conflicts"] == []
+        preview = client.get(
+            "/api/rules/preview",
+            params={"pattern": "SUPERMARCHE", "category_id": bar, "rule_id": rule["id"]},
+        ).json()
+        assert preview["conflicts"] == []
 
     def test_rules_carry_what_they_classify(self, seeded_db, client):
         _upload(client)

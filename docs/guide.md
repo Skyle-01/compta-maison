@@ -64,6 +64,7 @@ Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque
 
 - Au clavier : ↑/↓ changent de groupe, Entrée classe dans la catégorie proposée, Alt+M bascule règle / manuel, →/← montrent ou cachent les opérations, Échap efface la saisie.
 - « Annuler » (8 secondes, ou Alt+Z) défait le dernier classement.
+- **Conflit de règles** : en tête de page, les opérations qui correspondent à des règles de catégories différentes. Elles restent sans catégorie (l'application ne choisit pas). Chacune liste les règles en cause, avec un lien vers la recherche de la règle dans « Catégories » pour la corriger, et un sélecteur pour la classer à la main. Lors de la création d'une règle, l'aperçu annonce « N opérations correspondent aussi à la règle X (catégorie Y) » quand elle créerait un conflit.
 - « Virement interne ? » propose d'associer l'opération à son pendant sur un autre compte.
 - Le compteur à côté de l'onglet « À classer » indique combien d'opérations restent.
 
@@ -75,7 +76,7 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 
 - **Créer, renommer, déplacer, supprimer** : ＋ ajoute une sous-catégorie, ✎ renomme ou change le parent, ✕ supprime. Créer une sous-catégorie sous une feuille déjà utilisée y descend ses règles et ses opérations. Supprimer la dernière sous-catégorie d'un groupe remonte ses règles et ses opérations sur le parent.
 - **Fixer un objectif de budget** : « ＋ objectif » sur une feuille ou un groupe, un montant mensuel en euros. Un seul objectif par branche. Un objectif sur le groupe « Épargne » est l'objectif d'épargne mensuel (un plancher).
-- **Règles** : déplier une feuille pour voir ses règles (priorité, ancre de revenu, opérations touchées), les modifier, les supprimer, ou « ＋ règle ». Priorité plus basse = passe d'abord.
+- **Règles** : déplier une feuille pour voir ses règles (priorité, ancre de revenu, opérations touchées), les modifier, les supprimer, ou « ＋ règle ». Il n'y a pas de priorité entre les règles : si deux règles de catégories différentes correspondent à la même opération, c'est un **conflit** (voir « À classer »). Enregistrer une règle qui crée un conflit affiche un avertissement, la règle est enregistrée quand même. Deux règles de la même catégorie ne sont jamais en conflit.
 - **Déplacer des règles ou des opérations** : cocher, choisir la feuille cible. Une opération classée par règle ne se déplace pas seule : « Classer à part » la rend manuelle.
 - **Recherche** : sur les noms, les motifs de règles et les libellés ou notes manuels (sans tenir compte des accents ni de la casse).
 

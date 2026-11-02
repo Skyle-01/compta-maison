@@ -21,12 +21,12 @@ function rule(id: number, category_id: number, fields: Partial<Rule> = {}): Rule
     id,
     category_id,
     pattern: `MOTIF ${id}`,
-    priority: 100,
     is_income_anchor: false,
     description: null,
     operation_count: 0,
     debit: 0,
     credit: 0,
+    conflicts: [],
     ...fields,
   };
 }
