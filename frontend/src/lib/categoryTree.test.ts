@@ -23,6 +23,7 @@ function rule(id: number, category_id: number, fields: Partial<Rule> = {}): Rule
     pattern: `MOTIF ${id}`,
     is_income_anchor: false,
     description: null,
+    account_id: null,
     operation_count: 0,
     debit: 0,
     credit: 0,

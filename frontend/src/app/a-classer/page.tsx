@@ -34,6 +34,7 @@ const draftFor = (g: UncategorizedGroup): Draft => ({
   mode: defaultMode(g),
   pattern: g.pattern,
   description: "",
+  account_id: null,
 });
 
 /** The last action's confirmation: `undo` reverts it, `key` is the group to reactivate then. */
@@ -109,13 +110,13 @@ export default function TriagePage() {
 
   // Debounced rule preview: rows the rule would classify, and rows it would take from other rules.
   const pattern = d?.mode === "rule" ? d.pattern.trim() : "";
-  const previewQuery = pattern ? `${pattern}\u0000${candidate?.id ?? ""}` : "";
+  const previewQuery = pattern ? `${pattern}\u0000${candidate?.id ?? ""}\u0000${d?.account_id ?? ""}` : "";
   useEffect(() => {
     if (!previewQuery) return;
-    const [p, categoryId] = previewQuery.split("\u0000");
+    const [p, categoryId, accountId] = previewQuery.split("\u0000");
     const timer = setTimeout(() => {
       api
-        .previewRule(p, categoryId ? Number(categoryId) : null)
+        .previewRule(p, categoryId ? Number(categoryId) : null, undefined, accountId || null)
         .then((result) => setPreview({ query: previewQuery, result }))
         .catch(() => setPreview(null));
     }, 250);
@@ -166,6 +167,7 @@ export default function TriagePage() {
           pattern,
           is_income_anchor: false,
           description: d.description,
+          account_id: d.account_id,
         }),
       );
       const after = await api.uncategorizedCount();
@@ -243,6 +245,8 @@ export default function TriagePage() {
       undo();
       return;
     }
+    // The rule's account select keeps its own arrow keys.
+    if (e.target instanceof HTMLSelectElement && e.key.startsWith("Arrow")) return;
     switch (e.key) {
       case "ArrowDown":
       case "ArrowUp": {

@@ -139,6 +139,62 @@ class TestApplyRules:
             assert find_conflicts(conn) == {}
 
 
+class TestAccountRules:
+    def _add_rule(self, db, category: str, pattern: str, account_id: str | None) -> None:
+        with connect(db) as conn:
+            conn.execute(
+                "INSERT INTO label_rules (category_id, pattern, account_id) VALUES (?, ?, ?)",
+                (cat_id(db, category), pattern, account_id),
+            )
+
+    def _by_account(self, db) -> dict[str, str | None]:
+        with connect(db) as conn:
+            return dict(
+                conn.execute(
+                    "SELECT t.account_id, c.name FROM transactions t "
+                    "LEFT JOIN categories c ON c.id = t.category_id"
+                ).fetchall()
+            )
+
+    def test_the_same_label_takes_a_category_per_account(self, seeded_db):
+        self._add_rule(seeded_db, "bar", "SUPERMARCHE", "PERSO")
+        import_rows(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "PERSO"),
+            ("2026-06-01", "2026-06-01", "SUPERMARCHE", 40, 0, "JOINT"),
+        )
+        apply_rules(seeded_db)
+        assert self._by_account(seeded_db) == {"PERSO": "bar", "JOINT": "courses"}
+        with connect(seeded_db) as conn:
+            assert find_conflicts(conn) == {}  # the account rule overrides the global one
+
+    def test_an_account_rule_wins_whatever_the_rule_ids(self, seeded_db):
+        # The global SUPERMARCHE rule has the lowest id; the account rule still wins on its account.
+        self._add_rule(seeded_db, "bar", "SUPER", "JOINT")
+        import_rows(seeded_db, ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "JOINT"))
+        apply_rules(seeded_db)
+        assert self._by_account(seeded_db) == {"JOINT": "bar"}
+
+    def test_two_rules_of_one_account_conflict_and_never_fall_back_to_a_global_rule(self, seeded_db):
+        self._add_rule(seeded_db, "bar", "SUPERMARCHE", "JOINT")
+        self._add_rule(seeded_db, "salaire", "SUPERMARCHE", "JOINT")  # any second leaf will do
+        import_rows(seeded_db, ("2026-06-01", "2026-06-01", "SUPERMARCHE", 50, 0, "JOINT"))
+        apply_rules(seeded_db)
+        assert self._by_account(seeded_db) == {"JOINT": None}
+        with connect(seeded_db) as conn:
+            [rules] = find_conflicts(conn).values()
+        assert {category_id for _, _, category_id in rules} == {
+            cat_id(seeded_db, "bar"),
+            cat_id(seeded_db, "salaire"),
+        }  # the global courses rule is not in cause
+
+    def test_an_account_rule_does_not_touch_other_accounts(self, seeded_db):
+        self._add_rule(seeded_db, "bar", "BOULANGERIE", "PERSO")
+        import_rows(seeded_db, ("2026-06-01", "2026-06-01", "BOULANGERIE", 5, 0, "JOINT"))
+        apply_rules(seeded_db)
+        assert self._by_account(seeded_db) == {"JOINT": None}
+
+
 class TestCategoryTree:
     def test_parent_sums_children(self, seeded_db):
         import_rows(

@@ -12,6 +12,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 # Request fields as the UI names them; any other field is shown by its API name.
 FIELD_LABELS = {
     "account": "Compte",
+    "account_id": "Compte",
     "aliases": "Alias",
     "budget_target": "Objectif",
     "category_id": "Catégorie",

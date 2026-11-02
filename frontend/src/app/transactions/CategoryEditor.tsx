@@ -1,3 +1,4 @@
+import AccountSelect from "@/components/AccountSelect";
 import CategoryPicker from "@/components/CategoryPicker";
 import type { Category, Transaction } from "@/lib/api";
 import type { RuleForm } from "@/lib/ruleForm";
@@ -78,6 +79,7 @@ export default function CategoryEditor({
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs">
+            <AccountSelect value={form.account_id} onChange={(account_id) => onEdit({ account_id })} />
             <label className="flex items-center gap-1 text-zinc-600">
               <input
                 type="checkbox"

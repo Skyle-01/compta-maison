@@ -1,4 +1,4 @@
-from app.core.periods import recompute_budget_months
+from app.core.periods import budget_starts, recompute_budget_months
 from app.db import connect
 from tests.conftest import import_rows
 
@@ -25,6 +25,20 @@ class TestRecomputeBudgetMonths:
             ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"),
         )
         assert recompute_budget_months(seeded_db) == 0
+
+    def test_an_anchor_scoped_to_an_account_ignores_the_same_label_elsewhere(self, seeded_db):
+        with connect(seeded_db) as conn:
+            conn.execute("UPDATE label_rules SET account_id = 'PERSO' WHERE is_income_anchor = 1")
+        import_rows(
+            seeded_db,
+            ("2026-05-28", "2026-05-28", "VIR EMPLOYEUR", 0, 2500, "PERSO"),
+            ("2026-05-20", "2026-05-20", "VIR EMPLOYEUR", 0, 300, "JOINT"),  # same label, not the anchor
+            ("2026-05-30", "2026-05-30", "CARTE LECLERC", 30, 0, "JOINT"),
+        )
+        recompute_budget_months(seeded_db)
+        with connect(seeded_db) as conn:
+            assert list(budget_starts(conn).values()) == ["2026-05-28"]
+        assert _months(seeded_db)["CARTE LECLERC"] == "2026-06"
 
     def test_spending_after_paycheck_rolls_into_next_month(self, seeded_db):
         import_rows(

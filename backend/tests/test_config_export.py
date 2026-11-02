@@ -16,7 +16,7 @@ from app.core.config_export import (
     override_rows,
     rule_rows,
 )
-from app.db import connect, get_transfer_markers, init_db
+from app.db import connect, get_transfer_markers
 from app.main import create_app
 from scripts.import_csv import import_csv
 from tests.api_helpers import _category_id, _export, _upload, _upload_transfers
@@ -84,7 +84,7 @@ def test_writes_the_config_files(seeded_db, client, tmp_path):
     assert read("accounts.csv")[0] == "code;label;type;sort_order;deposit_pattern;aliases;start_date"
     assert "ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;;" in read("accounts.csv")
     assert "variable / sortie / bar;" in read("categories.csv")
-    assert "fixe / salaire;EMPLOYEUR;1;" in read("rules.csv")
+    assert "fixe / salaire;EMPLOYEUR;1;;" in read("rules.csv")
     assert any(
         ";variable / courses;;MYSTERY SHOP;à vérifier;;JOINT;" in line for line in read("overrides.csv")
     )
@@ -210,9 +210,18 @@ def test_export_categories_csv(seeded_db, tmp_path):
 
 def test_export_rules_csv(seeded_db, tmp_path):
     body = (_export(seeded_db, tmp_path) / "rules.csv").read_text(encoding="utf-8-sig")
-    assert body.splitlines()[0] == "category_path;pattern;is_income_anchor;description"
-    assert "fixe / salaire;EMPLOYEUR;1;" in body
-    assert "variable / sortie / bar;ANGELUS;0;" in body
+    assert body.splitlines()[0] == "category_path;pattern;is_income_anchor;description;account"
+    assert "fixe / salaire;EMPLOYEUR;1;;" in body
+    assert "variable / sortie / bar;ANGELUS;0;;" in body
+
+
+def test_export_rules_csv_writes_the_account_of_a_scoped_rule(seeded_db, client, tmp_path):
+    client.post(
+        "/api/rules",
+        json={"category_id": _category_id(client, "bar"), "pattern": "GUINNESS", "account_id": "JOINT"},
+    )
+    body = (_export(seeded_db, tmp_path) / "rules.csv").read_text(encoding="utf-8-sig")
+    assert "variable / sortie / bar;GUINNESS;0;;JOINT" in body
 
 
 def test_round_trip(seeded_db, client, tmp_path):
@@ -221,14 +230,14 @@ def test_round_trip(seeded_db, client, tmp_path):
             paths = sorted(c.path for c in _load_all(conn))
             cat_paths = category_paths(conn)
             rules = sorted(
-                (cat_paths[cid], pattern, anchor, description)
-                for cid, pattern, anchor, description in conn.execute(
-                    "SELECT category_id, pattern, is_income_anchor, description FROM label_rules"
+                (cat_paths[cid], pattern, anchor, description, account_id)
+                for cid, pattern, anchor, description, account_id in conn.execute(
+                    "SELECT category_id, pattern, is_income_anchor, description, account_id FROM label_rules"
                 )
             )
         return paths, rules
 
-    # Give a rule a description so the round-trip actually proves descriptions survive.
+    # Give a rule a description and another an account so the round-trip proves both survive.
     client.post(
         "/api/rules",
         json={
@@ -238,17 +247,47 @@ def test_round_trip(seeded_db, client, tmp_path):
             "description": "pub du vendredi",
         },
     )
+    client.post(
+        "/api/rules",
+        json={"category_id": _category_id(client, "courses"), "pattern": "PRIMEUR", "account_id": "JOINT"},
+    )
 
     cfg = _export(seeded_db, tmp_path)
     cats_csv, rules_csv = cfg / "categories.csv", cfg / "rules.csv"
 
     before = snapshot(seeded_db)
 
-    fresh = tmp_path / "fresh.db"
-    init_db(fresh)
+    fresh = make_db(tmp_path / "fresh.db")
     import_csv(cats_csv, rules_csv, fresh)
 
     assert snapshot(fresh) == before
+
+
+def test_import_rules_skips_an_unknown_account_and_reads_files_without_the_column(tmp_path, capsys):
+    cats_csv, rules_csv = tmp_path / "categories.csv", tmp_path / "rules.csv"
+    cats_csv.write_text("path;budget_target\nCourses;\n", encoding="utf-8")
+    rules_csv.write_text(
+        "category_path;pattern;is_income_anchor;description;account\n"
+        "Courses;LIDL;0;;JOINT\n"
+        "Courses;ALDI;0;;NOPE\n"
+        "Courses;CARREFOUR;0;;\n",
+        encoding="utf-8",
+    )
+    fresh = make_db(tmp_path / "fresh.db")
+    import_csv(cats_csv, rules_csv, fresh)
+    with connect(fresh) as conn:
+        assert conn.execute("SELECT pattern, account_id FROM label_rules ORDER BY id").fetchall() == [
+            ("LIDL", "JOINT"),
+            ("CARREFOUR", None),
+        ]
+    assert "unknown account: 'NOPE'" in capsys.readouterr().out
+
+    rules_csv.write_text(
+        "category_path;pattern;is_income_anchor;description\nCourses;LIDL;0;\n", encoding="utf-8"
+    )
+    import_csv(cats_csv, rules_csv, fresh)
+    with connect(fresh) as conn:
+        assert conn.execute("SELECT pattern, account_id FROM label_rules").fetchall() == [("LIDL", None)]
 
 
 def test_export_overrides_csv(seeded_db, client, tmp_path):

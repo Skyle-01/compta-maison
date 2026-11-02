@@ -254,6 +254,53 @@ class TestRules:
         )
         assert resp.status_code == 422  # 'variable' is a group; rules must target a leaf
 
+    def test_rule_rejects_unknown_account(self, seeded_db, client):
+        resp = client.post(
+            "/api/rules",
+            json={"category_id": _category_id(client, "bar"), "pattern": "X", "account_id": "NOPE"},
+        )
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == ["Compte NOPE introuvable"]
+
+    def test_an_account_rule_overrides_a_global_one_without_conflict(self, seeded_db, client):
+        _upload(client)  # CARTE SUPERMARCHE is a JOINT operation, the global rule says courses
+        bar = _category_id(client, "bar")
+        created = client.post(
+            "/api/rules", json={"category_id": bar, "pattern": "SUPERMARCHE", "account_id": "JOINT"}
+        ).json()
+        assert (created["account_id"], created["conflicts"]) == ("JOINT", [])
+        items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]
+        assert next(t for t in items if "SUPERMARCHE" in t["libelle"])["category"] == "bar"
+        assert client.get("/api/transactions/rule-conflicts").json() == []
+
+    def test_an_account_rule_leaves_the_other_accounts_alone(self, seeded_db, client):
+        _upload(client)
+        bar = _category_id(client, "bar")
+        created = client.post(
+            "/api/rules", json={"category_id": bar, "pattern": "SUPERMARCHE", "account_id": "PERSO"}
+        ).json()
+        assert created["conflicts"] == []
+        items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]
+        assert next(t for t in items if "SUPERMARCHE" in t["libelle"])["category"] == "courses"
+
+    def test_two_rules_of_the_same_account_conflict(self, seeded_db, client):
+        _upload(client)
+        bar, courses = _category_id(client, "bar"), _category_id(client, "courses")
+        client.post("/api/rules", json={"category_id": bar, "pattern": "SUPERMARCHE", "account_id": "JOINT"})
+        preview = client.get(
+            "/api/rules/preview",
+            params={"pattern": "SUPERMARCHE", "category_id": courses, "account_id": "JOINT"},
+        ).json()
+        assert [(c["pattern"], c["category_id"], c["count"]) for c in preview["conflicts"]] == [
+            ("SUPERMARCHE", bar, 1)
+        ]
+        created = client.post(
+            "/api/rules", json={"category_id": courses, "pattern": "SUPERMARCHE", "account_id": "JOINT"}
+        ).json()
+        assert [c["category_id"] for c in created["conflicts"]] == [bar]
+        [conflict] = client.get("/api/transactions/rule-conflicts").json()
+        assert sorted(r["category_id"] for r in conflict["rules"]) == sorted([bar, courses])
+
     def test_anchor_rule_mutation_moves_periods(self, seeded_db, client):
         # Salary deposit late in June + spending after it
         csv = (

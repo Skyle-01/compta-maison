@@ -13,3 +13,4 @@ Three sessions of UI changes on 2026-11-02 were checked by lint, vitest and `nex
 ## Progress
 
 - 2026-11-02: item written at the end of the session that shipped the three changes.
+- 2026-11-02: the account-scoped rules session ran a headless-Edge pass on the demo DB for its own change only: the account select in the Catégories rule editor (add and inline edit, `RuleRow` badge), the Transactions rule-mode editor and the « À classer » group editor all render and work, and the Transactions match count and the « À classer » preview line follow the chosen account (14 checks, scratch scripts not kept). Still to do: the three points above, and the new account select on the Catégories and « À classer » screenshots.

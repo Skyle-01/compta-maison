@@ -204,6 +204,37 @@ class TestRulePreview:
         assert rule_preview(seeded_db, "LECLERC", bar, rule_id=leclerc) == (0, [])
         assert [r.pattern for r in rule_preview(seeded_db, "LECLERC", bar)[1]] == ["LECLERC"]
 
+    def test_a_scoped_rule_only_sees_its_account(self, seeded_db):
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "CARTE DRIVE PIZZA", 15, 0, "PERSO"),
+            ("2026-06-02", "2026-06-02", "CARTE DRIVE PIZZA", 15, 0, "JOINT"),
+        )
+        assert rule_preview(seeded_db, "DRIVE")[0] == 2
+        assert rule_preview(seeded_db, "DRIVE", account_id="JOINT")[0] == 1
+
+    def test_a_scoped_rule_only_conflicts_with_its_own_level(self, seeded_db):
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "CARTE LECLERC DRIVE", 40, 0, "PERSO"),
+            ("2026-06-02", "2026-06-02", "CARTE LECLERC DRIVE", 20, 0, "JOINT"),
+        )
+        bar = cat_id(seeded_db, "bar")
+        # Over the global LECLERC rule: an override, not a conflict.
+        assert rule_preview(seeded_db, "DRIVE", bar, account_id="PERSO")[1] == []
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "INSERT INTO label_rules (category_id, pattern, account_id) VALUES (?, 'DRIVE', 'PERSO')",
+                (bar,),
+            )
+        # A global rule on another category conflicts on JOINT only: PERSO's operation is taken over.
+        courses = cat_id(seeded_db, "courses")
+        _, overlaps = rule_preview(seeded_db, "CARTE", cat_id(seeded_db, "salaire"))
+        assert [(r.pattern, r.count) for r in overlaps] == [("LECLERC", 1)]
+        # Another rule of the same account on another category does conflict.
+        _, overlaps = rule_preview(seeded_db, "LECLERC", courses, account_id="PERSO")
+        assert [(r.pattern, r.category_id, r.count) for r in overlaps] == [("DRIVE", bar, 1)]
+
     def test_conflicted_rows_are_neither_counted_nor_grouped(self, seeded_db):
         with connect(seeded_db) as conn:
             conn.execute(

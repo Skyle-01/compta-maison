@@ -22,14 +22,16 @@ GAP_TOLERANCE_DAYS = 4
 
 def budget_starts(conn: sqlite3.Connection) -> dict[str, str]:
     """Budget month -> the date (ISO) of the first deposit opening it, oldest first. Anchors are
-    the credits matching a rule flagged `is_income_anchor`; empty without any. Months before the
-    first deposit are calendar months and have no entry."""
+    the credits matching a rule flagged `is_income_anchor` (a rule scoped to an account only
+    counts for that account's credits); empty without any. Months before the first deposit are
+    calendar months and have no entry."""
     anchor_dates = [
         d
         for (d,) in conn.execute(
             "SELECT DISTINCT t.date_valeur FROM transactions t "
             "WHERE t.credit_cents > 0 AND EXISTS ("
             "  SELECT 1 FROM label_rules r WHERE r.is_income_anchor = 1 AND instr(t.libelle, r.pattern) > 0"
+            "  AND (r.account_id IS NULL OR r.account_id = t.account_id)"
             ")"
         )
     ]

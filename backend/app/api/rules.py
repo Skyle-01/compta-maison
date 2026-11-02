@@ -16,20 +16,21 @@ router = APIRouter(prefix="/api/rules", tags=["rules"])
 
 # Each rule with the operations it classifies (apply_rules sets rule_id on non-manual rows only).
 _SELECT_WITH_COUNTS = (
-    "SELECT r.id, r.category_id, r.pattern, r.is_income_anchor, r.description, "
+    "SELECT r.id, r.category_id, r.pattern, r.is_income_anchor, r.description, r.account_id, "
     "COUNT(t.id), COALESCE(SUM(t.debit_cents), 0), COALESCE(SUM(t.credit_cents), 0) "
     "FROM label_rules r LEFT JOIN transactions t ON t.rule_id = r.id"
 )
 
 
 def _to_model(row: tuple) -> RuleOut:
-    id_, category_id, pattern, is_income_anchor, description, count, debit, credit = row
+    id_, category_id, pattern, is_income_anchor, description, account_id, count, debit, credit = row
     return RuleOut(
         id=id_,
         category_id=category_id,
         pattern=pattern,
         is_income_anchor=bool(is_income_anchor),
         description=description,
+        account_id=account_id,
         operation_count=count,
         debit=euros(debit),
         credit=euros(credit),
@@ -41,9 +42,17 @@ def _get_one(db_path: Path, rule_id: int, with_conflicts: bool = False) -> RuleO
         row = conn.execute(f"{_SELECT_WITH_COUNTS} WHERE r.id = ? GROUP BY r.id", (rule_id,)).fetchone()
     rule = _to_model(row)
     if with_conflicts:
-        _, overlaps = rule_preview(db_path, rule.pattern, rule.category_id, rule_id)
+        _, overlaps = rule_preview(db_path, rule.pattern, rule.category_id, rule_id, rule.account_id)
         rule.conflicts = [RuleConflict(**vars(o)) for o in overlaps]
     return rule
+
+
+def _reject_unknown_account(conn: sqlite3.Connection, account_id: str | None) -> None:
+    if (
+        account_id is not None
+        and not conn.execute("SELECT 1 FROM accounts WHERE code = ?", (account_id,)).fetchone()
+    ):
+        raise HTTPException(422, detail=[f"Compte {account_id} introuvable"])
 
 
 def _refresh(db_path: Path) -> None:
@@ -70,10 +79,12 @@ def preview_rule(
     pattern: Annotated[str, Query(min_length=1)],
     category_id: int | None = None,
     rule_id: int | None = None,
+    account_id: str | None = None,
 ) -> RulePreview:
     """What a rule about to be saved would do: the uncategorised operations it would classify and
-    the other rules (of another category) it would conflict with. `rule_id` = the rule being edited."""
-    uncategorized, overlaps = rule_preview(db_path, pattern, category_id, rule_id)
+    the other rules (of another category) it would conflict with. `rule_id` = the rule being edited,
+    `account_id` = the account it is limited to (none = all accounts)."""
+    uncategorized, overlaps = rule_preview(db_path, pattern, category_id, rule_id, account_id)
     return RulePreview(uncategorized=uncategorized, conflicts=[RuleConflict(**vars(o)) for o in overlaps])
 
 
@@ -82,10 +93,17 @@ def create_rule(rule: RuleIn, db_path: DbPath) -> RuleOut:
     try:
         with connect(db_path) as conn:
             reject_group_target(conn, rule.category_id)
+            _reject_unknown_account(conn, rule.account_id)
             cur = conn.execute(
-                "INSERT INTO label_rules (category_id, pattern, is_income_anchor, description) "
-                "VALUES (?, ?, ?, ?)",
-                (rule.category_id, rule.pattern, int(rule.is_income_anchor), rule.description),
+                "INSERT INTO label_rules (category_id, pattern, is_income_anchor, description, account_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    rule.category_id,
+                    rule.pattern,
+                    int(rule.is_income_anchor),
+                    rule.description,
+                    rule.account_id,
+                ),
             )
             rule_id = cur.lastrowid
     except sqlite3.IntegrityError as exc:
@@ -99,14 +117,16 @@ def update_rule(rule_id: int, rule: RuleIn, db_path: DbPath) -> RuleOut:
     try:
         with connect(db_path) as conn:
             reject_group_target(conn, rule.category_id)
+            _reject_unknown_account(conn, rule.account_id)
             cur = conn.execute(
-                "UPDATE label_rules SET category_id = ?, pattern = ?, is_income_anchor = ?, description = ? "
-                "WHERE id = ?",
+                "UPDATE label_rules SET category_id = ?, pattern = ?, is_income_anchor = ?, description = ?, "
+                "account_id = ? WHERE id = ?",
                 (
                     rule.category_id,
                     rule.pattern,
                     int(rule.is_income_anchor),
                     rule.description,
+                    rule.account_id,
                     rule_id,
                 ),
             )

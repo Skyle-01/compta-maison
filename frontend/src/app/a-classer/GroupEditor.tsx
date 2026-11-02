@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import AccountSelect from "@/components/AccountSelect";
 import { type Category, type RulePreview, shortPath, type UncategorizedGroup } from "@/lib/api";
 import { previewMessage, suggestionReason, type TriageMode } from "@/lib/triage";
 
@@ -11,6 +12,8 @@ export type Draft = {
   mode: TriageMode;
   pattern: string;
   description: string;
+  /** The account the rule is limited to, null = all accounts (the group does not split by account). */
+  account_id: string | null;
 };
 
 /** The active group's category search, rule / manual choice, rule fields and « Classer » button.
@@ -117,6 +120,7 @@ export default function GroupEditor({
                   aria-label="Motif de la règle"
                   className="w-64 rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs"
                 />
+                <AccountSelect value={d.account_id} onChange={(account_id) => update({ account_id })} />
               </div>
               <p
                 className={`text-xs ${currentPreview?.conflicts.length ? "text-amber-800" : "text-zinc-500"}`}

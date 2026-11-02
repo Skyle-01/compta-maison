@@ -285,30 +285,41 @@ class RuleOverlap:
 
 
 def rule_preview(
-    db_path: Path, pattern: str, category_id: int | None = None, rule_id: int | None = None
+    db_path: Path,
+    pattern: str,
+    category_id: int | None = None,
+    rule_id: int | None = None,
+    account_id: str | None = None,
 ) -> tuple[int, list[RuleOverlap]]:
     """What a rule `pattern` on `category_id` would do: the uncategorised non-transfer rows it
     would classify (rows already in conflict stay out), and per other rule of another category
     the non-manual real-flow operations both match, which would become a conflict. `rule_id` is
-    the rule being edited, left out of the comparison."""
+    the rule being edited, left out of the comparison. `account_id` scopes the rule (None = all
+    accounts): it only sees that account's operations and only conflicts with rules of the same
+    level; a global rule leaves out the operations an account rule already takes over."""
     with connect(db_path) as conn:
         conflicted = find_conflicts(conn)
         uncategorized = [
             row[0]
             for row in conn.execute(
                 f"SELECT id FROM transactions WHERE category_id IS NULL AND {real_flow_clause()} "
-                "AND instr(libelle, ?) > 0",
-                (pattern,),
+                "AND instr(libelle, ?) > 0 AND (? IS NULL OR account_id = ?)",
+                (pattern, account_id, account_id),
             )
             if row[0] not in conflicted
         ]
         overlaps = conn.execute(
             "SELECT lr.id, lr.pattern, lr.category_id, COUNT(*) FROM transactions t "
             "JOIN label_rules lr ON instr(t.libelle, lr.pattern) > 0 "
+            "AND (lr.account_id IS NULL OR lr.account_id = t.account_id) "
             f"WHERE t.category_manual = 0 AND {real_flow_clause('t.kind')} AND instr(t.libelle, ?) > 0 "
             "AND lr.id IS NOT ? AND lr.category_id IS NOT ? "
+            "AND lr.account_id IS ? AND (? IS NULL OR t.account_id = ?) "
+            "AND (? IS NOT NULL OR NOT EXISTS ("
+            "  SELECT 1 FROM label_rules sr WHERE sr.account_id = t.account_id AND instr(t.libelle, sr.pattern) > 0"
+            ")) "
             "GROUP BY lr.id ORDER BY COUNT(*) DESC, lr.id",
-            (pattern, rule_id, category_id),
+            (pattern, rule_id, category_id, account_id, account_id, account_id, account_id),
         ).fetchall()
     return len(uncategorized), [RuleOverlap(*row) for row in overlaps]
 

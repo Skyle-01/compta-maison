@@ -228,6 +228,9 @@ class RuleIn(BaseModel):
     pattern: str = Field(min_length=1)
     is_income_anchor: bool = False
     description: str | None = None
+    account_id: str | None = Field(
+        default=None, description="Account code the rule is limited to; null = all accounts"
+    )
 
 
 class RuleConflict(BaseModel):

@@ -142,6 +142,8 @@ export interface Rule {
   pattern: string;
   is_income_anchor: boolean;
   description: string | null;
+  /** Account code the rule is limited to (it beats a global rule there); null = all accounts. */
+  account_id: string | null;
   /** Operations this rule classifies (manual assignments excluded), and their totals. */
   operation_count: number;
   debit: number;
@@ -530,11 +532,18 @@ export const api = {
 
   listRules: (): Promise<Rule[]> => request("/api/rules"),
   /** What a rule about to be saved would classify, and the rules it would conflict with
-   *  (`ruleId`: the rule being edited, left out of the comparison). */
-  previewRule(pattern: string, categoryId: number | null, ruleId?: number): Promise<RulePreview> {
+   *  (`ruleId`: the rule being edited, left out of the comparison; `accountId`: the account it is
+   *  limited to, none = all accounts). */
+  previewRule(
+    pattern: string,
+    categoryId: number | null,
+    ruleId?: number,
+    accountId?: string | null,
+  ): Promise<RulePreview> {
     const search = new URLSearchParams({ pattern });
     if (categoryId != null) search.set("category_id", String(categoryId));
     if (ruleId != null) search.set("rule_id", String(ruleId));
+    if (accountId) search.set("account_id", accountId);
     return request(`/api/rules/preview?${search}`);
   },
   pairTransfer(ids: [number, number]): Promise<Transaction[]> {

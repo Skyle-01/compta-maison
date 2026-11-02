@@ -70,6 +70,14 @@ export default function RuleRow({
           {open ? "▾" : "▸"}
         </button>
         <span className="font-mono text-xs">{rule.pattern}</span>
+        {rule.account_id && (
+          <span
+            className="rounded bg-zinc-100 px-1.5 text-xs text-zinc-600"
+            title="Règle limitée à ce compte : elle l'emporte sur une règle de tous les comptes"
+          >
+            {rule.account_id}
+          </span>
+        )}
         {rule.is_income_anchor && <span title="Ancre de revenu : ouvre un mois budgétaire">⚓</span>}
         {rule.description && <span className="truncate text-zinc-500">{rule.description}</span>}
         <span className="ml-auto flex items-center gap-3 whitespace-nowrap">

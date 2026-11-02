@@ -166,21 +166,28 @@ def import_categories(conn, rows: list[dict]) -> dict[str, int]:
 
 
 def import_rules(conn, rows: list[dict], path_to_id: dict[str, int]) -> int:
-    """Insert each rule under the category named by its path; skip (with a note) unknown paths."""
+    """Insert each rule under the category named by its path; skip (with a note) unknown paths and
+    unknown account codes (the optional `account` column, empty = all accounts)."""
+    accounts = {code for (code,) in conn.execute("SELECT code FROM accounts")}
     count = 0
     for row in rows:
         category_id = path_to_id.get(row["category_path"])
         if category_id is None:
             print(f"Skipping rule for unknown category path: {row['category_path']!r}")
             continue
+        account_id = (row.get("account") or "").strip() or None
+        if account_id is not None and account_id not in accounts:
+            print(f"Skipping rule {row['pattern']!r} for unknown account: {account_id!r}")
+            continue
         conn.execute(
-            "INSERT INTO label_rules (category_id, pattern, is_income_anchor, description) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO label_rules (category_id, pattern, is_income_anchor, description, account_id) "
+            "VALUES (?, ?, ?, ?, ?)",
             (
                 category_id,
                 row["pattern"],
                 1 if row["is_income_anchor"] == "1" else 0,
                 row["description"] or None,
+                account_id,
             ),
         )
         count += 1

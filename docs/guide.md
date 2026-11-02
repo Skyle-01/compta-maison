@@ -12,7 +12,7 @@ Les notions à connaître :
 - **Mois budgétaire** : il suit le salaire, pas le calendrier. Un crédit reconnu comme « salaire » (règle marquée « ancre de revenu ») ouvre un mois ; toutes les opérations jusqu'au salaire suivant lui appartiennent. Un salaire versé à partir du 15 paie le mois suivant.
 - **Nature d'une opération** : revenu, dépense ou virement. Un virement interne (une sortie d'un compte et une entrée du même montant sur un autre compte, à moins de 3 jours) n'est ni un revenu ni une dépense.
 - **Catégorie** : un arbre unique. On classe une opération dans une **feuille** (une catégorie sans sous-catégorie), jamais dans un groupe.
-- **Règle** : un morceau de libellé (texte simple, majuscules et minuscules comptent) qui classe automatiquement les opérations qui le contiennent. Un classement fait à la main sur une opération n'est jamais écrasé par une règle.
+- **Règle** : un morceau de libellé (texte simple, majuscules et minuscules comptent) qui classe automatiquement les opérations qui le contiennent. Une règle peut être limitée à un compte (voir « Catégories »). Un classement fait à la main sur une opération n'est jamais écrasé par une règle.
 
 Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qui reste dans « À classer », puis on lit le « Tableau de bord ».
 
@@ -51,7 +51,7 @@ La page « Statistiques » regroupe les moyennes mensuelles. En haut à droite, 
 
 La liste des opérations, avec des filtres (mois, compte, catégorie, texte, « Sans catégorie uniquement »…). La date affichée est la **date de valeur**.
 
-- **Classer une opération** : ouvrir l'éditeur de la ligne, choisir une catégorie (feuille), puis soit « Cette opération » (classement manuel, avec une description facultative), soit « Règle (opérations similaires) » (crée une règle, avec le nombre d'opérations qu'elle classerait).
+- **Classer une opération** : ouvrir l'éditeur de la ligne, choisir une catégorie (feuille), puis soit « Cette opération » (classement manuel, avec une description facultative), soit « Règle (opérations similaires) » (crée une règle, éventuellement limitée à un compte, avec le nombre d'opérations qu'elle classerait).
 - **Badges** : ⚙ indique un classement par règle, ✎ un classement manuel.
 - **Associer deux opérations en virement** : cocher deux lignes (une sortie, une entrée de même montant sur deux comptes), puis « Associer en virement ». Cocher une seule ligne offre « Marquer comme virement » (virement à un seul côté). Sur une ligne déjà virement, « Dissocier » la détache et « Auto » rend la décision à la détection automatique.
 - **Exporter CSV** : toutes les opérations du filtre en cours, au format d'un Excel français.
@@ -60,7 +60,7 @@ La liste des opérations, avec des filtres (mois, compte, catégorie, texte, « 
 
 ![La page À classer](img/a-classer.png)
 
-Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque groupe, on choisit une catégorie : un groupe de plusieurs opérations propose par défaut une **règle**, une opération isolée un **classement manuel**.
+Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque groupe, on choisit une catégorie : un groupe de plusieurs opérations propose par défaut une **règle**, une opération isolée un **classement manuel**. Une règle créée ici vaut pour tous les comptes ; le champ compte, à côté du motif, la limite à un compte.
 
 - Au clavier : ↑/↓ changent de groupe, Entrée classe dans la catégorie proposée, Alt+M bascule règle / manuel, →/← montrent ou cachent les opérations, Échap efface la saisie.
 - « Annuler » (8 secondes, ou Alt+Z) défait le dernier classement.
@@ -76,7 +76,7 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 
 - **Créer, renommer, déplacer, supprimer** : ＋ ajoute une sous-catégorie, ✎ renomme ou change le parent, ✕ supprime. Créer une sous-catégorie sous une feuille déjà utilisée y descend ses règles et ses opérations. Supprimer la dernière sous-catégorie d'un groupe remonte ses règles et ses opérations sur le parent.
 - **Fixer un objectif de budget** : « ＋ objectif » sur une feuille ou un groupe, un montant mensuel en euros. Un seul objectif par branche. Un objectif sur le groupe « Épargne » est l'objectif d'épargne mensuel (un plancher).
-- **Règles** : déplier une feuille pour voir ses règles (ancre de revenu, opérations touchées), les modifier, les supprimer, ou « ＋ règle ». Il n'y a pas de priorité entre les règles : si deux règles de catégories différentes correspondent à la même opération, c'est un **conflit** (voir « À classer »). Enregistrer une règle qui crée un conflit affiche un avertissement, la règle est enregistrée quand même. Deux règles de la même catégorie ne sont jamais en conflit.
+- **Règles** : déplier une feuille pour voir ses règles (ancre de revenu, opérations touchées), les modifier, les supprimer, ou « ＋ règle ». Une règle s'applique par défaut à « Tous les comptes » ; le champ compte la limite à un seul compte (pour deux comptes sur trois, créer deux règles). Une règle d'un compte l'emporte toujours sur une règle de tous les comptes : ce n'est pas un conflit, c'est la façon de classer le même libellé autrement selon le compte. Il n'y a pas d'autre priorité : si deux règles de catégories différentes du même niveau (deux règles de tous les comptes, ou deux règles du même compte) correspondent à la même opération, c'est un **conflit** (voir « À classer »). Une règle d'ancre de revenu limitée à un compte n'ouvre un mois que pour les crédits de ce compte. Enregistrer une règle qui crée un conflit affiche un avertissement, la règle est enregistrée quand même. Deux règles de la même catégorie ne sont jamais en conflit.
 - **Déplacer des règles ou des opérations** : cocher, choisir la feuille cible. Une opération classée par règle ne se déplace pas seule : « Classer à part » la rend manuelle.
 - **Recherche** : sur les noms, les motifs de règles et les libellés ou notes manuels (sans tenir compte des accents ni de la casse).
 

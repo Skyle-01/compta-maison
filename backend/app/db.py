@@ -49,7 +49,8 @@ CREATE TABLE IF NOT EXISTS label_rules (
     category_id      INTEGER NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
     pattern          TEXT NOT NULL,
     is_income_anchor INTEGER NOT NULL DEFAULT 0,
-    description      TEXT
+    description      TEXT,
+    account_id       TEXT REFERENCES accounts(code)      /* NULL = all accounts; a rule of an account beats a global one */
 );
 
 /* Label prefixes identifying a virement for transfer auto-pairing (core/transfers.py).

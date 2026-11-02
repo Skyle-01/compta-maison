@@ -13,38 +13,48 @@ UNBALANCED_TOLERANCE_CENTS = 1
 def find_conflicts(conn: sqlite3.Connection) -> dict[int, list[tuple[int, str, int]]]:
     """Real-flow, non-manual operations matched by rules of 2+ different categories:
     {transaction_id: [(rule_id, pattern, category_id), ...]}, rules by id. Two rules on the same
-    category are not a conflict."""
+    category are not a conflict. Only the most specific level counts: the rules of the operation's
+    account when any matches, else the global ones (account_id NULL), so an account rule overriding
+    a global one is no conflict."""
     rows = conn.execute(
-        "SELECT t.id, r.id, r.pattern, r.category_id FROM transactions t "
+        "SELECT t.id, r.id, r.pattern, r.category_id, r.account_id FROM transactions t "
         "JOIN label_rules r ON instr(t.libelle, r.pattern) > 0 "
+        "AND (r.account_id IS NULL OR r.account_id = t.account_id) "
         f"WHERE t.category_manual = 0 AND {real_flow_clause('t.kind')} ORDER BY t.id, r.id"
     ).fetchall()
-    matches: dict[int, list[tuple[int, str, int]]] = defaultdict(list)
-    for transaction_id, rule_id, pattern, category_id in rows:
-        matches[transaction_id].append((rule_id, pattern, category_id))
-    return {
-        transaction_id: rules
-        for transaction_id, rules in matches.items()
-        if len({category_id for _, _, category_id in rules}) > 1
-    }
+    matches: dict[int, list[tuple[int, str, int, str | None]]] = defaultdict(list)
+    for transaction_id, *rule in rows:
+        matches[transaction_id].append(tuple(rule))
+    conflicts = {}
+    for transaction_id, rules in matches.items():
+        in_force = [r for r in rules if r[3] is not None] or rules
+        if len({category_id for _, _, category_id, _ in in_force}) > 1:
+            conflicts[transaction_id] = [
+                (rule_id, pattern, category_id) for rule_id, pattern, category_id, _ in in_force
+            ]
+    return conflicts
 
 
 def apply_rules(db_path: Path = DEFAULT_DB_PATH) -> None:
     """Re-categorise all non-manual transactions from label_rules.
 
     Patterns are plain substrings matched case-sensitively against libelle
-    (instr mirrors str.contains(regex=False)). The matching rule of lowest id wins, except on a
-    real-flow operation matched by rules of different categories (a conflict, see find_conflicts):
-    it stays uncategorised rather than pick a winner.
+    (instr mirrors str.contains(regex=False)). The rules of an account come first and only touch its
+    operations, then the global ones take what is left; within a level the matching rule of lowest id
+    wins, except on a real-flow operation matched by rules of different categories at its level (a
+    conflict, see find_conflicts): it stays uncategorised rather than pick a winner.
     """
     with connect(db_path) as conn:
         conn.execute("UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE category_manual = 0")
-        rules = conn.execute("SELECT id, category_id, pattern FROM label_rules ORDER BY id").fetchall()
-        for rule_id, category_id, pattern in rules:
+        rules = conn.execute(
+            "SELECT id, category_id, pattern, account_id FROM label_rules ORDER BY account_id IS NULL, id"
+        ).fetchall()
+        for rule_id, category_id, pattern, account_id in rules:
             conn.execute(
                 "UPDATE transactions SET category_id = ?, rule_id = ? "
-                "WHERE category_manual = 0 AND category_id IS NULL AND instr(libelle, ?) > 0",
-                (category_id, rule_id, pattern),
+                "WHERE category_manual = 0 AND category_id IS NULL AND instr(libelle, ?) > 0 "
+                "AND (? IS NULL OR account_id = ?)",
+                (category_id, rule_id, pattern, account_id, account_id),
             )
         conflicted = list(find_conflicts(conn))
         conn.executemany(

@@ -43,8 +43,8 @@ export default function TransactionsPage() {
   const [editMode, setEditMode] = useState<EditMode>("manual");
   const [form, setForm] = useState<RuleForm>(emptyRuleForm());
   const edit = (patch: Partial<RuleForm>) => setForm((f) => ({ ...f, ...patch }));
-  // Last live-preview result, keyed by the pattern it counted (see the preview effect below).
-  const [matchResult, setMatchResult] = useState<{ pattern: string; count: number } | null>(null);
+  // Last live-preview result, keyed by the pattern and account it counted (see the preview effect below).
+  const [matchResult, setMatchResult] = useState<{ key: string; count: number } | null>(null);
   // Rows ticked for a manual transfer decision (kept across pages/months; at most two).
   const [selected, setSelected] = useState<Map<number, Transaction>>(new Map());
 
@@ -95,24 +95,28 @@ export default function TransactionsPage() {
 
   // Live preview (rule mode only): count the rows the rule would actually claim — currently
   // uncategorised, non-transfer transactions whose label contains the pattern (same case-sensitive
-  // instr semantics as the rule engine). Debounced.
+  // instr semantics as the rule engine), of the rule's account when it is limited to one. Debounced.
+  const matchKey = `${form.pattern.trim()}\u0000${form.account_id ?? ""}`;
   useEffect(() => {
     const pattern = form.pattern.trim();
     if (editingTxId == null || editMode !== "rule" || !pattern) return;
     const timer = setTimeout(() => {
       api
-        .listTransactions({ libelleContains: pattern, uncategorized: true, limit: 1 })
-        .then((page) => setMatchResult({ pattern, count: page.total }))
+        .listTransactions({
+          libelleContains: pattern,
+          account: form.account_id ?? undefined,
+          uncategorized: true,
+          limit: 1,
+        })
+        .then((page) => setMatchResult({ key: matchKey, count: page.total }))
         .catch(() => setMatchResult(null));
     }, 250);
     return () => clearTimeout(timer);
-  }, [form.pattern, editMode, editingTxId]);
-  // Only a count for the pattern currently typed is shown ("…" while the debounce runs), so a
-  // late response for an older pattern can't be mistaken for the current one.
+  }, [form.pattern, form.account_id, matchKey, editMode, editingTxId]);
+  // Only a count for the pattern and account currently set is shown ("…" while the debounce runs),
+  // so a late response for an older one can't be mistaken for the current one.
   const matchCount =
-    editingTxId != null && editMode === "rule" && matchResult?.pattern === form.pattern.trim()
-      ? matchResult.count
-      : null;
+    editingTxId != null && editMode === "rule" && matchResult?.key === matchKey ? matchResult.count : null;
 
   // Auto-dismiss the success flash.
   useEffect(() => {

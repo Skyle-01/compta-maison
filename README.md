@@ -54,9 +54,10 @@ your own `accounts.csv` their account names no longer resolve).
    - `categories.csv`: `path;budget_target` — one full category path per line
      (`Vie courante / Courses`), with an optional monthly spending target in euros on leaf categories
      (`450.00`; a file with only the `path` column still loads).
-   - `rules.csv`: `category_path;pattern;is_income_anchor;description`. A pattern is a
+   - `rules.csv`: `category_path;pattern;is_income_anchor;description;account`. A pattern is a
      plain, case-sensitive substring of the bank label. The rule flagged `is_income_anchor=1`
-     (your salary) starts each budget month.
+     (your salary) starts each budget month. The optional `account` (an account code, empty =
+     all accounts) limits a rule to one account, where it beats a rule for all accounts.
    - `transfer_markers.csv` (optional): one `marker` per line. A debit and a credit of the same
      amount on two of your accounts, at most 3 days apart, are paired as an internal transfer
      (left out of income and expenses) only if **both** labels start with one of these prefixes
