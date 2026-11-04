@@ -99,11 +99,11 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 - **Comptes** : la liste des comptes, avec ✎ pour modifier le libellé, les alias, le motif de dépôt, la date de départ et la couleur d'un compte, et un formulaire pour en ajouter un. Le code et le type ne changent plus après la création. Un relevé est rattaché à un compte par son nom de fichier : le code, le libellé ou un alias (par exemple le numéro de compte de la banque) doit s'y retrouver. Un nom ne peut désigner qu'un seul compte. La date de départ (comptes courants) écarte à l'import les opérations valorisées avant elle ; choisissez la date du salaire qui ouvre le premier mois du compte. Modifier cette date ne retire pas les lignes déjà importées : reconstruisez la base (`reset_db.py`). La couleur se choisit parmi huit pastilles ; sans choix (« Par défaut »), le compte prend une couleur selon sa position dans la liste, donc deux comptes peuvent partager la même. Enregistrer un compte recalcule les virements, car les noms des comptes servent à les reconnaître.
 - **Virements internes** : les débuts de libellé qui signalent un virement (par défaut `VIR`). `*` accepte n'importe quel libellé.
 - **Virements manuels** : les opérations appariées à la main, par paires, avec « Auto » pour rendre la main à la détection.
-- **Sauvegarde** : « Enregistrer la configuration » écrit les comptes, catégories, règles et décisions manuelles dans `_config/`, pour pouvoir reconstruire la base.
+- **Sauvegarde** : « Enregistrer la configuration » écrit les comptes, catégories, règles et décisions manuelles dans `_config/`, pour pouvoir reconstruire la base. « Exporter les opérations en CSV » écrit, à part, les opérations de la base en relevés réimportables (un fichier par compte) dans le sous-dossier `inputs/` d'un nouveau dossier daté de `_backups/`. Elle ne touche jamais à `_inputs/`, et ne contient que les opérations postérieures aux dates de début : ce n'est pas une copie de `_inputs/`.
 
 ### Sauvegardes et reconstruction
 
-Les opérations viennent toujours de `_inputs/`. Une copie complète de l'état = « Enregistrer la configuration » + les fichiers de `_inputs/`. La reconstruction d'une base se fait en ligne de commande (`reset_db.py`) : voir le README à la racine du dépôt.
+Les opérations viennent toujours de `_inputs/`. Une copie complète de l'état = « Enregistrer la configuration » + les fichiers de `_inputs/`. Si `_inputs/` est perdu, l'export des opérations sert de filet : lancez `reset_db.py` avec la variable `COMPTA_INPUTS_DIR` pointant sur le dossier `_backups/<date>/inputs/` pour reconstruire la base depuis ces fichiers. La reconstruction d'une base se fait en ligne de commande (`reset_db.py`) : voir le README à la racine du dépôt.
 
 ## Aide
 

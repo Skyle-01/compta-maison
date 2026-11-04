@@ -21,7 +21,7 @@ backend/
       transfers.py     # auto-pair internal transfers across accounts (recompute_transfers), transfer_candidates
       inputs.py        # _inputs/ archive of uploads (archive_statement); import_inputs_dir = the one loop importing every _inputs/*.csv into an existing DB (no recompute), shared by reset_db, import_inputs.py and POST /api/imports/inputs; gap_warning + account_coverage (GET /api/imports/coverage)
       categorize.py    # apply_rules, category_tree, income_and_expenses, monthly_totals, budget_status, category_averages (+ averaging_window), uncategorized_balance, transfers_summary
-      config_export.py # config CSVs written from the DB (export_config, *_rows builders), backups_dir, save_config (the Réglages « Enregistrer la configuration » button); reset_db.py's snapshots use export_config too
+      config_export.py # config CSVs written from the DB (export_config, *_rows builders), backups_dir, save_config (the Réglages « Enregistrer la configuration » button); reset_db.py's snapshots use export_config too; export_statements (POST /api/config/export-statements: the operations as re-importable DEFAULT_PROFILE CSVs, one per raw account, into _backups/<ts>/inputs/)
       triage.py        # « À classer » logic: label_key, default_pattern + is_generic, SuggestionIndex, uncategorized_groups, rule_preview
     api/               # routers: imports, transactions, categories, rules, dashboard, accounts, transfer_markers, config (POST /api/config/export); deps.py (Annotated deps); errors.py (French request-validation messages + the non-UTF-8 body 400)
   scripts/reset_db.py  # THE rebuild CLI (see Rebuild model)

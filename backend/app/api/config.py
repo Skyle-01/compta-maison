@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException
 
 from app.api.deps import ConfigDir, DbPath
-from app.core.config_export import save_config
-from app.schemas import ConfigExportResult
+from app.core.config_export import export_statements, save_config
+from app.schemas import ConfigExportResult, StatementsExportResult
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -29,4 +29,26 @@ def export_config_dir(db_path: DbPath, config_dir: ConfigDir) -> ConfigExportRes
         rules=counts.rules,
         overrides=counts.overrides,
         transfer_markers=counts.transfer_markers,
+    )
+
+
+@router.post("/export-statements")
+def export_statements_dir(db_path: DbPath) -> StatementsExportResult:
+    """Write the DB's operations as re-importable bank CSVs (one per account) to a new
+    _backups/<ts>/inputs/, a safety net for _inputs/. Never writes to _inputs/."""
+    try:
+        exported = export_statements(db_path)
+    except ValueError as exc:
+        raise HTTPException(422, detail=[str(exc)]) from exc
+    except OSError as exc:
+        raise HTTPException(
+            500,
+            detail=[
+                f"Impossible d'écrire {exc.filename2 or exc.filename or 'le fichier'} : {exc.strerror or exc}"
+            ],
+        ) from exc
+    return StatementsExportResult(
+        backup_dir=str(exported.backup_dir) if exported.backup_dir else None,
+        files=exported.files,
+        operations=exported.operations,
     )

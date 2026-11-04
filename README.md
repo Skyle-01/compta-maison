@@ -88,7 +88,9 @@ snapshot's files into `_config/` to make it your new reference setup. Or let the
 « Enregistrer la configuration » writes your accounts, categories, rules, manual decisions and transfer markers from the
 database into `_config/` (after copying the files it replaces, and the database itself, to `_backups/<timestamp>/`; your
 `bank_profiles.toml` and `settings.toml` are never touched), so `reset_db.py --source defaults` rebuilds the same database
-if `compta.db` is ever lost.
+if `compta.db` is ever lost. As a safety net for `_inputs/`, « Exporter les opérations en CSV » (same section) writes the
+operations kept in the database as re-importable statements, one file per account, to `_backups/<timestamp>/inputs/`
+(never to `_inputs/`); to rebuild from them, run `reset_db.py` with `COMPTA_INPUTS_DIR` pointing at that folder.
 
 ## Other banks
 

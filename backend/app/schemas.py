@@ -69,6 +69,15 @@ class AccountCoverage(BaseModel):
     holes: list[Silence] = Field(description="Days covered by no _inputs/ statement, between two of them")
 
 
+class StatementsExportResult(BaseModel):
+    """What « Exporter les opérations en CSV » wrote: `backup_dir` is the `_backups/<ts>/` holding
+    the `inputs/` folder, None when the DB has no operation."""
+
+    backup_dir: str | None
+    files: int
+    operations: int
+
+
 class ConfigExportResult(BaseModel):
     """What « Enregistrer la configuration » wrote to the config dir, and where the files it
     replaced (plus the DB) were backed up first."""

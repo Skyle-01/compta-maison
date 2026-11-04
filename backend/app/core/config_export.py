@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from app.core.bank_profiles import DEFAULT_PROFILE
+from app.core.parsing import infer_account
 from app.db import account_aliases_by_code, connect, euros, get_transfer_markers
 
 # Full category paths use this separator (matches CategoryOut.path); the CSV importer splits on it.
@@ -66,14 +68,18 @@ def csv_text(header: list[str], rows: list[list]) -> str:
     return buf.getvalue()
 
 
-def write_csv(path: Path, header: list[str], rows: list[list]) -> None:
+def write_text_atomic(path: Path, text: str) -> None:
     """Write through a temp file then replace, so an interrupted write never leaves a truncated CSV."""
     tmp = path.with_name(path.name + ".tmp")
     try:
-        tmp.write_text(csv_text(header, rows), encoding="utf-8-sig", newline="")
+        tmp.write_text(text, encoding="utf-8-sig", newline="")
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
+
+
+def write_csv(path: Path, header: list[str], rows: list[list]) -> None:
+    write_text_atomic(path, csv_text(header, rows))
 
 
 def category_paths(conn: sqlite3.Connection) -> dict[int, str]:
@@ -244,3 +250,67 @@ def save_config(db_path: Path, config_dir: Path) -> ConfigSave:
             shutil.copy2(config_dir / name, backup / name)
     backup_db(db_path, backup / "compta.db")
     return ConfigSave(export_config(db_path, config_dir), backup)
+
+
+@dataclass(frozen=True)
+class StatementsExport:
+    backup_dir: Path | None  # None when the DB holds no operation (nothing written)
+    files: int
+    operations: int
+
+
+def _statement_text(rows: list[tuple]) -> str:
+    """One account's rows in the DEFAULT_PROFILE layout: everything quoted, `;`, comma decimals,
+    dd/mm/yyyy, an empty cell for a zero amount. parse_statement reads it back to the same
+    import_hash values (the occurrence counter keeps identical same-day operations apart)."""
+
+    def day(iso: str) -> str:
+        return f"{iso[8:10]}/{iso[5:7]}/{iso[:4]}"
+
+    def amount(cents: int) -> str:
+        return f"{euros(cents):.2f}".replace(".", ",") if cents else ""
+
+    buf = io.StringIO()
+    writer = csv.writer(buf, delimiter=";", quoting=csv.QUOTE_ALL, lineterminator="\n")
+    profile = DEFAULT_PROFILE
+    writer.writerow(
+        [profile.date_operation, profile.date_valeur, profile.libelle, profile.debit, profile.credit]
+    )
+    for date_operation, date_valeur, libelle, debit_cents, credit_cents in rows:
+        writer.writerow(
+            [day(date_operation), day(date_valeur), libelle, amount(debit_cents), amount(credit_cents)]
+        )
+    return buf.getvalue()
+
+
+def export_statements(db_path: Path) -> StatementsExport:
+    """Safety net for _inputs/: write the DB's operations as re-importable bank CSVs, one file per
+    raw `transactions.account` string (the string feeds import_hash), into a new
+    `_backups/<ts>/inputs/`. Only the rows kept since the start dates exist in the DB, so this is
+    not a copy of _inputs/. Never writes to _inputs/. Raises ValueError (French) when a file name
+    would not give its account back through infer_account; nothing is written then."""
+    with connect(db_path) as conn:
+        found = conn.execute(
+            "SELECT account, date_operation, date_valeur, libelle, debit_cents, credit_cents "
+            "FROM transactions ORDER BY date_valeur, id"
+        ).fetchall()
+    by_account: dict[str, list[tuple]] = {}
+    for account, *row in found:
+        by_account.setdefault(account, []).append(tuple(row))
+    if not by_account:
+        return StatementsExport(None, 0, 0)
+
+    stamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+    names = {account: f"RELEVE_{account.replace(' ', '_')}_{stamp}.csv" for account in by_account}
+    for account, name in names.items():
+        if infer_account(name) != account:
+            raise ValueError(
+                f"Impossible d'exporter le compte « {account} » : le nom de fichier {name} ne permet "
+                "pas de retrouver ce compte à l'import."
+            )
+
+    out_dir = new_backup_dir(db_path) / "inputs"
+    out_dir.mkdir()
+    for account, name in names.items():
+        write_text_atomic(out_dir / name, _statement_text(by_account[account]))
+    return StatementsExport(out_dir.parent, len(by_account), len(found))

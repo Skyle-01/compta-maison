@@ -69,6 +69,14 @@ export interface ConfigExportResult {
   transfer_markers: number;
 }
 
+/** What « Exporter les opérations en CSV » wrote: `backup_dir` holds the `inputs/` folder, null
+ *  when the database has no operation. */
+export interface StatementsExportResult {
+  backup_dir: string | null;
+  files: number;
+  operations: number;
+}
+
 export interface Transaction {
   id: number;
   date_operation: string;
@@ -581,6 +589,8 @@ export const api = {
 
   /** Regenerate the config dir's CSVs from the DB (after backing up the old ones and the DB). */
   exportConfig: (): Promise<ConfigExportResult> => request("/api/config/export", { method: "POST" }),
+  exportStatements: (): Promise<StatementsExportResult> =>
+    request("/api/config/export-statements", { method: "POST" }),
 
   dashboard(month?: string): Promise<Dashboard> {
     return request(`/api/dashboard${month ? `?month=${month}` : ""}`);

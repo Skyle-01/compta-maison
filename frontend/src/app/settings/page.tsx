@@ -8,6 +8,7 @@ import {
   errorMessage,
   type Account,
   type ConfigExportResult,
+  type StatementsExportResult,
   type Transaction,
   frenchDate,
   notifyUncategorizedChanged,
@@ -502,12 +503,19 @@ function savedMessage(r: ConfigExportResult): string {
   return `Configuration enregistrée dans ${r.config_dir} : ${counts}. L’ancienne version et la base sont copiées dans ${r.backup_dir}.`;
 }
 
+function exportedMessage(r: StatementsExportResult): string {
+  if (!r.backup_dir) return "Aucune opération à exporter.";
+  return `${plural(r.operations, "opération exportée", "opérations exportées")} dans ${plural(r.files, "fichier", "fichiers")}, dans le sous-dossier inputs/ de ${r.backup_dir}.`;
+}
+
 /** Writes the DB's accounts, taxonomy, manual decisions and transfer markers to the config dir, so
  *  reset_db.py --source defaults rebuilds the same DB if compta.db is lost. */
 function BackupSection() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<string | null>(null);
 
   async function save() {
     setSaving(true);
@@ -519,6 +527,19 @@ function BackupSection() {
       setError(errorMessage(e));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function exportStatements() {
+    setExporting(true);
+    setExported(null);
+    setError(null);
+    try {
+      setExported(exportedMessage(await api.exportStatements()));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -543,6 +564,20 @@ function BackupSection() {
           {saving ? "Enregistrement…" : "Enregistrer la configuration"}
         </button>
         {saved && <p className="flex-1 text-zinc-600">{saved}</p>}
+      </div>
+      <p className="text-sm text-zinc-500">
+        Écrit les opérations de la base en relevés CSV réimportables (un fichier par compte) dans le
+        sous-dossier <code className="rounded bg-zinc-100 px-1 text-zinc-700">inputs/</code> d&apos;un
+        nouveau dossier daté de <code className="rounded bg-zinc-100 px-1 text-zinc-700">_backups/</code>,
+        sans toucher à <code className="rounded bg-zinc-100 px-1 text-zinc-700">_inputs/</code>. Seules
+        les opérations postérieures aux dates de début sont dans la base : ce n&apos;est pas une copie de
+        <code className="mx-1 rounded bg-zinc-100 px-1 text-zinc-700">_inputs/</code>.
+      </p>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
+        <button onClick={exportStatements} disabled={exporting} className="btn-secondary">
+          {exporting ? "Export…" : "Exporter les opérations en CSV"}
+        </button>
+        {exported && <p className="flex-1 text-zinc-600">{exported}</p>}
       </div>
     </section>
   );
