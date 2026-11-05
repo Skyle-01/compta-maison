@@ -474,6 +474,25 @@ export function leafFilters(node: CategoryNode, month?: string): TransactionFilt
   return { month, categoryId: node.id };
 }
 
+const LEAF_BATCH = 6;
+
+/** The operations of each leaf, one `GET /api/transactions` per leaf (`limit` 1000 is the API's page
+ *  maximum) sent in small batches, so a tree with many leaves doesn't open dozens of requests at once. */
+export async function listLeafOperations(
+  leaves: CategoryNode[],
+  month: string | undefined,
+): Promise<Map<CategoryNode, Transaction[]>> {
+  const operations = new Map<CategoryNode, Transaction[]>();
+  for (let i = 0; i < leaves.length; i += LEAF_BATCH) {
+    const chunk = leaves.slice(i, i + LEAF_BATCH);
+    const pages = await Promise.all(
+      chunk.map((n) => api.listTransactions({ ...leafFilters(n, month), limit: 1000 })),
+    );
+    chunk.forEach((n, j) => operations.set(n, pages[j].items));
+  }
+  return operations;
+}
+
 export const api = {
   uploadCsv(file: File, account: string): Promise<ImportResult> {
     const form = new FormData();

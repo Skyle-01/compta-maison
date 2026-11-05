@@ -14,30 +14,38 @@ Les notions à connaître :
 - **Catégorie** : un arbre unique. On classe une opération dans une **feuille** (une catégorie sans sous-catégorie), jamais dans un groupe.
 - **Règle** : un morceau de libellé (texte simple, majuscules et minuscules comptent) qui classe automatiquement les opérations qui le contiennent. Une règle peut être limitée à un compte (voir « Catégories »). Un classement fait à la main sur une opération n'est jamais écrasé par une règle.
 
-Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qui reste dans « À classer », puis on lit le « Tableau de bord ».
+Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qui reste dans « À classer », puis on lit « Le mois » et le « Budget ».
 
-## Tableau de bord
+La navigation regroupe les pages en trois familles : **Analyser** (Le mois, Budget, Statistiques), **Traiter** (Transactions, À classer, Catégories, Importer) et **Configurer** (Réglages, Aide). Le nombre à côté de « À classer » est celui des opérations encore sans catégorie, et « Dernière opération » indique la date des relevés les plus récents.
 
-![Le tableau de bord](img/dashboard.png)
+## Le mois
 
-En haut, le mois affiché (liste déroulante, « Tous les mois » pour l'ensemble de la période, « Dernier mois » pour revenir au plus récent) et le lien « Rapport PDF ».
+![La page Le mois](img/dashboard.png)
 
-- **Les quatre cartes** : Revenus, Dépenses, Épargne et Reste. Elles se réconcilient : Revenus - Dépenses - Épargne = Reste. Les variations par rapport au mois précédent sont indiquées (masquées dans « Tous les mois »).
+En haut, le mois affiché (liste déroulante, « Dernier mois » pour revenir au plus récent) et le lien « Rapport PDF ». Pour une vue sur toute la période, voir « Statistiques ».
+
+- **Les quatre cartes** : Revenus, Dépenses, Épargne et Reste. Elles se réconcilient : Revenus - Dépenses - Épargne = Reste. Les variations par rapport au mois précédent sont indiquées.
 - **Reste mois par mois** : une barre par mois. Le mois affiché est en couleur pleine, le mois en cours (encore incomplet) est en pointillés. Un clic sur une barre bascule sur ce mois. Un mois « partiel » (voir ci-dessous) est signalé dans l'infobulle et dans la liste déroulante des mois.
-- **Budget** : pour chaque catégorie qui a un objectif, la dépense du mois face à son plafond. Vert sous 90 %, orange entre 90 et 100 %, rouge au-delà. Le solde du budget (revenu de référence - objectifs de dépense - objectif d'épargne) passe au rouge s'il est négatif : c'est un avertissement, jamais un blocage.
+- **Résumé du budget** : une ligne (dépenses face aux objectifs, nombre de groupes dépassés) qui mène à la page « Budget ».
 - **Flux d'argent** : un diagramme de Sankey qui part des revenus, passe par le budget et finit dans les groupes de dépenses, l'épargne et le Reste (ou le Découvert quand les sorties dépassent les entrées).
-- **Arbre des catégories** : le total par catégorie. Cliquer sur une feuille affiche ses opérations, chacune précédée de la pastille de couleur de son compte ; les lignes d'épargne d'un compte importé portent aussi la leur.
+- **Détail par catégorie** : le total par catégorie, toujours déplié, avec sous chaque feuille ses opérations, chacune précédée de la pastille de couleur de son compte ; les lignes d'épargne d'un compte importé portent aussi la leur.
 - **Avertissement « non classé »** : des opérations sans catégorie faussent les totaux par catégorie. Elles se traitent dans « À classer ».
 
 ### Épargne et désépargne
 
-Pour chaque compte d'épargne, l'application calcule le net du mois : positif, c'est de l'**épargne** (comptée dans la carte Épargne) ; négatif, c'est de la **désépargne** (un retrait, compté en déficit). Sur « Tous les mois », un même compte peut donc apparaître des deux côtés, sans que l'un annule l'autre.
+Pour chaque compte d'épargne, l'application calcule le net du mois : positif, c'est de l'**épargne** (comptée dans la carte Épargne) ; négatif, c'est de la **désépargne** (un retrait, compté en déficit). Sur plusieurs mois (par exemple dans « Statistiques »), un même compte peut donc apparaître des deux côtés, sans que l'un annule l'autre.
 
 ### Rapport PDF
 
 Le lien « Rapport PDF » ouvre une version imprimable pour le foyer. Choisir le mois (par défaut le dernier mois complet), puis « Enregistrer en PDF » : dans la fenêtre d'impression du navigateur, choisir « Enregistrer au format PDF » et décocher les en-têtes et pieds de page.
 
-Le rapport montre une synthèse (cartes, tendance, « Comment lire »), les derniers mois, le détail du mois, le détail par catégorie (avec les opérations de chaque feuille) et le diagramme des flux. Ses Revenus et Dépenses sont **nets des remboursements** : ils peuvent être plus bas que ceux du tableau de bord, mais le Reste est identique. Un montant notable est en gras rouge ou vert : au-dessus de son objectif, ou à la fois d'au moins 20 euros et 20 % d'écart avec sa moyenne.
+Le rapport montre une synthèse (cartes, tendance, « Comment lire »), les derniers mois, le détail du mois, le détail par catégorie (avec les opérations de chaque feuille) et le diagramme des flux. Ses Revenus et Dépenses sont **nets des remboursements** : ils peuvent être plus bas que ceux de la page « Le mois », mais le Reste est identique. Un montant notable est en gras rouge ou vert : au-dessus de son objectif, ou à la fois d'au moins 20 euros et 20 % d'écart avec sa moyenne.
+
+## Budget
+
+![La page Budget](img/budget.png)
+
+La page « Budget » compare, pour le mois choisi (liste déroulante, « Dernier mois »), la dépense de chaque catégorie qui a un objectif à son plafond. Vert sous 90 %, orange entre 90 et 100 %, rouge au-delà. Le solde du budget (revenu de référence - objectifs de dépense - objectif d'épargne) passe au rouge s'il est négatif : c'est un avertissement, jamais un blocage. Les objectifs se fixent dans « Catégories ».
 
 ## Statistiques
 

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { type BudgetSummary, formatEuro } from "@/lib/api";
-import { barWidth, budgetLeft, budgetMargin, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
+import { barWidth, budgetLeft, hasTargets, budgetMargin, budgetRatio, budgetTone, type BudgetTone } from "@/lib/budget";
 
 const TONE_BAR: Record<BudgetTone, string> = {
   ok: "bg-green-500",
@@ -85,20 +85,13 @@ export function BudgetBalance({
 
 /** Spending vs the categories' monthly targets, one card per top-level group, overruns first
  *  (the backend already orders groups and leaves). Hidden when no category has a target. */
-export default function BudgetSection({ budget, all }: { budget: BudgetSummary; all: boolean }) {
-  if (budget.groups.length === 0 && budget.savings_target === null) return null;
+export default function BudgetSection({ budget }: { budget: BudgetSummary }) {
+  if (!hasTargets(budget)) return null;
   const savingsShort = budget.savings_target !== null ? budget.savings_target - budget.savings_actual : 0;
   return (
     <section>
       <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="font-semibold">
-          Budget
-          {all && (
-            <span className="ml-2 text-sm font-normal text-zinc-500">
-              sur {budget.months} mois (objectifs mensuels × {budget.months})
-            </span>
-          )}
-        </h2>
+        <h2 className="font-semibold">Objectifs du mois</h2>
         <Link
           href="/categories"
           className="text-xs text-zinc-600 underline hover:text-zinc-900 hover:no-underline print:hidden"

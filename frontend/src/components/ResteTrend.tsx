@@ -133,7 +133,7 @@ function TrendTooltip({
 }
 
 /** A compact reste-by-month bar chart so the current month reads in context: short month ticks,
- *  the current month's amount (the extremes in the "Tous les mois" view), a labelled zero line, a
+ *  the current month's amount, a labelled zero line, a
  *  red tint below it so a deficit month stands out and the month still filling (`latest`) outlined. With `onSelect` (the dashboard; not the printed report)
  *  a click anywhere on the chart picks the month under the tooltip. */
 export default function ResteTrend({

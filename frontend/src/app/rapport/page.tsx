@@ -10,7 +10,7 @@ import {
   errorMessage,
   formatEuro,
   frenchMonth,
-  leafFilters,
+  listLeafOperations,
   type Transaction,
 } from "@/lib/api";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
@@ -226,12 +226,8 @@ export default function ReportPage() {
         api.dashboard(month),
         Promise.all(statementMonths(available, month).map((m) => api.averages(REPORT_AVERAGE, m))),
       ]);
-      // One request per leaf, as the dashboard's drill-down does (1000: the API's page maximum).
-      const leaves = treeLeaves(data.by_category);
-      const pages = await Promise.all(
-        leaves.map((n) => api.listTransactions({ ...leafFilters(n, month), limit: 1000 })),
-      );
-      return { data, columns, operations: new Map(leaves.map((n, i) => [n, pages[i].items])) };
+      const operations = await listLeafOperations(treeLeaves(data.by_category), month);
+      return { data, columns, operations };
     };
     load()
       .then((loaded) => {
@@ -271,7 +267,7 @@ export default function ReportPage() {
             href={month && month !== available?.[0] ? `/?month=${month}` : "/"}
             className="text-sm text-zinc-600 hover:text-zinc-900"
           >
-            ← Tableau de bord
+            ← Le mois
           </Link>
           <h1 className="text-xl font-semibold">Rapport</h1>
         </div>

@@ -1,4 +1,4 @@
-import type { CategoryAverages } from "./api";
+import type { BudgetSummary, CategoryAverages } from "./api";
 
 /** Pure helpers for the dashboard Budget section (spending vs a category's target). */
 
@@ -14,6 +14,16 @@ export function budgetTone(ratio: number): BudgetTone {
   if (ratio > 1 + 1e-9) return "over";
   if (ratio >= 0.9) return "warn";
   return "ok";
+}
+
+/** Whether anything is budgeted (a spending target or a savings goal): else the section is hidden. */
+export function hasTargets(budget: BudgetSummary): boolean {
+  return budget.groups.length > 0 || budget.savings_target !== null;
+}
+
+/** How many lines (groups) are above their target: the dashboard's budget summary. */
+export function overrunCount(groups: { actual: number; target: number }[]): number {
+  return groups.filter((g) => budgetTone(budgetRatio(g.actual, g.target)) === "over").length;
 }
 
 /** Bar fill width in percent, capped at 100 (an overrun fills the bar). */

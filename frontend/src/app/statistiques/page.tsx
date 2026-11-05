@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import AveragesSection from "@/components/AveragesSection";
 import HelpLink from "@/components/HelpLink";
-import { ALL_MONTHS, api, errorMessage, frenchMonth, type Dashboard } from "@/lib/api";
+import MonthSelect from "@/components/MonthSelect";
+import { api, errorMessage, type Dashboard } from "@/lib/api";
 
 export default function StatisticsPage() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -44,20 +45,13 @@ export default function StatisticsPage() {
           Statistiques
           <HelpLink page="/statistiques" />
         </h1>
-        <select
-          className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
+        <MonthSelect
           value={data.month}
-          onChange={(e) => load(e.target.value)}
-          aria-label="Mois affiché"
-        >
-          <option value={ALL_MONTHS}>Tous les mois</option>
-          {data.months_available.map((m) => (
-            <option key={m} value={m}>
-              {frenchMonth(m)}
-              {data.months_partial.includes(m) ? " (partiel)" : ""}
-            </option>
-          ))}
-        </select>
+          available={data.months_available}
+          partial={data.months_partial}
+          onChange={load}
+          withAll
+        />
       </div>
 
       <AveragesSection data={data} />

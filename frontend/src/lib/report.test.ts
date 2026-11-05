@@ -65,10 +65,9 @@ describe("report months", () => {
     expect(reportMonth([], null)).toBeNull();
   });
 
-  it("links the dashboard's month, except every month or the month still filling", () => {
+  it("links the dashboard's month, except the month still filling", () => {
     expect(reportLink("2026-07", available)).toBe("/rapport?month=2026-07");
     expect(reportLink("2026-09", available)).toBe("/rapport");
-    expect(reportLink("all", available)).toBe("/rapport");
   });
 
   it("lists the statement months oldest first, ending with the report month", () => {

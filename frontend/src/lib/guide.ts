@@ -1,7 +1,8 @@
 /** Anchor (the github-slugger slug of a heading in docs/guide.md) of each page's section.
  *  guide.test.ts fails when a page has none or when a heading disappears. */
 export const GUIDE_ANCHORS = {
-  "/": "tableau-de-bord",
+  "/": "le-mois",
+  "/budget": "budget",
   "/statistiques": "statistiques",
   "/transactions": "transactions",
   "/a-classer": "à-classer",

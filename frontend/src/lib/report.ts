@@ -1,6 +1,5 @@
 /** Pure helpers for the printable report (/rapport). */
 import {
-  ALL_MONTHS,
   type AverageNode,
   type AveragePeriod,
   type CategoryAverages,
@@ -36,10 +35,10 @@ export function reportMonth(available: string[], requested: string | null): stri
   return available[1] ?? available[0] ?? null;
 }
 
-/** The dashboard's « Rapport PDF » link: for the month shown, unless it is every month or the
+/** The dashboard's « Rapport PDF » link: for the month shown, unless it is the
  *  month still filling (the report then defaults to the latest complete month). */
 export function reportLink(month: string, available: string[]): string {
-  return month === ALL_MONTHS || month === available[0] ? "/rapport" : `/rapport?month=${month}`;
+  return month === available[0] ? "/rapport" : `/rapport?month=${month}`;
 }
 
 /** The statement's columns, oldest first: up to `count` budget months ending with `month`. */

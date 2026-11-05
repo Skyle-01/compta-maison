@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { barWidth, budgetLeft, budgetMargin, budgetRatio, budgetTone, categoryTargets, parseTarget } from "./budget";
+import {
+  barWidth,
+  budgetLeft,
+  budgetMargin,
+  budgetRatio,
+  budgetTone,
+  categoryTargets,
+  overrunCount,
+  parseTarget,
+} from "./budget";
 
 describe("budget helpers", () => {
   it("balances the targets against the income", () => {
@@ -29,6 +38,16 @@ describe("budget helpers", () => {
     expect(budgetTone(0.9)).toBe("warn");
     expect(budgetTone(1)).toBe("warn");
     expect(budgetTone(1.01)).toBe("over");
+  });
+
+  it("counts the groups above their target", () => {
+    const groups = [
+      { actual: 120, target: 100 },
+      { actual: 100, target: 100 },
+      { actual: 5, target: 0 },
+    ];
+    expect(overrunCount(groups)).toBe(1);
+    expect(overrunCount([])).toBe(0);
   });
 
   it("caps the bar at 100 %", () => {

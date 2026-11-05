@@ -4,16 +4,30 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api, frenchDate, UNCATEGORIZED_CHANGED } from "@/lib/api";
-import { NAV } from "@/lib/nav";
+import { NAV_GROUPS } from "@/lib/nav";
 
-/** The report is opened from the dashboard, so it keeps « Tableau de bord » current. */
+/** The report is opened from the dashboard, so it keeps « Le mois » current. */
 function isCurrent(href: string, pathname: string): boolean {
   if (href === "/") return pathname === "/" || pathname.startsWith("/rapport");
   return pathname.startsWith(href);
 }
 
-/** The top navigation; « À classer » carries the uncategorised count, refreshed on every page
- *  change and whenever a page signals a categorisation (notifyUncategorizedChanged). */
+/** The uncategorised count next to « À classer »: amber while there is work, grey at zero. */
+function CountBadge({ count }: { count: number }) {
+  return (
+    <span
+      className={`ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums ${
+        count > 0 ? "bg-amber-100 text-amber-900" : "bg-zinc-100 text-zinc-600"
+      }`}
+    >
+      {count}
+    </span>
+  );
+}
+
+/** The navigation, in three labelled groups (to look at, to work on, to configure); « À classer »
+ *  carries the uncategorised count, refreshed on every page change and whenever a page signals a
+ *  categorisation (notifyUncategorizedChanged). */
 export default function Nav() {
   const pathname = usePathname();
   const [count, setCount] = useState<number | null>(null);
@@ -35,25 +49,43 @@ export default function Nav() {
   }, [pathname]);
 
   return (
-    <nav className="mx-auto flex max-w-5xl items-center gap-6 px-6">
-      <span className="font-semibold tracking-tight">compta</span>
-      {NAV.map(({ href, label }) => (
-        <Link
-          key={href}
-          href={href}
-          aria-current={isCurrent(href, pathname) ? "page" : undefined}
-          className={`-mb-px border-b-2 py-3 text-sm ${
-            isCurrent(href, pathname)
-              ? "border-zinc-900 text-zinc-900"
-              : "border-transparent text-zinc-600 hover:text-zinc-900"
-          }`}
+    <nav className="mx-auto flex max-w-5xl items-stretch gap-3 px-6 whitespace-nowrap" aria-label="Navigation principale">
+      <span className="self-center pr-1 font-semibold tracking-tight">compta</span>
+      {NAV_GROUPS.map((group, i) => (
+        <div
+          key={group.label}
+          role="group"
+          aria-label={group.label}
+          className={`flex flex-col ${i > 0 ? "border-l border-zinc-200 pl-3" : ""}`}
         >
-          {label}
-          {href === "/a-classer" && count != null && ` (${count})`}
-        </Link>
+          <span className="pt-1.5 text-[11px] font-medium leading-4 text-zinc-500">{group.label}</span>
+          <div className="flex gap-3.5">
+            {group.items.map(({ href, label }) => {
+              const current = isCurrent(href, pathname);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={current ? "page" : undefined}
+                  className={`-mb-px flex items-center border-b-2 pb-2 pt-1 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900 ${
+                    current
+                      ? "border-zinc-900 font-medium text-zinc-900"
+                      : "border-transparent text-zinc-600 hover:text-zinc-900"
+                  }`}
+                >
+                  {label}
+                  {href === "/a-classer" && count != null && <CountBadge count={count} />}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
       ))}
       {latest && (
-        <span className="ml-auto text-xs text-zinc-500" title="Date de valeur de l’opération la plus récente">
+        <span
+          className="ml-auto self-start pt-1.5 text-xs text-zinc-500"
+          title="Date de valeur de l’opération la plus récente"
+        >
           Dernière opération : {frenchDate(latest)}
         </span>
       )}

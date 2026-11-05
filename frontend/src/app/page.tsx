@@ -1,12 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import HelpLink from "@/components/HelpLink";
 import Link from "next/link";
 import AccountDot from "@/components/AccountDot";
 import {
-  ALL_MONTHS,
-  api,
   errorMessage,
   type Account,
   type CategoryNode,
@@ -16,16 +14,18 @@ import {
   frenchDate,
   frenchMonth,
   frenchMonthShort,
-  leafFilters,
+  listLeafOperations,
   treeLabel,
 } from "@/lib/api";
-import BudgetSection from "@/components/BudgetSection";
+import BudgetGlance from "@/components/BudgetGlance";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
+import MonthSelect from "@/components/MonthSelect";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
 import { moneyFlow } from "@/lib/moneyFlow";
-import { reportLink } from "@/lib/report";
+import { reportLink, treeLeaves } from "@/lib/report";
 import { useAccounts } from "@/lib/useAccounts";
+import { useMonthDashboard } from "@/lib/useMonthDashboard";
 
 /** A muted "▲ 1 234 € vs avril" delta line under a stat. `goodIsUp` colours the change green/red
  *  by whether an increase is good (revenus, reste) or bad (dépenses). */
@@ -67,18 +67,9 @@ function Stat({
  *  cards (Revenus − Dépenses − Épargne nette = Reste) in words. */
 function HeroSummary({ data }: { data: Dashboard }) {
   const positive = data.reste >= 0;
-  const all = data.month === ALL_MONTHS;
-  const when = all ? "sur l’ensemble de la période" : "ce mois-ci";
   return (
     <p className="text-base leading-relaxed text-zinc-700">
-      {all ? (
-        "Sur l’ensemble de la période"
-      ) : (
-        <>
-          En <span className="font-medium">{frenchMonth(data.month ?? "")}</span>
-        </>
-      )}
-      , vous avez gagné{" "}
+      En <span className="font-medium">{frenchMonth(data.month ?? "")}</span>, vous avez gagné{" "}
       <span className="font-medium text-green-700">{formatEuro(data.income)}</span> et dépensé{" "}
       <span className="font-medium text-red-700">{formatEuro(data.expenses)}</span>.{" "}
       {data.epargne > 0.005 && (
@@ -95,77 +86,48 @@ function HeroSummary({ data }: { data: Dashboard }) {
       )}
       {positive ? (
         <>
-          Il vous reste <span className="font-semibold text-green-700">{formatEuro(data.reste)}</span>{" "}
-          {when}.
+          Il vous reste <span className="font-semibold text-green-700">{formatEuro(data.reste)}</span> ce
+          mois-ci.
         </>
       ) : data.epargne > 0.005 ? (
         <>
           En tenant compte de cette épargne, il vous manque{" "}
-          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span>{" "}
-          {when}.
+          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span> ce mois-ci.
         </>
       ) : (
         <>
-          Il vous manque{" "}
-          <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span>{" "}
-          {when}.
+          Il vous manque <span className="font-semibold text-red-700">{formatEuro(Math.abs(data.reste))}</span>{" "}
+          ce mois-ci.
         </>
       )}
     </p>
   );
 }
 
+/** The balance tree, fully open: each leaf lists its operations (`operations`, loaded once for the
+ *  whole tree; undefined while loading). Transactions are only ever assigned to leaf categories, so
+ *  groups and the root just aggregate their children. */
 function TreeNode({
   node,
   depth,
-  month,
+  operations,
+  failed,
   accounts,
 }: {
   node: CategoryNode;
   depth: number;
-  month?: string;
+  operations: Map<CategoryNode, Transaction[]> | null;
+  failed: boolean;
   accounts: Account[];
 }) {
-  const hasActivity = node.credit !== 0 || node.debit !== 0;
-  const [open, setOpen] = useState(false);
-  const [txns, setTxns] = useState<Transaction[] | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Transactions are only ever assigned to leaf categories, so only leaves expand to reveal
-  // them: the uncategorised bucket and the derived savings leaves (by account) included.
-  // Group nodes (and the root "total") just aggregate their children inline.
-  const expandable = depth > 0 && node.children.length === 0;
-
-  if (!hasActivity) return null;
-
-  function toggle() {
-    const next = !open;
-    setOpen(next);
-    if (next && txns === null && !loading) {
-      setLoading(true);
-      api
-        .listTransactions({ ...leafFilters(node, month), limit: 500 })
-        .then((p) => setTxns(p.items))
-        .catch(() => setTxns([]))
-        .finally(() => setLoading(false));
-    }
-  }
-
+  if (node.credit === 0 && node.debit === 0) return null;
+  const isLeaf = depth > 0 && node.children.length === 0;
+  const txns = operations?.get(node);
   const childIndent = { paddingLeft: (depth + 1) * 20 };
-
   return (
     <>
-      <div
-        className={`flex justify-between border-b border-zinc-100 py-1 text-sm ${
-          expandable ? "cursor-pointer hover:bg-zinc-50" : ""
-        }`}
-        style={{ paddingLeft: depth * 20 }}
-        onClick={expandable ? toggle : undefined}
-      >
+      <div className="flex justify-between border-b border-zinc-100 py-1 text-sm" style={{ paddingLeft: depth * 20 }}>
         <span className={depth <= 1 ? "font-medium" : ""}>
-          {expandable && (
-            <span className="mr-1 inline-block w-3 text-zinc-500">{open ? "▾" : "▸"}</span>
-          )}
           {node.synthetic && <AccountDot accounts={accounts} code={node.account_id} />}
           {treeLabel(node.name)}
         </span>
@@ -173,32 +135,33 @@ function TreeNode({
           {formatEuro(node.balance)}
         </span>
       </div>
-      {open &&
-        (loading ? (
-          <div className="py-1 text-xs text-zinc-500" style={childIndent}>
-            Chargement…
-          </div>
-        ) : txns && txns.length > 0 ? (
-          txns.map((t) => (
-            <div
-              key={t.id}
-              className="flex justify-between border-b border-zinc-50 py-0.5 text-xs text-zinc-600"
-              style={childIndent}
-            >
-              <span className="min-w-0 truncate pr-2">
-                <AccountDot accounts={accounts} code={t.account_id} />
-                <span className="text-zinc-500">{frenchDate(t.date_valeur)}</span> {t.libelle}
-              </span>
-              <SignedAmount tx={t} />
-            </div>
-          ))
-        ) : (
-          <div className="py-1 text-xs text-zinc-500" style={childIndent}>
-            Aucune transaction dans cette catégorie.
-          </div>
-        ))}
+      {isLeaf && !txns && !failed && (
+        <div className="py-1 text-xs text-zinc-500" style={childIndent}>
+          Chargement…
+        </div>
+      )}
+      {txns?.map((t) => (
+        <div
+          key={t.id}
+          className="flex justify-between border-b border-zinc-50 py-0.5 text-xs text-zinc-600"
+          style={childIndent}
+        >
+          <span className="min-w-0 truncate pr-2">
+            <AccountDot accounts={accounts} code={t.account_id} />
+            <span className="text-zinc-500">{frenchDate(t.date_valeur)}</span> {t.libelle}
+          </span>
+          <SignedAmount tx={t} />
+        </div>
+      ))}
       {node.children.map((child) => (
-        <TreeNode key={child.id ?? child.name} node={child} depth={depth + 1} month={month} accounts={accounts} />
+        <TreeNode
+          key={child.id ?? child.name}
+          node={child}
+          depth={depth + 1}
+          operations={operations}
+          failed={failed}
+          accounts={accounts}
+        />
       ))}
     </>
   );
@@ -206,43 +169,30 @@ function TreeNode({
 
 export default function DashboardPage() {
   const accounts = useAccounts();
-  const [data, setData] = useState<Dashboard | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, choose } = useMonthDashboard();
+  // The operations of every leaf, loaded per displayed month (null while loading).
+  const [operations, setOperations] = useState<{
+    month: string;
+    byLeaf: Map<CategoryNode, Transaction[]> | null;
+    error: string | null;
+  } | null>(null);
 
-  const request = useRef(0); // a slower answer for a previous month must not overwrite this one
-
-  const load = useCallback((month?: string) => {
-    const id = ++request.current;
-    api
-      .dashboard(month)
-      .then((d) => {
-        // An unknown ?month= (a stale link, a rebuilt DB) falls back to the latest month.
-        if (!month || month === ALL_MONTHS || d.months_available.includes(month)) return d;
-        window.history.replaceState(null, "", window.location.pathname);
-        return api.dashboard();
-      })
-      .then((d) => {
-        if (id === request.current) setData(d);
+  const tree = data?.by_category;
+  const treeMonth = data?.month ?? undefined;
+  useEffect(() => {
+    if (!tree || !treeMonth) return;
+    let stale = false; // a slower answer for a previous month must not overwrite this one
+    listLeafOperations(treeLeaves(tree), treeMonth)
+      .then((byLeaf) => {
+        if (!stale) setOperations({ month: treeMonth, byLeaf, error: null });
       })
       .catch((e) => {
-        if (id === request.current) setError(errorMessage(e));
+        if (!stale) setOperations({ month: treeMonth, byLeaf: null, error: errorMessage(e) });
       });
-  }, []);
-
-  // The displayed month lives in the URL (?month=, none for the latest month) so a reload keeps it
-  // and the browser's Back button returns to the previous month.
-  useEffect(() => {
-    const fromUrl = () => load(new URLSearchParams(window.location.search).get("month") ?? undefined);
-    fromUrl();
-    window.addEventListener("popstate", fromUrl);
-    return () => window.removeEventListener("popstate", fromUrl);
-  }, [load]);
-
-  const select = (month: string, latest: string | undefined) => {
-    const url = month === latest ? window.location.pathname : `?month=${month}`;
-    window.history.pushState(null, "", url);
-    load(month);
-  };
+    return () => {
+      stale = true;
+    };
+  }, [tree, treeMonth]);
 
   if (error) return <p className="text-red-700">{error}</p>;
   if (!data) return <p className="text-zinc-500">Chargement…</p>;
@@ -256,15 +206,14 @@ export default function DashboardPage() {
     );
   }
 
-  const all = data.month === ALL_MONTHS;
-  const month = all ? undefined : data.month; // the transaction filter: none for every month
+  const month = data.month;
+  const shown = operations?.month === month ? operations : null; // none until this month's answer
   const flow = moneyFlow(data);
   const hist = data.history;
-  const cur = hist.findIndex((h) => h.month === data.month);
+  const cur = hist.findIndex((h) => h.month === month);
   const prev = cur > 0 ? hist[cur - 1] : null;
   const epargneNet = data.epargne - data.desepargne;
   const latest = data.months_available[0];
-  const choose = (m: string) => select(m, latest);
   const deltaProps = (current: number, previous: number | undefined, goodIsUp: boolean) =>
     prev && previous !== undefined
       ? { delta: current - previous, prevMonth: prev.month, goodIsUp }
@@ -274,17 +223,17 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">
-          Tableau de bord
+          Le mois
           <HelpLink page="/" />
         </h1>
         <div className="flex items-center gap-3">
           <Link
-            href={reportLink(data.month, data.months_available)}
+            href={reportLink(month, data.months_available)}
             className="btn-secondary"
           >
             Rapport PDF
           </Link>
-          {data.month !== latest && (
+          {month !== latest && (
             <button
               type="button"
               onClick={() => choose(latest)}
@@ -293,19 +242,12 @@ export default function DashboardPage() {
               Dernier mois
             </button>
           )}
-          <select
-            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-            value={data.month}
-            onChange={(e) => choose(e.target.value)}
-          >
-            <option value={ALL_MONTHS}>Tous les mois</option>
-            {data.months_available.map((m) => (
-              <option key={m} value={m}>
-                {frenchMonth(m)}
-                {data.months_partial.includes(m) ? " (partiel)" : ""}
-              </option>
-            ))}
-          </select>
+          <MonthSelect
+            value={month}
+            available={data.months_available}
+            partial={data.months_partial}
+            onChange={choose}
+          />
         </div>
       </div>
 
@@ -335,13 +277,13 @@ export default function DashboardPage() {
 
       <ResteTrend
         history={hist}
-        current={data.month}
+        current={month}
         latest={hist.at(-1)?.month}
         partial={data.months_partial}
         onSelect={choose}
       />
 
-      <BudgetSection budget={data.budget} all={all} />
+      <BudgetGlance budget={data.budget} month={month} />
 
       {data.transfers.count > 0 && (
         <p className="text-sm text-zinc-500">
@@ -355,7 +297,7 @@ export default function DashboardPage() {
           {data.uncategorized.count} opération{data.uncategorized.count > 1 ? "s" : ""} encore sans
           catégorie ({formatEuro(Math.abs(data.uncategorized.difference))} d’écart dans les totaux).{" "}
           <Link
-            href={`/transactions?uncategorized=1&month=${month ?? ""}`}
+            href={`/transactions?uncategorized=1&month=${month}`}
             className="font-medium underline hover:no-underline"
           >
             Les classer →
@@ -382,12 +324,17 @@ export default function DashboardPage() {
       </section>
 
       <section>
-        <details className="rounded-lg border border-zinc-200 bg-white">
-          <summary className="cursor-pointer px-4 py-3 font-medium">Détail par catégorie</summary>
-          <div className="border-t border-zinc-100 px-4 pb-3 pt-1">
-            <TreeNode key={data.month} node={data.by_category} depth={0} month={month} accounts={accounts} />
-          </div>
-        </details>
+        <h2 className="mb-3 font-semibold">Détail par catégorie</h2>
+        <div className="rounded-lg border border-zinc-200 bg-white px-4 pb-3 pt-1">
+          {shown?.error && <p className="py-1 text-sm text-red-700">{shown.error}</p>}
+          <TreeNode
+            node={data.by_category}
+            depth={0}
+            operations={shown?.byLeaf ?? null}
+            failed={!!shown?.error}
+            accounts={accounts}
+          />
+        </div>
       </section>
     </div>
   );

@@ -20,7 +20,7 @@ export default function MonthDetail({ data, avg }: { data: Dashboard; avg: Categ
         empty="Aucun revenu classé ce mois-ci."
       />
       <div className="break-inside-avoid">
-        <BudgetSection budget={data.budget} all={false} />
+        <BudgetSection budget={data.budget} />
       </div>
     </div>
   );
