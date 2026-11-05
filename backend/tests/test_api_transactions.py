@@ -228,6 +228,31 @@ class TestTriage:
             ("VIR INST LOCATAIRE DUPONT", [])
         ]
 
+    def test_triage_account_filter_keeps_transfer_partners_of_other_accounts(self, db, client):
+        import_rows(
+            db,
+            ("2026-09-03", "2026-09-03", "VIR vers LOGEMENT", 570, 0, "PERSO"),
+            ("2026-09-04", "2026-09-04", "VIR de MOI MEME", 0, 570, "LOCATIF"),
+            ("2026-09-05", "2026-09-05", "CARTE LIBRAIRIE", 30, 0, "JOINT"),
+        )
+        groups = client.get("/api/transactions/uncategorized-groups", params={"account": "PERSO"}).json()
+        assert [g["transactions"][0]["libelle"] for g in groups] == ["VIR vers LOGEMENT"]
+        # The other leg sits on LOCATIF, which the account filter does not hide.
+        [candidate] = groups[0]["transfer_candidates"]
+        assert (candidate["partner"]["libelle"], candidate["partner"]["account_id"]) == (
+            "VIR de MOI MEME",
+            "LOCATIF",
+        )
+        assert len(client.get("/api/transactions/uncategorized-groups").json()) == 3
+
+    def test_rule_conflicts_account_filter(self, seeded_db, client):
+        _upload(client, content=TRIAGE_CSV)
+        bar = _category_id(client, "bar")
+        client.post("/api/rules", json={"pattern": "DRIVE", "category_id": bar})
+        assert len(client.get("/api/transactions/rule-conflicts").json()) == 1
+        assert len(client.get("/api/transactions/rule-conflicts", params={"account": "JOINT"}).json()) == 1
+        assert client.get("/api/transactions/rule-conflicts", params={"account": "PERSO"}).json() == []
+
     def test_rule_preview_needs_a_pattern(self, client):
         resp = client.get("/api/rules/preview", params={"pattern": ""})
         assert resp.status_code == 422

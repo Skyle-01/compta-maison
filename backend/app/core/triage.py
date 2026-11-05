@@ -226,20 +226,30 @@ class UncategorizedGroup:
     suggestion: Suggestion | None
 
 
+def _scope(month: str | None, account: str | None) -> tuple[str, tuple]:
+    """The ` AND ...` SQL clause and params limiting `transactions` to a budget month and/or an
+    account (empty when neither is set)."""
+    clause, params = "", []
+    if month:
+        clause += " AND budget_month = ?"
+        params.append(month)
+    if account:
+        clause += " AND account_id = ?"
+        params.append(account)
+    return clause, tuple(params)
+
+
 def uncategorized_groups(
-    db_path: Path = DEFAULT_DB_PATH, month: str | None = None
+    db_path: Path = DEFAULT_DB_PATH, month: str | None = None, account: str | None = None
 ) -> list[UncategorizedGroup]:
-    """Uncategorised non-transfer operations (optionally of one budget month) grouped by label
-    key, largest gross total (debits + credits) first. Suggestions learn from every categorised
-    real flow, whatever the month."""
+    """Uncategorised non-transfer operations (optionally of one budget month and/or one account)
+    grouped by label key, largest gross total (debits + credits) first. Suggestions learn from every
+    categorised real flow, whatever the month and the account."""
+    scope, params = _scope(month, account)
     query = (
         "SELECT id, libelle, date_valeur, debit_cents, credit_cents, account_id FROM transactions "
-        f"WHERE category_id IS NULL AND {real_flow_clause()}"
+        f"WHERE category_id IS NULL AND {real_flow_clause()}{scope}"
     )
-    params: tuple = ()
-    if month:
-        query += " AND budget_month = ?"
-        params = (month,)
     with connect(db_path) as conn:
         conflicted = find_conflicts(conn)  # listed apart, see conflicted_operations
         rows = [
@@ -325,19 +335,18 @@ def rule_preview(
 
 
 def conflicted_operations(
-    db_path: Path = DEFAULT_DB_PATH, month: str | None = None
+    db_path: Path = DEFAULT_DB_PATH, month: str | None = None, account: str | None = None
 ) -> list[tuple[int, list[tuple[int, str, int]]]]:
     """(transaction id, rules in cause) of the operations in conflict (optionally of one budget
-    month), newest first."""
+    month and/or one account), newest first."""
     with connect(db_path) as conn:
         conflicts = find_conflicts(conn)
         if not conflicts:
             return []
         ids = ",".join(str(i) for i in conflicts)
-        query = f"SELECT id FROM transactions WHERE id IN ({ids})"
-        params: tuple = ()
-        if month:
-            query += " AND budget_month = ?"
-            params = (month,)
-        ordered = conn.execute(query + " ORDER BY date_valeur DESC, id DESC", params).fetchall()
+        scope, params = _scope(month, account)
+        ordered = conn.execute(
+            f"SELECT id FROM transactions WHERE id IN ({ids}){scope} ORDER BY date_valeur DESC, id DESC",
+            params,
+        ).fetchall()
     return [(row[0], conflicts[row[0]]) for row in ordered]

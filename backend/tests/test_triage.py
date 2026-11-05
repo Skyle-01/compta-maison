@@ -162,6 +162,39 @@ class TestUncategorizedGroups:
         assert groups[0].suggestion is None
         assert groups[1].suggestion.category_id == courses
 
+    def test_account_filter_groups_only_that_accounts_rows(self, seeded_db):
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "CARTE 01/06 BOULANGERIE DUPONT", 4, 0, "PERSO"),
+            ("2026-06-02", "2026-06-02", "CARTE 02/06 BOULANGERIE DUPONT", 6, 0, "JOINT"),
+            ("2026-06-03", "2026-06-03", "CARTE 03/06 LIBRAIRIE", 30, 0, "JOINT"),
+        )
+        groups = uncategorized_groups(seeded_db, account="PERSO")
+        assert [(g.key, len(g.transaction_ids), g.accounts) for g in groups] == [
+            ("CARTE BOULANGERIE DUPONT", 1, ["PERSO"])
+        ]
+        joint = uncategorized_groups(seeded_db, account="JOINT")
+        assert [(g.key, len(g.transaction_ids)) for g in joint] == [
+            ("CARTE LIBRAIRIE", 1),
+            ("CARTE BOULANGERIE DUPONT", 1),
+        ]
+        assert uncategorized_groups(seeded_db, month="2026-06", account="LIVRET") == []
+
+    def test_suggestions_learn_from_every_account(self, seeded_db):
+        _import(
+            seeded_db,
+            ("2026-06-01", "2026-06-01", "CARTE 01/06 BOULANGERIE DUPONT", 4, 0, "PERSO"),
+            ("2026-06-02", "2026-06-02", "CARTE 02/06 BOULANGERIE DUPONT", 6, 0, "JOINT"),
+        )
+        courses = cat_id(seeded_db, "courses")
+        with connect(seeded_db) as conn:
+            conn.execute(
+                "UPDATE transactions SET category_id = ?, category_manual = 1 WHERE account_id = 'PERSO'",
+                (courses,),
+            )
+        [group] = uncategorized_groups(seeded_db, account="JOINT")
+        assert group.suggestion.category_id == courses
+
     def test_transfers_left_out(self, seeded_db):
         _import(seeded_db, ("2026-06-01", "2026-06-01", "VIR vers COMPTE JOINT", 100, 0, "PERSO"))
         with connect(seeded_db) as conn:
@@ -247,3 +280,5 @@ class TestRulePreview:
         assert uncategorized_groups(seeded_db) == []
         [(_, rules)] = conflicted_operations(seeded_db)
         assert sorted(pattern for _, pattern, _ in rules) == ["DRIVE", "LECLERC"]
+        assert len(conflicted_operations(seeded_db, account="PERSO")) == 1
+        assert conflicted_operations(seeded_db, account="JOINT") == []

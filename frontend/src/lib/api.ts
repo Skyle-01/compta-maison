@@ -536,13 +536,14 @@ export const api = {
     return request("/api/transactions", json("PATCH", { ids, category_id: categoryId, note }));
   },
 
-  uncategorizedGroups(month?: string): Promise<UncategorizedGroup[]> {
-    return request(`/api/transactions/uncategorized-groups${month ? `?month=${month}` : ""}`);
+  /** The « À classer » groups, of one month and/or one account (transfer candidates still span every account). */
+  uncategorizedGroups(scope: Pick<TransactionFilters, "month" | "account"> = {}): Promise<UncategorizedGroup[]> {
+    return request(`/api/transactions/uncategorized-groups?${transactionSearch(scope)}`);
   },
 
   /** Operations matched by rules of different categories (the « Conflit de règles » group). */
-  ruleConflicts(month?: string): Promise<ConflictedOperation[]> {
-    return request(`/api/transactions/rule-conflicts${month ? `?month=${month}` : ""}`);
+  ruleConflicts(scope: Pick<TransactionFilters, "month" | "account"> = {}): Promise<ConflictedOperation[]> {
+    return request(`/api/transactions/rule-conflicts?${transactionSearch(scope)}`);
   },
 
   /** Number of uncategorised non-transfer operations (the nav's « À classer (N) »). */

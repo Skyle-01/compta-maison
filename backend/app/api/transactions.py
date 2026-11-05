@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from app.api.categories import csv_response, reject_group_target
-from app.api.deps import DbPath
+from app.api.deps import AccountFilter, DbPath
 from app.core.categorize import apply_rules
 from app.core.config_export import category_paths
 from app.core.transfers import pair_manually, set_transfer_mode, transfer_candidates
@@ -138,7 +138,7 @@ def _filter_clause(
 def list_transactions(
     db_path: DbPath,
     month: str | None = None,
-    account: str | None = None,
+    account: AccountFilter = None,
     category_id: int | None = None,
     libelle_contains: str | None = None,
     uncategorized: bool = False,
@@ -170,11 +170,13 @@ def list_transactions(
 
 
 @router.get("/uncategorized-groups")
-def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list[UncategorizedGroup]:
-    """Uncategorised operations grouped by similar label, largest total first, each with a default
-    rule pattern, a category suggestion and the operations that could pair with them as a transfer
-    (the « À classer » page)."""
-    groups = uncategorized_groups(db_path, month)
+def list_uncategorized_groups(
+    db_path: DbPath, month: str | None = None, account: AccountFilter = None
+) -> list[UncategorizedGroup]:
+    """Uncategorised operations (of one account when `account` is set) grouped by similar label,
+    largest total first, each with a default rule pattern, a category suggestion and the operations
+    that could pair with them as a transfer, whatever their account (the « À classer » page)."""
+    groups = uncategorized_groups(db_path, month, account)
     ids = [i for g in groups for i in g.transaction_ids]
     candidates = transfer_candidates(db_path, ids)
     partner_ids = {p for partners in candidates.values() for p in partners}
@@ -203,10 +205,12 @@ def list_uncategorized_groups(db_path: DbPath, month: str | None = None) -> list
 
 
 @router.get("/rule-conflicts")
-def list_rule_conflicts(db_path: DbPath, month: str | None = None) -> list[ConflictedOperation]:
+def list_rule_conflicts(
+    db_path: DbPath, month: str | None = None, account: AccountFilter = None
+) -> list[ConflictedOperation]:
     """Operations matched by rules of different categories, left uncategorised, with the rules in
     cause (the « Conflit de règles » group of « À classer »)."""
-    found = conflicted_operations(db_path, month)
+    found = conflicted_operations(db_path, month, account)
     by_id = {t.id: t for t in _load(db_path, [i for i, _ in found])}
     return [
         ConflictedOperation(
@@ -247,7 +251,7 @@ def _french_amount(cents: int) -> str:
 def export_transactions(
     db_path: DbPath,
     month: str | None = None,
-    account: str | None = None,
+    account: AccountFilter = None,
     category_id: int | None = None,
     libelle_contains: str | None = None,
     uncategorized: bool = False,

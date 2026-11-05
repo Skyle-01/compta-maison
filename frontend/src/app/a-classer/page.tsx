@@ -72,7 +72,7 @@ export default function TriagePage() {
    *  one now at `fallback`. */
   const load = useCallback(
     (followingKey: string | null, fallback: number) =>
-      Promise.all([api.uncategorizedGroups(month || undefined), api.ruleConflicts(month || undefined)]).then(
+      Promise.all([api.uncategorizedGroups({ month: month || undefined }), api.ruleConflicts({ month: month || undefined })]).then(
         ([next, conflicted]) => {
           setGroups(next);
           setConflicts(conflicted);
