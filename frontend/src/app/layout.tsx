@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
+import { FiltersProvider } from "@/components/FiltersProvider";
 import Nav from "@/components/Nav";
 import "./globals.css";
 
@@ -32,7 +34,12 @@ export default function RootLayout({
         <header className="border-b border-zinc-200 bg-white print:hidden">
           <Nav />
         </header>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8 print:max-w-none print:p-0">{children}</main>
+        <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8 print:max-w-none print:p-0">
+          {/* useSearchParams (the links' ?month= / ?account=) needs a Suspense boundary. */}
+          <Suspense>
+            <FiltersProvider>{children}</FiltersProvider>
+          </Suspense>
+        </main>
       </body>
     </html>
   );

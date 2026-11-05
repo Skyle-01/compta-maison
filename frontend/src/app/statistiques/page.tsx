@@ -1,30 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import AveragesSection from "@/components/AveragesSection";
 import HelpLink from "@/components/HelpLink";
-import MonthSelect from "@/components/MonthSelect";
-import { api, errorMessage, type Dashboard } from "@/lib/api";
+import PeriodFilter from "@/components/PeriodFilter";
+import { useMonthDashboard } from "@/lib/useMonthDashboard";
 
 export default function StatisticsPage() {
-  const [data, setData] = useState<Dashboard | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const request = useRef(0); // a slower answer for a previous month must not overwrite this one
-
-  const load = useCallback((month?: string) => {
-    const id = ++request.current;
-    api
-      .dashboard(month)
-      .then((d) => {
-        if (id === request.current) setData(d);
-      })
-      .catch((e) => {
-        if (id === request.current) setError(errorMessage(e));
-      });
-  }, []);
-
-  useEffect(() => load(), [load]);
+  const { data, error } = useMonthDashboard({ allowAll: true });
 
   if (error) return <p className="text-red-700">{error}</p>;
   if (!data) return <p className="text-zinc-500">Chargement…</p>;
@@ -45,13 +27,7 @@ export default function StatisticsPage() {
           Statistiques
           <HelpLink page="/statistiques" />
         </h1>
-        <MonthSelect
-          value={data.month}
-          available={data.months_available}
-          partial={data.months_partial}
-          onChange={load}
-          withAll
-        />
+        <PeriodFilter withAll />
       </div>
 
       <AveragesSection data={data} />

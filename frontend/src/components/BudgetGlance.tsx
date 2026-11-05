@@ -4,7 +4,7 @@ import { type BudgetSummary, formatEuro } from "@/lib/api";
 import { budgetRatio, budgetTone, overrunCount } from "@/lib/budget";
 
 /** The dashboard's one-line budget summary, linking to the Budget page. Hidden without targets. */
-export default function BudgetGlance({ budget, month }: { budget: BudgetSummary; month: string }) {
+export default function BudgetGlance({ budget }: { budget: BudgetSummary }) {
   if (budget.groups.length === 0) return null;
   const over = overrunCount(budget.groups);
   const tone = budgetTone(budgetRatio(budget.actual, budget.target));
@@ -19,7 +19,7 @@ export default function BudgetGlance({ budget, month }: { budget: BudgetSummary;
       )}
       {over === 0 && tone === "warn" && <span className={TONE_TEXT.warn}>, proche de la limite</span>}
       .{" "}
-      <Link href={`/budget?month=${month}`} className="font-medium underline hover:no-underline">
+      <Link href="/budget" className="font-medium underline hover:no-underline">
         Voir le budget →
       </Link>
     </p>

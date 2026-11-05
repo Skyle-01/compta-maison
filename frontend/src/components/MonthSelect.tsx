@@ -1,27 +1,27 @@
-import { ALL_MONTHS, frenchMonth } from "@/lib/api";
+import { frenchMonth } from "@/lib/api";
 
-/** The month picker of the month pages; partial months are flagged, `withAll` adds « Tous les mois ». */
+/** The month list of `PeriodFilter`; partial months are flagged. */
 export default function MonthSelect({
   value,
   available,
   partial,
   onChange,
-  withAll,
+  disabled,
 }: {
   value: string;
   available: string[];
   partial: string[];
   onChange: (month: string) => void;
-  withAll?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <select
-      className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
+      className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm disabled:bg-zinc-100 disabled:text-zinc-500"
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
       aria-label="Mois affiché"
     >
-      {withAll && <option value={ALL_MONTHS}>Tous les mois</option>}
       {available.map((m) => (
         <option key={m} value={m}>
           {frenchMonth(m)}

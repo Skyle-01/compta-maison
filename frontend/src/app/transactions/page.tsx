@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useFilters } from "@/components/FiltersProvider";
 import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
-  type Account,
   type Category,
   type Transaction,
   type TransferMode,
@@ -15,6 +16,7 @@ import {
 } from "@/lib/api";
 import { conflictsMessage } from "@/lib/triage";
 import { emptyRuleForm, type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
+import { useAccounts } from "@/lib/useAccounts";
 import CategoryEditor, { type EditMode, type SplitForm } from "./CategoryEditor";
 import Filters from "./Filters";
 import SelectionBar from "./SelectionBar";
@@ -26,13 +28,17 @@ export default function TransactionsPage() {
   const [items, setItems] = useState<Transaction[]>([]);
   const [total, setTotal] = useState(0);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [month, setMonth] = useState("");
-  const [months, setMonths] = useState<string[]>([]);
-  const [account, setAccount] = useState("");
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [ready, setReady] = useState(false);
-  const [onlyUncategorized, setOnlyUncategorized] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const accounts = useAccounts();
+  const { ready, monthFilter, account } = useFilters();
+  // The dashboard warning's deep-link (?uncategorized=1&month=YYYY-MM): the month is the shared
+  // filter's business (FiltersProvider), this one is the page's own, read once.
+  const urlUncategorized = useSearchParams().get("uncategorized");
+  const [onlyUncategorized, setOnlyUncategorized] = useState(Boolean(urlUncategorized));
+  // The page offset belongs to the filters it was reached with: another month or account starts over.
+  const scope = `${monthFilter ?? ""}\u0000${account ?? ""}`;
+  const [paging, setPaging] = useState({ scope, offset: 0 });
+  const offset = paging.scope === scope ? paging.offset : 0;
+  const setOffset = (next: number) => setPaging({ scope, offset: next });
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -50,46 +56,30 @@ export default function TransactionsPage() {
   const [selected, setSelected] = useState<Map<number, Transaction>>(new Map());
 
   useEffect(() => {
-    // Honour a deep-link from the dashboard warning (?uncategorized=1&month=YYYY-MM, or an empty
-    // month for every month); the URL month wins over the dashboard's default current month. Read
-    // once, client-side (no Suspense needed).
-    const params = new URLSearchParams(window.location.search);
-    const urlMonth = params.get("month");
-    const urlUncategorized = Boolean(params.get("uncategorized"));
     api.listCategories().then(setCategories).catch((e) => setError(errorMessage(e)));
-    api
-      .listAccounts()
-      .then(setAccounts)
-      .catch((e) => setError(errorMessage(e)));
-    api
-      .dashboard()
-      .then((d) => {
-        setMonths(d.months_available);
-        // Applied with the month, in one render, so the list is fetched once with both filters.
-        if (urlUncategorized) setOnlyUncategorized(true);
-        if (urlMonth !== null) setMonth(urlMonth);
-        else if (d.month) setMonth(d.month);
-      })
-      .catch((e) => setError(errorMessage(e)))
-      .finally(() => setReady(true));
   }, []);
 
+  const request = useRef(0); // a slower answer for previous filters must not overwrite this one
   const load = useCallback(() => {
-    if (!ready) return; // wait for the initial month, so the list is fetched once
+    if (!ready) return; // wait for the shared filters, so the list is fetched once
+    const id = ++request.current;
     api
       .listTransactions({
-        month: month || undefined,
-        account: account || undefined,
+        month: monthFilter,
+        account: account ?? undefined,
         uncategorized: onlyUncategorized,
         limit: PAGE_SIZE,
         offset,
       })
       .then((page) => {
+        if (id !== request.current) return;
         setItems(page.items);
         setTotal(page.total);
       })
-      .catch((e) => setError(errorMessage(e)));
-  }, [ready, month, account, onlyUncategorized, offset]);
+      .catch((e) => {
+        if (id === request.current) setError(errorMessage(e));
+      });
+  }, [ready, monthFilter, account, onlyUncategorized, offset]);
 
   useEffect(load, [load]);
 
@@ -222,19 +212,6 @@ export default function TransactionsPage() {
           onlyUncategorized={onlyUncategorized}
           onOnlyUncategorizedChange={(checked) => {
             setOnlyUncategorized(checked);
-            setOffset(0);
-          }}
-          month={month}
-          months={months}
-          onMonthChange={(m) => {
-            setMonth(m);
-            setOffset(0);
-          }}
-          account={account}
-          // External savings accounts (a deposit pattern) have no operations of their own to filter on.
-          accounts={accounts.filter((a) => !a.deposit_pattern)}
-          onAccountChange={(code) => {
-            setAccount(code);
             setOffset(0);
           }}
         />

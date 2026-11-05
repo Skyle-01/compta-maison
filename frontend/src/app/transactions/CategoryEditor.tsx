@@ -123,7 +123,11 @@ export default function CategoryEditor({
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs">
-            <AccountSelect value={form.account_id} onChange={(account_id) => onEdit({ account_id })} />
+            <AccountSelect
+              purpose="rule"
+              value={form.account_id}
+              onChange={(account_id) => onEdit({ account_id })}
+            />
             <label className="flex items-center gap-1 text-zinc-600">
               <input
                 type="checkbox"

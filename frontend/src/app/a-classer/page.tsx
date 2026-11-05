@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AccountSelect from "@/components/AccountSelect";
+import { useFilters } from "@/components/FiltersProvider";
 import HelpLink from "@/components/HelpLink";
+import PeriodFilter from "@/components/PeriodFilter";
 import {
   api,
   errorMessage,
   type Category,
   type ConflictedOperation,
-  frenchMonth,
   notifyUncategorizedChanged,
   type RulePreview,
   shortPath,
@@ -48,8 +50,7 @@ export default function TriagePage() {
   const [conflicts, setConflicts] = useState<ConflictedOperation[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const accounts = useAccounts();
-  const [months, setMonths] = useState<string[]>([]);
-  const [month, setMonth] = useState("");
+  const { ready, monthFilter, account, setAccount } = useFilters();
   const [active, setActive] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -62,29 +63,30 @@ export default function TriagePage() {
 
   useEffect(() => {
     api.listCategories().then(setCategories).catch((e) => setError(errorMessage(e)));
-    api
-      .dashboard()
-      .then((d) => setMonths(d.months_available))
-      .catch((e) => setError(errorMessage(e)));
   }, []);
 
+  const request = useRef(0); // a slower answer for previous filters must not overwrite this one
   /** Refetch the groups, then activate the group `followingKey` if it is still listed, else the
    *  one now at `fallback`. */
   const load = useCallback(
-    (followingKey: string | null, fallback: number) =>
-      Promise.all([api.uncategorizedGroups({ month: month || undefined }), api.ruleConflicts({ month: month || undefined })]).then(
+    (followingKey: string | null, fallback: number) => {
+      const id = ++request.current;
+      const scope = { month: monthFilter, account: account ?? undefined };
+      return Promise.all([api.uncategorizedGroups(scope), api.ruleConflicts(scope)]).then(
         ([next, conflicted]) => {
+          if (id !== request.current) return;
           setGroups(next);
           setConflicts(conflicted);
           setActive(nextActiveIndex(next.map((g) => g.key), followingKey, fallback));
         },
-      ),
-    [month],
+      );
+    },
+    [monthFilter, account],
   );
 
   useEffect(() => {
-    load(null, 0).catch((e) => setError(errorMessage(e)));
-  }, [load]);
+    if (ready) load(null, 0).catch((e) => setError(errorMessage(e)));
+  }, [ready, load]);
 
   const current = groups?.[active] ?? null;
   const d = current ? (draft?.key === current.key ? draft : draftFor(current)) : null;
@@ -296,18 +298,10 @@ export default function TriagePage() {
             </p>
           )}
         </div>
-        <select
-          className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-          value={month}
-          onChange={(e) => setMonth(e.target.value)}
-        >
-          <option value="">Tous les mois</option>
-          {months.map((m) => (
-            <option key={m} value={m}>
-              {frenchMonth(m)}
-            </option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <PeriodFilter withAll />
+          <AccountSelect purpose="filter" value={account} onChange={setAccount} />
+        </div>
       </div>
 
       <Shortcuts />
@@ -326,7 +320,7 @@ export default function TriagePage() {
 
       {groups && groups.length === 0 && conflicts.length === 0 && (
         <p className="rounded-lg border border-zinc-200 bg-white px-3 py-6 text-center text-sm text-zinc-500">
-          Aucune opération à classer{month ? " ce mois-ci" : ""}.
+          Aucune opération à classer{monthFilter || account ? " avec ces filtres" : ""}.
         </p>
       )}
 

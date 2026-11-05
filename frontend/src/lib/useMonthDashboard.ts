@@ -1,53 +1,35 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api, errorMessage, type Dashboard } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { useFilters } from "@/components/FiltersProvider";
+import { ALL_MONTHS, api, errorMessage, type Dashboard } from "@/lib/api";
 
-/** The dashboard payload of the month in the URL (`?month=YYYY-MM`, none for the latest month), shared
- *  by « Le mois » and « Budget ». `choose` switches month with a pushState so Back returns to the
- *  previous one and a reload keeps it; an unknown month (a stale link, the old `?month=all`) falls
- *  back to the latest. */
-export function useMonthDashboard(): {
+/** The dashboard payload of the shared month (`useFilters`), for « Le mois », « Budget » and, with
+ *  `allowAll`, Statistiques, where « Tous les mois » gives the payload of every month. */
+export function useMonthDashboard({ allowAll = false }: { allowAll?: boolean } = {}): {
   data: Dashboard | null;
   error: string | null;
-  choose: (month: string) => void;
 } {
+  const { ready, month, all } = useFilters();
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const request = useRef(0); // a slower answer for a previous month must not overwrite this one
-
-  const load = useCallback((month?: string) => {
-    const id = ++request.current;
-    api
-      .dashboard(month)
-      .then((d) => {
-        if (!month || d.months_available.includes(month)) return d;
-        window.history.replaceState(null, "", window.location.pathname);
-        return api.dashboard();
-      })
-      .then((d) => {
-        if (id === request.current) setData(d);
-      })
-      .catch((e) => {
-        if (id === request.current) setError(errorMessage(e));
-      });
-  }, []);
+  const period = allowAll && all ? ALL_MONTHS : month; // "" on an empty database: the latest, none
 
   useEffect(() => {
-    const fromUrl = () => load(new URLSearchParams(window.location.search).get("month") ?? undefined);
-    fromUrl();
-    window.addEventListener("popstate", fromUrl);
-    return () => window.removeEventListener("popstate", fromUrl);
-  }, [load]);
+    if (!ready) return;
+    let stale = false; // a slower answer for a previous month must not overwrite this one
+    api
+      .dashboard(period || undefined)
+      .then((d) => {
+        if (!stale) setData(d);
+      })
+      .catch((e) => {
+        if (!stale) setError(errorMessage(e));
+      });
+    return () => {
+      stale = true;
+    };
+  }, [ready, period]);
 
-  const latest = data?.months_available[0];
-  const choose = useCallback(
-    (month: string) => {
-      window.history.pushState(null, "", month === latest ? window.location.pathname : `?month=${month}`);
-      load(month);
-    },
-    [latest, load],
-  );
-
-  return { data, error, choose };
+  return { data, error };
 }

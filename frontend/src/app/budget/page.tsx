@@ -3,12 +3,12 @@
 import Link from "next/link";
 import BudgetSection from "@/components/BudgetSection";
 import HelpLink from "@/components/HelpLink";
-import MonthSelect from "@/components/MonthSelect";
+import PeriodFilter from "@/components/PeriodFilter";
 import { hasTargets } from "@/lib/budget";
 import { useMonthDashboard } from "@/lib/useMonthDashboard";
 
 export default function BudgetPage() {
-  const { data, error, choose } = useMonthDashboard();
+  const { data, error } = useMonthDashboard();
 
   if (error) return <p className="text-red-700">{error}</p>;
   if (!data) return <p className="text-zinc-500">Chargement…</p>;
@@ -21,7 +21,6 @@ export default function BudgetPage() {
     );
   }
 
-  const latest = data.months_available[0];
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -29,19 +28,7 @@ export default function BudgetPage() {
           Budget
           <HelpLink page="/budget" />
         </h1>
-        <div className="flex items-center gap-3">
-          {data.month !== latest && (
-            <button type="button" onClick={() => choose(latest)} className="btn-secondary">
-              Dernier mois
-            </button>
-          )}
-          <MonthSelect
-            value={data.month}
-            available={data.months_available}
-            partial={data.months_partial}
-            onChange={choose}
-          />
-        </div>
+        <PeriodFilter />
       </div>
       {!hasTargets(data.budget) ? (
         <p className="text-sm text-zinc-500">

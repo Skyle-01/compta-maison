@@ -19,7 +19,8 @@ import {
 } from "@/lib/api";
 import BudgetGlance from "@/components/BudgetGlance";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
-import MonthSelect from "@/components/MonthSelect";
+import { useFilters } from "@/components/FiltersProvider";
+import PeriodFilter from "@/components/PeriodFilter";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
 import { moneyFlow } from "@/lib/moneyFlow";
@@ -169,7 +170,8 @@ function TreeNode({
 
 export default function DashboardPage() {
   const accounts = useAccounts();
-  const { data, error, choose } = useMonthDashboard();
+  const { data, error } = useMonthDashboard();
+  const { setMonth } = useFilters();
   // The operations of every leaf, loaded per displayed month (null while loading).
   const [operations, setOperations] = useState<{
     month: string;
@@ -213,7 +215,6 @@ export default function DashboardPage() {
   const cur = hist.findIndex((h) => h.month === month);
   const prev = cur > 0 ? hist[cur - 1] : null;
   const epargneNet = data.epargne - data.desepargne;
-  const latest = data.months_available[0];
   const deltaProps = (current: number, previous: number | undefined, goodIsUp: boolean) =>
     prev && previous !== undefined
       ? { delta: current - previous, prevMonth: prev.month, goodIsUp }
@@ -233,21 +234,7 @@ export default function DashboardPage() {
           >
             Rapport PDF
           </Link>
-          {month !== latest && (
-            <button
-              type="button"
-              onClick={() => choose(latest)}
-              className="btn-secondary"
-            >
-              Dernier mois
-            </button>
-          )}
-          <MonthSelect
-            value={month}
-            available={data.months_available}
-            partial={data.months_partial}
-            onChange={choose}
-          />
+          <PeriodFilter />
         </div>
       </div>
 
@@ -280,10 +267,10 @@ export default function DashboardPage() {
         current={month}
         latest={hist.at(-1)?.month}
         partial={data.months_partial}
-        onSelect={choose}
+        onSelect={setMonth}
       />
 
-      <BudgetGlance budget={data.budget} month={month} />
+      <BudgetGlance budget={data.budget} />
 
       {data.transfers.count > 0 && (
         <p className="text-sm text-zinc-500">

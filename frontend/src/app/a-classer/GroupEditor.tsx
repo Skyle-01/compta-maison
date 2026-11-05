@@ -120,7 +120,11 @@ export default function GroupEditor({
                   aria-label="Motif de la règle"
                   className="w-64 rounded border border-zinc-300 bg-white px-2 py-1 font-mono text-xs"
                 />
-                <AccountSelect value={d.account_id} onChange={(account_id) => update({ account_id })} />
+                <AccountSelect
+                  purpose="rule"
+                  value={d.account_id}
+                  onChange={(account_id) => update({ account_id })}
+                />
               </div>
               <p
                 className={`text-xs ${currentPreview?.conflicts.length ? "text-amber-800" : "text-zinc-500"}`}

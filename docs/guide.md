@@ -18,11 +18,13 @@ Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qu
 
 La navigation regroupe les pages en trois familles : **Analyser** (Le mois, Budget, Statistiques), **Traiter** (Transactions, À classer, Catégories, Importer) et **Configurer** (Réglages, Aide). Le nombre à côté de « À classer » est celui des opérations encore sans catégorie, et « Dernière opération » indique la date des relevés les plus récents.
 
+Le **mois** et le **compte** choisis en haut des pages sont partagés : choisir juillet dans « Le mois » affiche aussi juillet dans « Budget », « Statistiques », « Transactions » et « À classer », et le choix est retenu d'une visite à l'autre. « Dernier mois » revient au mois le plus récent. Sur « Transactions », « À classer » et « Statistiques », la case « Tous les mois » retire le filtre de mois (la liste est alors grisée) ; la décocher rend le dernier mois choisi. « Le mois » et « Budget » montrent toujours un seul mois et ignorent cette case. Le filtre de compte n'existe que sur « Transactions » et « À classer », qui le partagent. Un lien qui porte un mois ou un compte, comme « Les classer » de la page « Le mois », l'emporte sur le choix retenu.
+
 ## Le mois
 
 ![La page Le mois](img/dashboard.png)
 
-En haut, le mois affiché (liste déroulante, « Dernier mois » pour revenir au plus récent) et le lien « Rapport PDF ». Pour une vue sur toute la période, voir « Statistiques ».
+En haut, le mois affiché (liste déroulante partagée, « Dernier mois » pour revenir au plus récent) et le lien « Rapport PDF ». Pour une vue sur toute la période, voir « Statistiques ».
 
 - **Les quatre cartes** : Revenus, Dépenses, Épargne et Reste. Elles se réconcilient : Revenus - Dépenses - Épargne = Reste. Les variations par rapport au mois précédent sont indiquées.
 - **Reste mois par mois** : une barre par mois. Le mois affiché est en couleur pleine, le mois en cours (encore incomplet) est en pointillés. Un clic sur une barre bascule sur ce mois. Un mois « partiel » (voir ci-dessous) est signalé dans l'infobulle et dans la liste déroulante des mois.
@@ -49,7 +51,7 @@ La page « Budget » compare, pour le mois choisi (liste déroulante, « Dernier
 
 ## Statistiques
 
-La page « Statistiques » regroupe les moyennes mensuelles. En haut à droite, la liste déroulante choisit le mois comparé à la moyenne (« Tous les mois » masque les écarts).
+La page « Statistiques » regroupe les moyennes mensuelles. En haut à droite, la liste déroulante choisit le mois comparé à la moyenne ; la case « Tous les mois » masque les écarts.
 
 **Moyennes mensuelles** : le mois moyen de chaque catégorie sur les 3, 6, 12 derniers mois complets ou « tout ». Le mois en cours est toujours exclu, car il se remplit encore, de même que les mois « partiels » : un mois est partiel tant qu'un compte courant importé n'avait pas démarré (sa date de départ, sinon sa première opération, tombe plus de 4 jours après l'ouverture du mois par le salaire). Ses totaux manquent des flux de ce compte, ils ne sont pas comparables ; ils restent comptés dans « Tous les mois ». La fenêtre peut donc compter moins de mois que demandé, et elle grandit à chaque nouveau mois complet. La colonne « Moyenne / mois » est signée (revenus moins dépenses), « Écart » compare le mois affiché à la moyenne, « Objectif » rappelle le plafond. Seule la cellule « Objectif » d'une catégorie qui a son propre objectif prend une couleur. Le bloc « Comptes d'épargne » donne, par compte, ce qui a été mis de côté par mois.
 
@@ -57,7 +59,7 @@ La page « Statistiques » regroupe les moyennes mensuelles. En haut à droite, 
 
 ![La page Transactions](img/transactions.png)
 
-La liste des opérations, avec des filtres (mois, compte, catégorie, texte, « Sans catégorie uniquement »…). La date affichée est la **date de valeur**. Le compte de chaque ligne est affiché par son code (et non plus par le nom brut du relevé), précédé de la pastille de sa couleur ; le libellé du compte s'affiche au survol.
+La liste des opérations, avec des filtres : le mois (avec « Tous les mois »), le compte (partagé avec « À classer ») et « Sans catégorie uniquement ». La date affichée est la **date de valeur**. Le compte de chaque ligne est affiché par son code (et non plus par le nom brut du relevé), précédé de la pastille de sa couleur ; le libellé du compte s'affiche au survol.
 
 - **Classer une opération** : ouvrir l'éditeur de la ligne, choisir une catégorie (feuille), puis soit « Cette opération » (classement manuel, avec une description facultative), soit « Règle (opérations similaires) » (crée une règle, éventuellement limitée à un compte, avec le nombre d'opérations qu'elle classerait).
 - **Scinder une opération** : dans l'éditeur de la ligne (« Cette opération »), « Scinder » répartit l'opération entre deux catégories : indiquer le montant de la deuxième part et sa catégorie, la première part garde le reste (un ticket de caisse qui mêle courses et maison, par exemple). La ligne affiche alors « Courses + Maison ». Filtrée par catégorie, la liste montre la part de cette catégorie. « Annuler le split » puis « Valider » remet toute l'opération dans la première catégorie. Un virement ne se scinde pas, et changer la catégorie d'une opération scindée, la classer en masse ou la déplacer depuis la page Catégories supprime le split. L'export CSV compte une ligne par part.
@@ -71,11 +73,13 @@ La liste des opérations, avec des filtres (mois, compte, catégorie, texte, « 
 
 Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque groupe, on choisit une catégorie : un groupe de plusieurs opérations propose par défaut une **règle**, une opération isolée un **classement manuel**. Une règle créée ici vaut pour tous les comptes ; le champ compte, à côté du motif, la limite à un compte.
 
+En haut à droite, le mois (avec « Tous les mois ») et le compte limitent les opérations proposées : ils sont partagés avec « Transactions ». Ce filtre de compte est distinct du champ compte d'une règle : il choisit les opérations à voir, pas la portée de la règle. Les virements possibles sont toujours cherchés sur tous les comptes, puisque l'autre côté d'un virement est sur un autre compte.
+
 - Au clavier : ↑/↓ changent de groupe, Entrée classe dans la catégorie proposée, Alt+M bascule règle / manuel, →/← montrent ou cachent les opérations, Échap efface la saisie.
 - « Annuler » (8 secondes, ou Alt+Z) défait le dernier classement.
 - **Conflit de règles** : en tête de page, les opérations qui correspondent à des règles de catégories différentes. Elles restent sans catégorie (l'application ne choisit pas). Chacune liste les règles en cause, avec un lien vers la recherche de la règle dans « Catégories » pour la corriger, et un sélecteur pour la classer à la main. Lors de la création d'une règle, l'aperçu annonce « N opérations correspondent aussi à la règle X (catégorie Y) » quand elle créerait un conflit.
 - « Virement interne ? » propose d'associer l'opération à son pendant sur un autre compte.
-- Le compteur à côté de l'onglet « À classer » indique combien d'opérations restent.
+- Le compteur à côté de l'onglet « À classer » indique combien d'opérations restent, tous mois et tous comptes confondus.
 - Le compte des opérations listées (celles d'un groupe, les virements possibles, les conflits de règles) est précédé de la pastille de sa couleur.
 
 ## Catégories
