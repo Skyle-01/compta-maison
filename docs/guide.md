@@ -51,6 +51,8 @@ La page « Budget » compare, pour le mois choisi (liste déroulante, « Dernier
 
 ## Statistiques
 
+![La page Statistiques](img/statistiques.png)
+
 La page « Statistiques » regroupe les moyennes mensuelles. En haut à droite, la liste déroulante choisit le mois comparé à la moyenne ; la case « Tous les mois » masque les écarts.
 
 **Moyennes mensuelles** : le mois moyen de chaque catégorie sur les 3, 6, 12 derniers mois complets ou « tout ». Le mois en cours est toujours exclu, car il se remplit encore, de même que les mois « partiels » : un mois est partiel tant qu'un compte courant importé n'avait pas démarré (sa date de départ, sinon sa première opération, tombe plus de 4 jours après l'ouverture du mois par le salaire). Ses totaux manquent des flux de ce compte, ils ne sont pas comparables ; ils restent comptés dans « Tous les mois ». La fenêtre peut donc compter moins de mois que demandé, et elle grandit à chaque nouveau mois complet. La colonne « Moyenne / mois » est signée (revenus moins dépenses), « Écart » compare le mois affiché à la moyenne, « Objectif » rappelle le plafond. Seule la cellule « Objectif » d'une catégorie qui a son propre objectif prend une couleur. Le bloc « Comptes d'épargne » donne, par compte, ce qui a été mis de côté par mois.
