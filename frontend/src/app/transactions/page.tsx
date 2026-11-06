@@ -41,6 +41,8 @@ export default function TransactionsPage() {
   const setOffset = (next: number) => setPaging({ scope, offset: next });
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  // Conflicts a saved rule created: kept until dismissed, since the operations need a decision.
+  const [warning, setWarning] = useState<string | null>(null);
 
   // Inline categorisation editor — one row open at a time. The same editor handles a one-off
   // manual assignment and creating a reusable rule; the description maps to the transaction note
@@ -135,6 +137,7 @@ export default function TransactionsPage() {
   async function submitEditor(tx: Transaction) {
     if (form.category_id == null) return;
     setError(null);
+    setWarning(null);
     try {
       if (editMode === "manual") {
         // A category_id drops any split server-side, so a split is always sent along with it.
@@ -150,15 +153,15 @@ export default function TransactionsPage() {
         if (!pattern) return;
         const created = await api.createRule(rule);
         const n = matchCount;
-        setFlash(
-          `Règle « ${pattern} » créée${n != null ? ` — ${n} opération(s) classée(s)` : ""}.` +
-            (created.conflicts.length
-              ? ` ⚠ ${conflictsMessage(created.conflicts, (id) => {
-                  const c = categories.find((x) => x.id === id);
-                  return c ? shortPath(c) : `#${id}`;
-                })}.`
-              : ""),
-        );
+        setFlash(`Règle « ${pattern} » créée${n != null ? ` — ${n} opération(s) classée(s)` : ""}.`);
+        if (created.conflicts.length) {
+          setWarning(
+            `${conflictsMessage(created.conflicts, (id) => {
+              const c = categories.find((x) => x.id === id);
+              return c ? shortPath(c) : `#${id}`;
+            })} : ces opérations restent sans catégorie, à classer dans « À classer ».`,
+          );
+        }
       }
       setEditingTxId(null);
       notifyUncategorizedChanged();
@@ -229,6 +232,22 @@ export default function TransactionsPage() {
         />
       )}
       {flash && <p className="text-sm text-green-700">{flash}</p>}
+      {warning && (
+        <p
+          role="status"
+          className="flex items-start justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+        >
+          <span>⚠ {warning}</span>
+          <button
+            type="button"
+            onClick={() => setWarning(null)}
+            className="shrink-0 text-amber-800 hover:text-amber-950"
+            aria-label="Fermer l'avertissement"
+          >
+            ✕
+          </button>
+        </p>
+      )}
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white">
         <table className="w-full text-sm">
