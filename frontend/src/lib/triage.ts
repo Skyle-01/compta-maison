@@ -18,6 +18,16 @@ export function nextActiveIndex(keys: string[], followingKey: string | null, pre
   return found !== -1 ? found : Math.min(previousIndex, keys.length - 1);
 }
 
+/** `amount`: the API order (largest total first); `date`: most recent operation first. */
+export type GroupSort = "amount" | "date";
+
+/** The groups in the requested order. `Array.sort` is stable, so groups with the same last date
+ *  keep the API's amount order. */
+export function sortGroups(groups: UncategorizedGroup[], sort: GroupSort): UncategorizedGroup[] {
+  if (sort === "amount") return groups;
+  return [...groups].sort((a, b) => b.last_date.localeCompare(a.last_date));
+}
+
 /** « 1 opération » / « 3 opérations ». */
 export function operations(n: number): string {
   return `${n} opération${n > 1 ? "s" : ""}`;

@@ -77,6 +77,7 @@ Les opérations sans catégorie, regroupées par libellé semblable. Pour chaque
 
 En haut à droite, le mois (avec « Tous les mois ») et le compte limitent les opérations proposées : ils sont partagés avec « Transactions ». Ce filtre de compte est distinct du champ compte d'une règle : il choisit les opérations à voir, pas la portée de la règle. Les virements possibles sont toujours cherchés sur tous les comptes, puisque l'autre côté d'un virement est sur un autre compte.
 
+- « Trier par » ordonne les groupes par **montant** total décroissant (par défaut) ou par **date** (le groupe dont l'opération est la plus récente en premier). Changer le tri revient au premier groupe.
 - Au clavier : ↑/↓ changent de groupe, Entrée classe dans la catégorie proposée, Alt+M bascule règle / manuel, →/← montrent ou cachent les opérations, Échap efface la saisie.
 - « Annuler » (8 secondes, ou Alt+Z) défait le dernier classement.
 - **Conflit de règles** : en tête de page, les opérations qui correspondent à des règles de catégories différentes. Elles restent sans catégorie (l'application ne choisit pas). Chacune liste les règles en cause, avec un lien vers la recherche de la règle dans « Catégories » pour la corriger, et un sélecteur pour la classer à la main. Lors de la création d'une règle, l'aperçu annonce « N opérations correspondent aussi à la règle X (catégorie Y) » quand elle créerait un conflit.

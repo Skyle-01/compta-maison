@@ -8,8 +8,23 @@ import {
   previewMessage,
   queryFromSearch,
   ruleLink,
+  sortGroups,
   suggestionReason,
 } from "./triage";
+import type { UncategorizedGroup } from "./api";
+
+describe("sortGroups", () => {
+  const group = (key: string, last_date: string) => ({ key, last_date }) as UncategorizedGroup;
+  const groups = [group("big", "2026-05-02"), group("recent", "2026-06-20"), group("small", "2026-05-02")];
+
+  it("keeps the API amount order", () => {
+    expect(sortGroups(groups, "amount").map((g) => g.key)).toEqual(["big", "recent", "small"]);
+  });
+
+  it("puts the most recent operation first, ties in amount order", () => {
+    expect(sortGroups(groups, "date").map((g) => g.key)).toEqual(["recent", "big", "small"]);
+  });
+});
 
 describe("defaultMode", () => {
   it("is a rule for a group, manual for a lone operation or a generic pattern", () => {

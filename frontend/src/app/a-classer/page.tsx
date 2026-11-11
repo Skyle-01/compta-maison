@@ -19,7 +19,16 @@ import {
 import { leafCategories, searchCategories } from "@/lib/categorySearch";
 import { ruleFormToPayload } from "@/lib/ruleForm";
 import { useAccounts } from "@/lib/useAccounts";
-import { classedMessage, conflictsMessage, defaultMode, nextActiveIndex, operations, pairedMessage } from "@/lib/triage";
+import {
+  classedMessage,
+  conflictsMessage,
+  defaultMode,
+  type GroupSort,
+  nextActiveIndex,
+  operations,
+  pairedMessage,
+  sortGroups,
+} from "@/lib/triage";
 import GroupEditor, { type Draft } from "./GroupEditor";
 import GroupSummary from "./GroupSummary";
 import RuleConflicts from "./RuleConflicts";
@@ -51,6 +60,7 @@ export default function TriagePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const accounts = useAccounts();
   const { ready, monthFilter, account, setAccount } = useFilters();
+  const [sort, setSort] = useState<GroupSort>("amount");
   const [active, setActive] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -75,13 +85,14 @@ export default function TriagePage() {
       return Promise.all([api.uncategorizedGroups(scope), api.ruleConflicts(scope)]).then(
         ([next, conflicted]) => {
           if (id !== request.current) return;
-          setGroups(next);
+          const sorted = sortGroups(next, sort);
+          setGroups(sorted);
           setConflicts(conflicted);
-          setActive(nextActiveIndex(next.map((g) => g.key), followingKey, fallback));
+          setActive(nextActiveIndex(sorted.map((g) => g.key), followingKey, fallback));
         },
       );
     },
-    [monthFilter, account],
+    [monthFilter, account, sort],
   );
 
   useEffect(() => {
@@ -299,6 +310,17 @@ export default function TriagePage() {
           )}
         </div>
         <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-sm text-zinc-600">
+            Trier par
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as GroupSort)}
+              className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900"
+            >
+              <option value="amount">Montant</option>
+              <option value="date">Date</option>
+            </select>
+          </label>
           <PeriodFilter withAll />
           <AccountSelect purpose="filter" value={account} onChange={setAccount} />
         </div>
