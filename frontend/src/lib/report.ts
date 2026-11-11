@@ -321,21 +321,44 @@ export function splitNote(tx: { total: number | null }): string | null {
   return tx.total === null ? null : `scindée, sur ${formatEuro(tx.total)}`;
 }
 
-/** The month in one plain sentence for a reader outside the app, e.g. « En septembre 2026, le
- *  foyer a gagné … et dépensé … Il a mis … de côté. Il reste … (en moyenne … par mois). » */
+/** Months of history in the report's Reste chart. */
+export const REPORT_TREND_MONTHS = 12;
+
+export interface SummaryParts {
+  /** What came in, went out and was set aside: « En septembre 2026, le foyer a gagné … ». */
+  story: string;
+  /** The answer a reader wants first, without a final period: « Il reste 200,00 € ». */
+  verdict: string;
+  /** « en moyenne 150,00 € par mois »; null while no budget month is complete. */
+  average: string | null;
+}
+
+/** The month in plain words for a reader outside the app, in the two parts the mobile page lays out
+ *  apart (the verdict first); `reportSummary` joins them in one sentence. */
+export function reportSummaryParts(
+  month: string,
+  d: Pick<Dashboard, "income" | "expenses" | "epargne" | "desepargne" | "reste">,
+  averageReste: number | null,
+): SummaryParts {
+  const story = [
+    `En ${frenchMonth(month)}, le foyer a gagné ${formatEuro(d.income)} et dépensé ${formatEuro(d.expenses)}.`,
+  ];
+  if (nonZero(d.epargne)) story.push(`Il a mis ${formatEuro(d.epargne)} de côté.`);
+  if (nonZero(d.desepargne)) story.push(`Il a puisé ${formatEuro(d.desepargne)} dans son épargne.`);
+  return {
+    story: story.join(" "),
+    verdict: d.reste >= 0 ? `Il reste ${formatEuro(d.reste)}` : `Il manque ${formatEuro(-d.reste)}`,
+    average: averageReste === null ? null : `en moyenne ${formatEuro(averageReste)} par mois`,
+  };
+}
+
+/** The month in one plain sentence, e.g. « En septembre 2026, le foyer a gagné … et dépensé … Il a
+ *  mis … de côté. Il reste … (en moyenne … par mois). » */
 export function reportSummary(
   month: string,
   d: Pick<Dashboard, "income" | "expenses" | "epargne" | "desepargne" | "reste">,
   averageReste: number | null,
 ): string {
-  const parts = [
-    `En ${frenchMonth(month)}, le foyer a gagné ${formatEuro(d.income)} et dépensé ${formatEuro(d.expenses)}.`,
-  ];
-  if (nonZero(d.epargne)) parts.push(`Il a mis ${formatEuro(d.epargne)} de côté.`);
-  if (nonZero(d.desepargne)) parts.push(`Il a puisé ${formatEuro(d.desepargne)} dans son épargne.`);
-  const average = averageReste === null ? "" : ` (en moyenne ${formatEuro(averageReste)} par mois)`;
-  parts.push(
-    d.reste >= 0 ? `Il reste ${formatEuro(d.reste)}${average}.` : `Il manque ${formatEuro(-d.reste)}${average}.`,
-  );
-  return parts.join(" ");
+  const { story, verdict, average } = reportSummaryParts(month, d, averageReste);
+  return `${story} ${verdict}${average ? ` (${average})` : ""}.`;
 }

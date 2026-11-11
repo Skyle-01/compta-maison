@@ -1,5 +1,4 @@
-import { formatEuro } from "@/lib/api";
-import { averageGap, type GapTone, gapTone } from "@/lib/averages";
+import { averageGap, type GapTone, gapText, gapTone } from "@/lib/averages";
 
 const GAP_TEXT: Record<GapTone, string> = {
   good: "text-green-700",
@@ -23,9 +22,8 @@ export default function Gap({
   /** Put the gap between parentheses, after a value it qualifies. */
   wrap?: boolean;
 }) {
-  const gap = averageGap(month, average);
-  if (gap === null || (month === 0 && average === 0)) return null;
-  const sign = gap > 0.005 ? "+" : gap < -0.005 ? "−" : "";
-  const text = sign + formatEuro(Math.abs(gap));
+  const text = gapText(month, average);
+  if (text === null) return null;
+  const gap = averageGap(month, average) ?? 0;
   return <span className={className ?? GAP_TEXT[gapTone(gap, goodIsUp)]}>{wrap ? `(${text})` : text}</span>;
 }

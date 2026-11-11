@@ -13,6 +13,7 @@ import {
   netOfRefunds,
   partialInReport,
   REPORT_AVERAGE,
+  REPORT_TREND_MONTHS,
   reportSummary,
   unclassifiedNote,
 } from "@/lib/report";
@@ -26,8 +27,6 @@ import StatementTable from "./StatementTable";
 import { HIGHLIGHT } from "./tableStyles";
 import TreeRows from "./TreeRows";
 
-/** Months of history in the page 1 Reste chart. */
-const TREND_MONTHS = 12;
 /** Sankey height that fits a landscape A4 page (186 mm of content, about 700 px) under the sheet
  *  header and its note; a taller chart is scaled down rather than pushed to the next page. */
 const FLOW_MAX_HEIGHT = 600;
@@ -53,7 +52,7 @@ function Report({
   const summary = periodSummary(avg, REPORT_AVERAGE);
   const epargneNet = data.epargne - data.desepargne;
   const flow = moneyFlow(data);
-  const history = data.history.filter((h) => h.month <= month).slice(-TREND_MONTHS);
+  const history = data.history.filter((h) => h.month <= month).slice(-REPORT_TREND_MONTHS);
   const unclassified = unclassifiedNote(data.uncategorized.count);
   const partial = partialInReport(
     history.map((h) => h.month),
@@ -154,7 +153,7 @@ function Report({
               .
             </li>
             <li>
-              La moyenne porte sur les {TREND_MONTHS} derniers mois clos ; l’écart compare le mois à cette
+              La moyenne porte sur les {REPORT_TREND_MONTHS} derniers mois clos ; l’écart compare le mois à cette
               moyenne (en vert quand c’est favorable, en rouge sinon).
             </li>
             {partial.length > 0 && (

@@ -1,5 +1,5 @@
 /** Pure helpers for the « Moyennes mensuelles » section of the Statistiques page. */
-import { type AverageNode, type AveragePeriod, type CategoryAverages, frenchMonth } from "./api";
+import { type AverageNode, type AveragePeriod, type CategoryAverages, formatEuro, frenchMonth } from "./api";
 
 export const AVERAGE_PERIODS: { value: AveragePeriod; label: string }[] = [
   { value: "3", label: "3 derniers mois" },
@@ -14,6 +14,15 @@ export type GapTone = "good" | "bad" | "flat";
  *  compare with (« Tous les mois »). */
 export function averageGap(month: number | null, average: number): number | null {
   return month === null ? null : Math.round((month - average) * 100) / 100;
+}
+
+/** A gap as text ("+120,00 €", "−35,00 €"); null when there is nothing to compare or no money
+ *  either way. */
+export function gapText(month: number | null, average: number): string | null {
+  const gap = averageGap(month, average);
+  if (gap === null || (month === 0 && average === 0)) return null;
+  const sign = gap > 0.005 ? "+" : gap < -0.005 ? "−" : "";
+  return sign + formatEuro(Math.abs(gap));
 }
 
 /** Colour of a gap: whether being above the average is good (income, savings) or bad (spending). */

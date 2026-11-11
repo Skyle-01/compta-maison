@@ -3,7 +3,7 @@ import { lastCompleteMonths, parseReportRequest, reportRangeTitle, reportSearch 
 
 // Newest first, like Dashboard.months_available: 2026-09 is still filling.
 const available = ["2026-09", "2026-08", "2026-07", "2026-06"];
-const plain = (s: string) => s.replace(/[  ]/g, " ");
+const plain = (s: string) => s.replace(/[  ]/g, " ");
 
 describe("lastCompleteMonths", () => {
   it("skips the month still filling and keeps the newest `count`", () => {
