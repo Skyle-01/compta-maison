@@ -11,12 +11,15 @@ export interface ReportData {
   operations: Map<CategoryNode, Transaction[]>;
 }
 
-/** Loads one month's report. `available` is Dashboard.months_available (newest first). */
-export async function loadReport(available: string[], month: string): Promise<ReportData> {
+/** Loads one month's report. `available` is Dashboard.months_available (newest first); without
+ *  `withOperations` the leaves' operations are not fetched (the map stays empty). */
+export async function loadReport(available: string[], month: string, withOperations = true): Promise<ReportData> {
   const [data, columns] = await Promise.all([
     api.dashboard(month),
     Promise.all(statementMonths(available, month).map((m) => api.averages(REPORT_AVERAGE, m))),
   ]);
-  const operations = await listLeafOperations(treeLeaves(data.by_category), month);
+  const operations = withOperations
+    ? await listLeafOperations(treeLeaves(data.by_category), month)
+    : new Map<CategoryNode, Transaction[]>();
   return { data, columns, operations };
 }

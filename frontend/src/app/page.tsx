@@ -24,7 +24,7 @@ import PeriodFilter from "@/components/PeriodFilter";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
 import { moneyFlow } from "@/lib/moneyFlow";
-import { reportLink, treeLeaves } from "@/lib/report";
+import { exportLink, treeLeaves } from "@/lib/report";
 import { useAccounts } from "@/lib/useAccounts";
 import { useMonthDashboard } from "@/lib/useMonthDashboard";
 
@@ -228,11 +228,8 @@ export default function DashboardPage() {
           <HelpLink page="/" />
         </h1>
         <div className="flex items-center gap-3">
-          <Link
-            href={reportLink(month, data.months_available)}
-            className="btn-secondary"
-          >
-            Rapport PDF
+          <Link href={exportLink(month, data.months_available)} className="btn-secondary">
+            Exporter
           </Link>
           <PeriodFilter />
         </div>

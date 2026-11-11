@@ -13,12 +13,11 @@ import {
   netOfRefunds,
   partialInReport,
   REPORT_AVERAGE,
-  reportMonth,
   reportSummary,
-  reportTitle,
   unclassifiedNote,
 } from "@/lib/report";
 import { loadReport, type ReportData } from "@/lib/reportData";
+import { parseReportRequest, reportRangeTitle, type ReportRequest } from "@/lib/reportRequest";
 import { useAccounts } from "@/lib/useAccounts";
 import MonthDetail from "./MonthDetail";
 import ReportStat from "./ReportStat";
@@ -38,11 +37,13 @@ function Report({
   month,
   inProgress,
   accounts,
+  withFlow,
 }: {
   report: ReportData;
   month: string;
   inProgress: boolean;
   accounts: Account[];
+  withFlow: boolean;
 }) {
   const { data, columns } = report;
   const avg = columns[columns.length - 1];
@@ -61,8 +62,7 @@ function Report({
   const today = new Intl.DateTimeFormat("fr-FR").format(new Date());
 
   return (
-    // Centred on screen, so the landscape page may overflow the content column on both sides.
-    <div className="flex flex-col items-center gap-6 print:block">
+    <>
       <section className="sheet">
         <header className="mb-5 border-b border-zinc-200 pb-3">
           <h1 className="text-2xl font-semibold">Comptes du foyer</h1>
@@ -201,7 +201,7 @@ function Report({
         </table>
       </Sheet>
 
-      {flow.links.length > 0 && (
+      {withFlow && flow.links.length > 0 && (
         <Sheet title="Flux d’argent du mois" month={month} landscape>
           <p className="mb-2 text-xs text-zinc-500">
             De gauche à droite : d’où vient l’argent, puis où il va. L’épaisseur de chaque bande est
@@ -210,36 +210,36 @@ function Report({
           <MoneyFlowChart flow={flow} maxHeight={FLOW_MAX_HEIGHT} />
         </Sheet>
       )}
-    </div>
+    </>
   );
 }
 
 export default function ReportPage() {
   const accounts = useAccounts();
   const [available, setAvailable] = useState<string[] | null>(null);
-  const [month, setMonth] = useState<string | null>(null);
-  const [report, setReport] = useState<ReportData | null>(null);
+  const [request, setRequest] = useState<ReportRequest | null>(null);
+  // One report per requested month, in the request's order (oldest first).
+  const [reports, setReports] = useState<ReportData[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // ?month=YYYY-MM from the dashboard's « Rapport PDF » link; read once, client-side.
-    const requested = new URLSearchParams(window.location.search).get("month");
+    // The months and options come from the Export page's link; read once, client-side.
     api
       .dashboard()
       .then((d) => {
         setAvailable(d.months_available);
-        setMonth(reportMonth(d.months_available, requested));
+        setRequest(parseReportRequest(window.location.search, d.months_available));
       })
       .catch((e) => setError(errorMessage(e)));
   }, []);
 
   useEffect(() => {
-    if (!month || !available) return;
-    let stale = false; // a slower answer for a previous month must not overwrite this one
-    loadReport(available, month)
+    if (!request || !available) return;
+    let stale = false;
+    Promise.all(request.months.map((m) => loadReport(available, m, request.operations)))
       .then((loaded) => {
         if (stale) return;
-        setReport(loaded);
+        setReports(loaded);
         setError(null);
       })
       .catch((e) => {
@@ -248,71 +248,58 @@ export default function ReportPage() {
     return () => {
       stale = true;
     };
-  }, [month, available]);
+  }, [request, available]);
 
   // The browser names the saved PDF after the page title.
   useEffect(() => {
-    if (!month) return;
+    if (!request) return;
     const previous = document.title;
-    document.title = reportTitle(month);
+    document.title = reportRangeTitle(request.months);
     return () => {
       document.title = previous;
     };
-  }, [month]);
-
-  const choose = (m: string) => {
-    setMonth(m);
-    setReport(null);
-    window.history.replaceState(null, "", `?month=${m}`);
-  };
+  }, [request]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div className="flex items-center gap-3">
-          <Link
-            href={month && month !== available?.[0] ? `/?month=${month}` : "/"}
-            className="text-sm text-zinc-600 hover:text-zinc-900"
-          >
-            ← Le mois
+          <Link href="/export" className="text-sm text-zinc-600 hover:text-zinc-900">
+            ← Export
           </Link>
-          <h1 className="text-xl font-semibold">Rapport</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          {available && month && (
-            <select
-              className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm"
-              value={month}
-              onChange={(e) => choose(e.target.value)}
-              aria-label="Mois du rapport"
-            >
-              {available.map((m, i) => (
-                <option key={m} value={m}>
-                  {frenchMonth(m)}
-                  {i === 0 ? " (en cours)" : ""}
-                </option>
-              ))}
-            </select>
+          <h1 className="text-xl font-semibold">Rapport PDF</h1>
+          {request && (
+            <span className="text-sm text-zinc-500">
+              {request.months.map(frenchMonth).join(", ")}
+            </span>
           )}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            disabled={!report}
-            className="btn-primary"
-          >
-            Enregistrer en PDF
-          </button>
         </div>
+        <button type="button" onClick={() => window.print()} disabled={!reports} className="btn-primary">
+          Enregistrer en PDF
+        </button>
       </div>
       <p className="text-xs text-zinc-500 print:hidden">
-        Dans la fenêtre d’impression, choisissez « Enregistrer au format PDF » comme imprimante.
+        Dans la fenêtre d&apos;impression, choisissez « Enregistrer au format PDF » comme imprimante. Les mois et
+        le contenu se choisissent sur la page Export.
       </p>
 
       {error && <p className="text-red-700">{error}</p>}
       {available?.length === 0 ? (
-        <p className="text-zinc-500">Aucune transaction pour l’instant : rien à mettre dans un rapport.</p>
-      ) : report && month ? (
-        <Report report={report} month={month} inProgress={month === available?.[0]} accounts={accounts} />
+        <p className="text-zinc-500">Aucune transaction pour l&apos;instant : rien à mettre dans un rapport.</p>
+      ) : reports && request ? (
+        // Centred on screen, so the landscape page may overflow the content column on both sides.
+        <div className="flex flex-col items-center gap-6 print:block">
+          {reports.map((report, i) => (
+            <Report
+              key={request.months[i]}
+              report={report}
+              month={request.months[i]}
+              inProgress={request.months[i] === available?.[0]}
+              accounts={accounts}
+              withFlow={request.flow}
+            />
+          ))}
+        </div>
       ) : (
         !error && <p className="text-zinc-500">Chargement…</p>
       )}

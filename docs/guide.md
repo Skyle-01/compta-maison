@@ -24,7 +24,7 @@ Le **mois** et le **compte** choisis en haut des pages sont partagés : choisir 
 
 ![La page Le mois](img/dashboard.png)
 
-En haut, le mois affiché (liste déroulante partagée, « Dernier mois » pour revenir au plus récent) et le lien « Rapport PDF ». Pour une vue sur toute la période, voir « Statistiques ».
+En haut, le mois affiché (liste déroulante partagée, « Dernier mois » pour revenir au plus récent) et le bouton « Exporter ». Pour une vue sur toute la période, voir « Statistiques ».
 
 - **Les quatre cartes** : Revenus, Dépenses, Épargne et Reste. Elles se réconcilient : Revenus - Dépenses - Épargne = Reste. Les variations par rapport au mois précédent sont indiquées.
 - **Reste mois par mois** : une barre par mois. Le mois affiché est en couleur pleine, le mois en cours (encore incomplet) est en pointillés. Un clic sur une barre bascule sur ce mois. Un mois « partiel » (voir ci-dessous) est signalé dans l'infobulle et dans la liste déroulante des mois.
@@ -36,12 +36,6 @@ En haut, le mois affiché (liste déroulante partagée, « Dernier mois » pour 
 ### Épargne et désépargne
 
 Pour chaque compte d'épargne, l'application calcule le net du mois : positif, c'est de l'**épargne** (comptée dans la carte Épargne) ; négatif, c'est de la **désépargne** (un retrait, compté en déficit). Sur plusieurs mois (par exemple dans « Statistiques »), un même compte peut donc apparaître des deux côtés, sans que l'un annule l'autre.
-
-### Rapport PDF
-
-Le lien « Rapport PDF » ouvre une version imprimable pour le foyer. Choisir le mois (par défaut le dernier mois complet), puis « Enregistrer en PDF » : dans la fenêtre d'impression du navigateur, choisir « Enregistrer au format PDF » et décocher les en-têtes et pieds de page.
-
-Le rapport montre une synthèse (cartes, tendance, « Comment lire »), les derniers mois, le détail du mois, le détail par catégorie (avec les opérations de chaque feuille) et le diagramme des flux. Ses Revenus et Dépenses sont **nets des remboursements** : ils peuvent être plus bas que ceux de la page « Le mois », mais le Reste est identique. Un montant notable est en gras rouge ou vert : au-dessus de son objectif, ou à la fois d'au moins 20 euros et 20 % d'écart avec sa moyenne. Une ligne ambre sous les cartes prévient quand des opérations du mois ne sont pas encore classées, et la synthèse explique les mois partiels qu'elle montre. Dans le détail par catégorie, chaque opération porte la pastille de son compte et, si elle est scindée, la mention « scindée, sur N € ».
 
 ## Budget
 
@@ -109,6 +103,15 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 - Les relevés envoyés sont archivés dans `_inputs/`. Les opérations antérieures à la date de départ sont écartées : celle de `settings.toml` (`start_date`, pour toute la comptabilité) ou celle du compte (voir Réglages), la plus tardive des deux.
 - Au premier import d'un compte, si ses opérations commencent plus de 4 jours après l'ouverture du mois budgétaire (le versement du salaire qui l'ouvre), un avertissement orange le signale et propose la date du salaire suivant comme date de départ du compte : ce mois-là serait incomplet pour lui. L'avertissement n'empêche rien.
 - La couverture par compte signale les trous entre deux relevés.
+
+## Export
+
+Le rapport du foyer, pour quelqu'un qui ne connaît pas l'application. Le bouton « Exporter » de la page « Le mois » ouvre cette page avec le mois affiché déjà coché.
+
+- **Mois à exporter** : une case par mois, avec des raccourcis (« Dernier mois clos », « 6 derniers mois clos », « Tous », « Aucun »). Par défaut, le dernier mois clos : le mois en cours n'est pas terminé, ses chiffres bougeront.
+- **PDF** : « Ouvrir le rapport PDF » affiche le rapport (un rapport complet par mois choisi, des pages A4), puis « Enregistrer en PDF » : dans la fenêtre d'impression du navigateur, choisir « Enregistrer au format PDF » et décocher les en-têtes et pieds de page. Deux options : le détail des opérations dans « Détail par catégorie », et le diagramme des flux (une page paysage par mois).
+
+Le rapport montre une synthèse (cartes, tendance, « Comment lire »), les derniers mois, le détail du mois, le détail par catégorie et le diagramme des flux. Ses Revenus et Dépenses sont **nets des remboursements** : ils peuvent être plus bas que ceux de la page « Le mois », mais le Reste est identique. Un montant notable est en gras rouge ou vert : au-dessus de son objectif, ou à la fois d'au moins 20 euros et 20 % d'écart avec sa moyenne. Une ligne ambre sous les cartes prévient quand des opérations du mois ne sont pas encore classées, et la synthèse explique les mois partiels qu'elle montre. Dans le détail par catégorie, chaque opération porte la pastille de son compte et, si elle est scindée, la mention « scindée, sur N € ».
 
 ## Réglages
 

@@ -6,9 +6,10 @@ import { useEffect, useState } from "react";
 import { api, frenchDate, UNCATEGORIZED_CHANGED } from "@/lib/api";
 import { NAV_GROUPS } from "@/lib/nav";
 
-/** The report is opened from the dashboard, so it keeps « Le mois » current. */
+/** The printable report is opened from the Export page, so it keeps « Export » current. */
 function isCurrent(href: string, pathname: string): boolean {
-  if (href === "/") return pathname === "/" || pathname.startsWith("/rapport");
+  if (href === "/") return pathname === "/";
+  if (href === "/export") return pathname.startsWith("/export") || pathname.startsWith("/rapport");
   return pathname.startsWith(href);
 }
 

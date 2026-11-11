@@ -8,6 +8,7 @@ export const GUIDE_ANCHORS = {
   "/a-classer": "à-classer",
   "/categories": "catégories",
   "/import": "importer-des-relevés",
+  "/export": "export",
   "/settings": "réglages",
   "/aide": "bien-démarrer",
 } as const;

@@ -35,10 +35,10 @@ export function reportMonth(available: string[], requested: string | null): stri
   return available[1] ?? available[0] ?? null;
 }
 
-/** The dashboard's « Rapport PDF » link: for the month shown, unless it is the
- *  month still filling (the report then defaults to the latest complete month). */
-export function reportLink(month: string, available: string[]): string {
-  return month === available[0] ? "/rapport" : `/rapport?month=${month}`;
+/** The dashboard's « Exporter » link: to the Export page with the month shown preselected, unless it is
+ *  the month still filling (the page then defaults to the latest complete month). */
+export function exportLink(month: string, available: string[]): string {
+  return month === available[0] ? "/export" : `/export?month=${month}`;
 }
 
 /** The statement's columns, oldest first: up to `count` budget months ending with `month`. */

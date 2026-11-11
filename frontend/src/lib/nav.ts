@@ -20,6 +20,7 @@ export const NAV_GROUPS = [
   {
     label: "Configurer",
     items: [
+      { href: "/export", label: "Export" },
       { href: "/settings", label: "Réglages" },
       { href: "/aide", label: "Aide" },
     ],
