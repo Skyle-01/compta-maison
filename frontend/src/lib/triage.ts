@@ -1,4 +1,4 @@
-import type { RuleConflict, RulePreview, Transaction, UncategorizedGroup } from "./api";
+import { formatEuro, type RuleConflict, type RulePreview, signedAmount, type Transaction, type UncategorizedGroup } from "./api";
 
 /** Pure helpers of the « À classer » page: default mode, next active group, messages. */
 
@@ -26,6 +26,37 @@ export type GroupSort = "amount" | "date";
 export function sortGroups(groups: UncategorizedGroup[], sort: GroupSort): UncategorizedGroup[] {
   if (sort === "amount") return groups;
   return [...groups].sort((a, b) => b.last_date.localeCompare(a.last_date));
+}
+
+/** The operations a manual classification applies to: the ticked ones ("Classer seule" ticks one),
+ *  else the whole group. Ids no longer in the group (already classed) are ignored, so a selection
+ *  made only of them falls back to the group. */
+export function manualScope(group: Pick<UncategorizedGroup, "transactions">, selectedIds: number[]): Transaction[] {
+  const picked = group.transactions.filter((t) => selectedIds.includes(t.id));
+  return picked.length > 0 ? picked : group.transactions;
+}
+
+/** The 2nd part of an operation split across two categories: its leaf and its amount in euros, as typed. */
+export type SplitForm = { category_id: number | null; amount: string };
+
+/** The typed amount in euros (comma or point); NaN or 0 when it is not a number. */
+export function splitAmount(split: SplitForm): number {
+  return Number(split.amount.replace(",", ".")) || 0;
+}
+
+/** A split that cannot be sent yet: no category or no positive amount (the server checks the upper bound). */
+export function splitIncomplete(split: SplitForm | null): boolean {
+  return split !== null && (split.category_id == null || splitAmount(split) <= 0);
+}
+
+/** What a group's line shows instead of the sum of its amounts: the amount of a lone operation,
+ *  « 3 × -12,00 € » when they are all equal, else the range « de -40,00 € à -5,00 € ». */
+export function amountSummary(transactions: Transaction[]): string {
+  const amounts = transactions.map(signedAmount);
+  const min = Math.min(...amounts);
+  const max = Math.max(...amounts);
+  if (min !== max) return `de ${formatEuro(min)} à ${formatEuro(max)}`;
+  return amounts.length > 1 ? `${amounts.length} × ${formatEuro(min)}` : formatEuro(min);
 }
 
 /** « 1 opération » / « 3 opérations ». */

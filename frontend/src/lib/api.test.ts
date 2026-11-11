@@ -9,7 +9,6 @@ import {
   frenchMonthShort,
   signedAmount,
   statusMessage,
-  suggestPattern,
   transactionsExportUrl,
 } from "./api";
 
@@ -42,16 +41,6 @@ describe("frenchMonth", () => {
   it("falls back to the raw value", () => {
     expect(frenchMonth("toutes")).toBe("toutes");
     expect(frenchMonthShort("")).toBe("");
-  });
-});
-
-describe("suggestPattern", () => {
-  it("strips the dated card and ATM prefixes", () => {
-    expect(suggestPattern("CARTE 26/05 BOULANGERIE DU PORT")).toBe("BOULANGERIE DU PORT");
-    expect(suggestPattern("RET DAB 26/05/26 AGENCE CENTRE")).toBe("AGENCE CENTRE");
-  });
-  it("leaves other labels alone", () => {
-    expect(suggestPattern("VIR EMPLOYEUR SALAIRE")).toBe("VIR EMPLOYEUR SALAIRE");
   });
 });
 

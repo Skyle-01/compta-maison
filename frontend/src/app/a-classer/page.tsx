@@ -24,10 +24,13 @@ import {
   conflictsMessage,
   defaultMode,
   type GroupSort,
+  manualScope,
   nextActiveIndex,
   operations,
   pairedMessage,
   sortGroups,
+  splitAmount,
+  splitIncomplete,
 } from "@/lib/triage";
 import GroupEditor, { type Draft } from "./GroupEditor";
 import GroupSummary from "./GroupSummary";
@@ -47,6 +50,9 @@ const draftFor = (g: UncategorizedGroup): Draft => ({
   pattern: g.pattern,
   description: "",
   account_id: null,
+  chosen: null,
+  selected: [],
+  split: null,
 });
 
 /** The last action's confirmation: `undo` reverts it, `key` is the group to reactivate then. */
@@ -61,9 +67,9 @@ export default function TriagePage() {
   const accounts = useAccounts();
   const { ready, monthFilter, account, setAccount } = useFilters();
   const [sort, setSort] = useState<GroupSort>("amount");
+  const [oldestFirst, setOldestFirst] = useState(false); // date order of a group's operations list
   const [active, setActive] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [preview, setPreview] = useState<{ query: string; result: RulePreview } | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +108,27 @@ export default function TriagePage() {
   const current = groups?.[active] ?? null;
   const d = current ? (draft?.key === current.key ? draft : draftFor(current)) : null;
   const update = (patch: Partial<Draft>) => d && setDraft({ ...d, ...patch });
+  // The operations a manual classification applies to: the ticked ones, else the group.
+  const scope = current && d ? manualScope(current, d.selected) : [];
+
+  /** Aim the editor at one operation (« Classer seule ») or back at the whole group. */
+  function target(id: number | null) {
+    update({ selected: id == null ? [] : [id], split: null, ...(id != null && { mode: "manual" as const }) });
+    searchRef.current?.focus({ preventScroll: true });
+  }
+
+  /** Tick or untick one operation; ticking aims the editor at the ticked ones (manual mode, no split). */
+  function toggle(id: number) {
+    if (!d) return;
+    const selected = d.selected.includes(id) ? d.selected.filter((x) => x !== id) : [...d.selected, id];
+    update({ selected, split: null, mode: "manual" });
+  }
+
+  function toggleAll() {
+    if (!current || !d) return;
+    const all = current.transactions.every((t) => d.selected.includes(t.id));
+    update({ selected: all ? [] : current.transactions.map((t) => t.id), split: null, mode: "manual" });
+  }
 
   const leaves = useMemo(() => leafCategories(categories), [categories]);
   const byId = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -113,8 +140,12 @@ export default function TriagePage() {
   const suggested = current?.suggestion
     ? (leaves.find((c) => c.id === current.suggestion?.category_id) ?? null)
     : null;
-  // What Enter (or « Valider ») classes the group in: the highlighted search result, else the suggestion.
-  const candidate = d?.query ? (results[d.highlight] ?? null) : suggested;
+  // The category picked and waiting for « Valider ».
+  const chosen = d?.chosen != null ? (byId.get(d.chosen) ?? null) : null;
+  // What Enter picks while a query is typed.
+  const highlighted = d?.query ? (results[d.highlight] ?? null) : null;
+  // The category the rule preview is computed for: what is about to be picked, else the pick.
+  const previewCategory = d?.query ? highlighted : (chosen ?? suggested);
 
   // Keep the active group on screen and the keyboard in its category search.
   useEffect(() => {
@@ -125,7 +156,7 @@ export default function TriagePage() {
 
   // Debounced rule preview: rows the rule would classify, and rows it would take from other rules.
   const pattern = d?.mode === "rule" ? d.pattern.trim() : "";
-  const previewQuery = pattern ? `${pattern}\u0000${candidate?.id ?? ""}\u0000${d?.account_id ?? ""}` : "";
+  const previewQuery = pattern ? `${pattern}\u0000${previewCategory?.id ?? ""}\u0000${d?.account_id ?? ""}` : "";
   useEffect(() => {
     if (!previewQuery) return;
     const [p, categoryId, accountId] = previewQuery.split("\u0000");
@@ -161,14 +192,42 @@ export default function TriagePage() {
     }
   }
 
-  function submit(category: Category | null) {
-    if (!groups || !current || !d || !category || busy) return;
+  /** Pick a category without classing anything: « Valider » (or a second Enter) does it. */
+  function choose(category: Category) {
+    update({ chosen: category.id, query: "", highlight: 0 });
+    searchRef.current?.focus({ preventScroll: true });
+  }
+
+  function submit(category: Category) {
+    if (!groups || !current || !d || busy) return;
     if (d.mode === "rule" && !pattern) return;
     const path = shortPath(category);
-    return act(groups[active + 1]?.key ?? null, async () => {
+    // A manual classification of some operations only (a lone one, « Classer seule », ticked ones):
+    // the group stays active while it still has other operations.
+    const partial = d.mode === "manual" && scope.length < current.count;
+    const one = d.mode === "manual" && scope.length === 1 ? scope[0] : null;
+    const split = one ? d.split : null;
+    if (splitIncomplete(split)) return;
+    const following = partial ? current.key : (groups[active + 1]?.key ?? null);
+    return act(following, async () => {
+      if (one) {
+        await api.updateTransaction(one.id, {
+          category_id: category.id,
+          note: d.description.trim() || null,
+          ...(split && { split_category_id: split.category_id, split_amount: splitAmount(split) }),
+        });
+        setDraft(null); // the group's remaining operations start from fresh defaults
+        return {
+          message: split ? `${classedMessage(1, path)} (scindée)` : classedMessage(1, path),
+          key: current.key,
+          // Clearing the category also drops the split and hands the operation back to the rules.
+          undo: () => api.updateTransaction(one.id, { category_id: null, note: null }),
+        };
+      }
       if (d.mode === "manual") {
-        const ids = current.transactions.map((t) => t.id);
+        const ids = scope.map((t) => t.id);
         await api.updateTransactions(ids, category.id, d.description.trim() || null);
+        setDraft(null); // the picked category and ticks must not carry over to what is left
         return {
           message: classedMessage(ids.length, path),
           key: current.key,
@@ -186,6 +245,7 @@ export default function TriagePage() {
         }),
       );
       const after = await api.uncategorizedCount();
+      setDraft(null);
       return {
         message:
           `Règle « ${pattern} » créée : ${classedMessage(before - after, path)}` +
@@ -238,15 +298,6 @@ export default function TriagePage() {
     }
   }
 
-  function toggleExpanded(key: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
   function onKeyDown(e: React.KeyboardEvent) {
     if (!groups || !current || !d) return;
     const inSearch = e.target === searchRef.current;
@@ -271,22 +322,20 @@ export default function TriagePage() {
         else setActive(clamp(active + delta, 0, groups.length - 1));
         return;
       }
-      case "ArrowRight":
-      case "ArrowLeft":
-        if (inSearch && !d.query) {
-          e.preventDefault();
-          if (expanded.has(current.key) !== (e.key === "ArrowRight")) toggleExpanded(current.key);
-        }
-        return;
       case "Enter":
-        // In a field only: Enter on a button keeps its own action.
-        if (!(e.target instanceof HTMLInputElement)) return;
+        // In a text field only: Enter on a button or a checkbox keeps its own action.
+        if (!(e.target instanceof HTMLInputElement && e.target.type === "text")) return;
         e.preventDefault();
-        submit(candidate);
+        // Enter picks the highlighted result, else the suggestion; a second Enter validates the pick.
+        if (d.query) {
+          if (highlighted) choose(highlighted);
+        } else if (chosen) submit(chosen);
+        else if (suggested) choose(suggested);
         return;
       case "Escape":
         e.preventDefault();
         if (d.query) update({ query: "", highlight: 0 });
+        else if (chosen) update({ chosen: null });
         else setDraft(draftFor(current));
         return;
     }
@@ -366,23 +415,35 @@ export default function TriagePage() {
                     <GroupEditor
                       group={g}
                       draft={d}
+                      scope={scope}
+                      categories={categories}
                       update={update}
                       searchRef={searchRef}
                       results={results}
                       suggested={suggested}
-                      candidate={candidate}
+                      chosen={chosen}
                       pattern={pattern}
                       currentPreview={currentPreview}
                       pathOf={pathOf}
                       busy={busy}
-                      expanded={expanded.has(g.key)}
+                      onChoose={choose}
                       onSubmit={submit}
-                      onToggleExpanded={() => toggleExpanded(g.key)}
                     />
+                    {g.count > 1 && (
+                      <OperationsTable
+                        transactions={g.transactions}
+                        accounts={accounts}
+                        selected={d.selected}
+                        onToggle={toggle}
+                        onToggleAll={toggleAll}
+                        onTarget={target}
+                        oldestFirst={oldestFirst}
+                        onToggleOrder={() => setOldestFirst((v) => !v)}
+                      />
+                    )}
                     {g.transfer_candidates.length > 0 && (
                       <TransferCandidates group={g} accounts={accounts} busy={busy} onPair={pair} />
                     )}
-                    {expanded.has(g.key) && <OperationsTable transactions={g.transactions} accounts={accounts} />}
                   </div>
                 )}
               </div>

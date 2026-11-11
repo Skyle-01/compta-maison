@@ -1,7 +1,7 @@
 import type { RuleInput } from "./api";
 
 /** Editable mirror of a Rule (numbers kept as strings while typing). Shared by the Catégories rule
- *  editor and the Transactions categorise editor, whose description doubles as the manual note.
+ *  editor and the rule creation of the « À classer » page.
  *  `account_id` is the account the rule is limited to, null = all accounts. */
 export type RuleForm = {
   category_id: number | null;

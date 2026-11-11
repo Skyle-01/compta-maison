@@ -669,16 +669,3 @@ export function frenchMonthShort(month: string): string {
 export function shortPath(category: Category): string {
   return category.path || category.name;
 }
-
-/**
- * Derive a rule pattern from a bank label by stripping the embedded date prefix,
- * so the pattern matches the same merchant across dates. Only the known dated
- * prefixes are stripped; otherwise the label is returned unchanged.
- * e.g. "CARTE 26/05 BOULANGERIE DU PORT" -> "BOULANGERIE DU PORT".
- */
-export function suggestPattern(libelle: string): string {
-  return libelle
-    .replace(/^CARTE \d{2}\/\d{2} /, "")
-    .replace(/^RET DAB \d{2}\/\d{2}\/\d{2} /, "")
-    .trim();
-}

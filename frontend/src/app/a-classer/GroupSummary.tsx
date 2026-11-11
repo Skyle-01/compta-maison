@@ -1,5 +1,5 @@
 import { formatEuro, frenchDate, type UncategorizedGroup } from "@/lib/api";
-import { operations } from "@/lib/triage";
+import { amountSummary, operations } from "@/lib/triage";
 
 function dateRange(g: UncategorizedGroup): string {
   return g.first_date === g.last_date
@@ -7,7 +7,7 @@ function dateRange(g: UncategorizedGroup): string {
     : `${frenchDate(g.first_date)} – ${frenchDate(g.last_date)}`;
 }
 
-/** The clickable line of a group: its first label, count, dates, accounts, suggestion and net. */
+/** The clickable line of a group: its first label, count, dates, accounts, suggestion and amounts. */
 export default function GroupSummary({
   group: g,
   isActive,
@@ -19,7 +19,8 @@ export default function GroupSummary({
   pathOf: (id: number) => string;
   onSelect: () => void;
 }) {
-  const net = g.credit - g.debit;
+  // Green when every operation is a credit, red when every one is a debit, neutral when mixed.
+  const tone = g.debit === 0 ? "text-green-700" : g.credit === 0 ? "text-red-700" : "text-zinc-700";
   return (
     <div
       onClick={onSelect}
@@ -36,7 +37,12 @@ export default function GroupSummary({
       {!isActive && g.suggestion && (
         <span className="truncate text-xs text-zinc-500">→ {pathOf(g.suggestion.category_id)}</span>
       )}
-      <span className={`whitespace-nowrap ${net >= 0 ? "text-green-700" : "text-red-700"}`}>{formatEuro(net)}</span>
+      <span
+        className={`whitespace-nowrap ${tone}`}
+        title={g.count > 1 ? `Tri par montant : ${formatEuro(g.debit + g.credit)} au total (valeurs absolues)` : undefined}
+      >
+        {amountSummary(g.transactions)}
+      </span>
     </div>
   );
 }

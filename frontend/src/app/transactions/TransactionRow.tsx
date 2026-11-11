@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import Link from "next/link";
 import AccountDot from "@/components/AccountDot";
 import SignedAmount from "@/components/SignedAmount";
 import { formatEuro, frenchDate, type Account, type Transaction, type TransferMode } from "@/lib/api";
@@ -23,8 +23,6 @@ export default function TransactionRow({
   checkDisabled,
   onToggle,
   onSetMode,
-  onOpenEditor,
-  editor,
 }: {
   tx: Transaction;
   accounts: Account[];
@@ -32,9 +30,6 @@ export default function TransactionRow({
   checkDisabled: boolean;
   onToggle: () => void;
   onSetMode: (mode: TransferMode, message: string) => void;
-  onOpenEditor: () => void;
-  /** The open categorisation editor of this row, else null. */
-  editor: ReactNode | null;
 }) {
   const backToAuto = () => onSetMode("auto", "Détection automatique rétablie.");
   return (
@@ -92,8 +87,6 @@ export default function TransactionRow({
               </button>
             )}
           </div>
-        ) : editor !== null ? (
-          editor
         ) : tx.category_id ? (
           <div className="flex flex-wrap items-center gap-2">
             <span>
@@ -116,22 +109,16 @@ export default function TransactionRow({
               </span>
             ) : null}
             {tx.note && <span className="text-xs italic text-zinc-500">- {tx.note}</span>}
-            <button
-              onClick={onOpenEditor}
-              className="text-xs text-zinc-600 hover:text-zinc-900"
-              title="Modifier le classement"
-            >
-              Modifier
-            </button>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={onOpenEditor}
+            <Link
+              href="/a-classer"
               className="rounded border border-amber-400 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-100"
+              title="Classer cette opération dans la page « À classer »"
             >
-              Classer
-            </button>
+              À classer
+            </Link>
             <NotTransferBadge tx={tx} onAuto={backToAuto} />
           </div>
         )}

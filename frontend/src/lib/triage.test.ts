@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  amountSummary,
   classedMessage,
   defaultMode,
+  manualScope,
   nextActiveIndex,
   pairedMessage,
   conflictsMessage,
@@ -9,9 +11,60 @@ import {
   queryFromSearch,
   ruleLink,
   sortGroups,
+  splitIncomplete,
   suggestionReason,
 } from "./triage";
-import type { UncategorizedGroup } from "./api";
+import type { Transaction, UncategorizedGroup } from "./api";
+
+const tx = (id: number, debit: number, credit = 0) => ({ id, debit, credit }) as Transaction;
+// Intl's fr-FR output uses (narrow) no-break spaces; compare with plain ones.
+const plain = (s: string) => s.replace(/[  ]/g, " ");
+
+describe("manualScope", () => {
+  const group = { transactions: [tx(1, 5), tx(2, 5), tx(3, 8)] };
+
+  it("is the whole group without a selection", () => {
+    expect(manualScope(group, []).map((t) => t.id)).toEqual([1, 2, 3]);
+  });
+
+  it("is the ticked operations, in the group's order", () => {
+    expect(manualScope(group, [2]).map((t) => t.id)).toEqual([2]);
+    expect(manualScope(group, [3, 1]).map((t) => t.id)).toEqual([1, 3]);
+  });
+
+  it("ignores ticked operations that left the group, and falls back to the group when none is left", () => {
+    expect(manualScope(group, [2, 99]).map((t) => t.id)).toEqual([2]);
+    expect(manualScope(group, [99]).map((t) => t.id)).toEqual([1, 2, 3]);
+  });
+});
+
+describe("splitIncomplete", () => {
+  it("needs a category and a positive amount, comma or point", () => {
+    expect(splitIncomplete(null)).toBe(false);
+    expect(splitIncomplete({ category_id: 4, amount: "12,5" })).toBe(false);
+    expect(splitIncomplete({ category_id: 4, amount: "12.5" })).toBe(false);
+    expect(splitIncomplete({ category_id: null, amount: "12" })).toBe(true);
+    expect(splitIncomplete({ category_id: 4, amount: "" })).toBe(true);
+    expect(splitIncomplete({ category_id: 4, amount: "abc" })).toBe(true);
+    expect(splitIncomplete({ category_id: 4, amount: "-3" })).toBe(true);
+  });
+});
+
+describe("amountSummary", () => {
+  it("shows the amount of a lone operation", () => {
+    expect(plain(amountSummary([tx(1, 12)]))).toBe("-12,00 €");
+    expect(plain(amountSummary([tx(1, 0, 30)]))).toBe("30,00 €");
+  });
+
+  it("repeats equal amounts instead of summing them", () => {
+    expect(plain(amountSummary([tx(1, 12), tx(2, 12), tx(3, 12)]))).toBe("3 × -12,00 €");
+  });
+
+  it("gives the range of different amounts, signs included", () => {
+    expect(plain(amountSummary([tx(1, 5), tx(2, 40)]))).toBe("de -40,00 € à -5,00 €");
+    expect(plain(amountSummary([tx(1, 5), tx(2, 0, 20)]))).toBe("de -5,00 € à 20,00 €");
+  });
+});
 
 describe("sortGroups", () => {
   const group = (key: string, last_date: string) => ({ key, last_date }) as UncategorizedGroup;

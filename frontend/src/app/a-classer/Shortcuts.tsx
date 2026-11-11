@@ -2,9 +2,8 @@
 const SHORTCUTS: [string, string][] = [
   ["↑ ↓", "changer de groupe"],
   ["", "tapez pour chercher une catégorie"],
-  ["Entrée", "valider (la suggestion si la recherche est vide)"],
+  ["Entrée", "choisir la catégorie (la suggestion si la recherche est vide), puis valider"],
   ["Alt+M", "règle / opérations"],
-  ["→ ←", "détails"],
   ["Échap", "effacer"],
   ["Alt+Z", "annuler le dernier classement"],
 ];
