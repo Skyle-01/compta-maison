@@ -301,6 +301,26 @@ export function treeLeaves(root: CategoryNode): CategoryNode[] {
 /** "2026-08-07" -> "07/08": an operation's day in the one-month report. */
 export const dayMonth = (date: string): string => `${date.slice(8, 10)}/${date.slice(5, 7)}`;
 
+/** A warning for the reader when operations of the month are still unclassed (they sit in « Non
+ *  classé » and may move categories); null when everything is classed. */
+export function unclassifiedNote(count: number): string | null {
+  if (count <= 0) return null;
+  return count === 1
+    ? "1 opération du mois n'est pas encore classée : les catégories peuvent encore bouger."
+    : `${count} opérations du mois ne sont pas encore classées : les catégories peuvent encore bouger.`;
+}
+
+/** The report's months where an account had not started yet (left out of the averages), newest first. */
+export function partialInReport(months: string[], partial: string[]): string[] {
+  return months.filter((m) => partial.includes(m));
+}
+
+/** The note beside a split operation's part listed under a leaf (« scindée, sur 40,00 € »); null
+ *  for a whole operation (`total` is set only when the amounts show one part). */
+export function splitNote(tx: { total: number | null }): string | null {
+  return tx.total === null ? null : `scindée, sur ${formatEuro(tx.total)}`;
+}
+
 /** The month in one plain sentence for a reader outside the app, e.g. « En septembre 2026, le
  *  foyer a gagné … et dépensé … Il a mis … de côté. Il reste … (en moyenne … par mois). » */
 export function reportSummary(

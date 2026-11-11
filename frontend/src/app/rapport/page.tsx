@@ -2,17 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  api,
-  type CategoryAverages,
-  type CategoryNode,
-  type Dashboard,
-  errorMessage,
-  formatEuro,
-  frenchMonth,
-  listLeafOperations,
-  type Transaction,
-} from "@/lib/api";
+import { type Account, api, errorMessage, formatEuro, frenchMonth } from "@/lib/api";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
 import { periodSummary } from "@/lib/averages";
@@ -21,13 +11,15 @@ import {
   NOTABLE_MIN,
   NOTABLE_RATIO,
   netOfRefunds,
+  partialInReport,
   REPORT_AVERAGE,
   reportMonth,
   reportSummary,
   reportTitle,
-  statementMonths,
-  treeLeaves,
+  unclassifiedNote,
 } from "@/lib/report";
+import { loadReport, type ReportData } from "@/lib/reportData";
+import { useAccounts } from "@/lib/useAccounts";
 import MonthDetail from "./MonthDetail";
 import ReportStat from "./ReportStat";
 import Sheet from "./Sheet";
@@ -41,15 +33,17 @@ const TREND_MONTHS = 12;
  *  header and its note; a taller chart is scaled down rather than pushed to the next page. */
 const FLOW_MAX_HEIGHT = 600;
 
-interface ReportData {
-  data: Dashboard;
-  /** The averages payload of each statement month, oldest first; the last one is the report month. */
-  columns: CategoryAverages[];
-  /** The operations of each leaf of `data.by_category` (see treeLeaves). */
-  operations: Map<CategoryNode, Transaction[]>;
-}
-
-function Report({ report, month, inProgress }: { report: ReportData; month: string; inProgress: boolean }) {
+function Report({
+  report,
+  month,
+  inProgress,
+  accounts,
+}: {
+  report: ReportData;
+  month: string;
+  inProgress: boolean;
+  accounts: Account[];
+}) {
   const { data, columns } = report;
   const avg = columns[columns.length - 1];
   // Revenus and Dépenses net of refunds, as in the report's tables (lib/report.ts::netOfRefunds).
@@ -59,6 +53,11 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
   const epargneNet = data.epargne - data.desepargne;
   const flow = moneyFlow(data);
   const history = data.history.filter((h) => h.month <= month).slice(-TREND_MONTHS);
+  const unclassified = unclassifiedNote(data.uncategorized.count);
+  const partial = partialInReport(
+    history.map((h) => h.month),
+    data.months_partial,
+  );
   const today = new Intl.DateTimeFormat("fr-FR").format(new Date());
 
   return (
@@ -115,6 +114,7 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
             ? `Moyennes ${summary}, mois clos uniquement.`
             : "Pas encore de mois clos : les moyennes viendront avec le prochain mois."}
         </p>
+        {unclassified && <p className="mt-1 text-xs text-amber-700">{unclassified}</p>}
 
         <div className="mt-5">
           <ResteTrend
@@ -157,6 +157,15 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
               La moyenne porte sur les {TREND_MONTHS} derniers mois clos ; l’écart compare le mois à cette
               moyenne (en vert quand c’est favorable, en rouge sinon).
             </li>
+            {partial.length > 0 && (
+              <li>
+                {partial.length === 1
+                  ? `${frenchMonth(partial[0])} est un mois partiel`
+                  : `${partial.map(frenchMonth).join(", ")} sont des mois partiels`}{" "}
+                : un compte courant n&apos;y avait pas encore commencé, donc les totaux sont incomplets. Ils ne
+                comptent pas dans les moyennes.
+              </li>
+            )}
             <li>
               Dans les tableaux, un montant en gras signale un mois inhabituel : en{" "}
               <span className={HIGHLIGHT.bad}>rouge</span> un objectif dépassé ou un écart défavorable d’au
@@ -182,7 +191,12 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
         </p>
         <table className="w-full text-xs">
           <tbody>
-            <TreeRows node={data.by_category} depth={0} operations={report.operations} />
+            <TreeRows
+              node={data.by_category}
+              depth={0}
+              operations={report.operations}
+              accounts={accounts}
+            />
           </tbody>
         </table>
       </Sheet>
@@ -201,6 +215,7 @@ function Report({ report, month, inProgress }: { report: ReportData; month: stri
 }
 
 export default function ReportPage() {
+  const accounts = useAccounts();
   const [available, setAvailable] = useState<string[] | null>(null);
   const [month, setMonth] = useState<string | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
@@ -221,15 +236,7 @@ export default function ReportPage() {
   useEffect(() => {
     if (!month || !available) return;
     let stale = false; // a slower answer for a previous month must not overwrite this one
-    const load = async (): Promise<ReportData> => {
-      const [data, columns] = await Promise.all([
-        api.dashboard(month),
-        Promise.all(statementMonths(available, month).map((m) => api.averages(REPORT_AVERAGE, m))),
-      ]);
-      const operations = await listLeafOperations(treeLeaves(data.by_category), month);
-      return { data, columns, operations };
-    };
-    load()
+    loadReport(available, month)
       .then((loaded) => {
         if (stale) return;
         setReport(loaded);
@@ -305,7 +312,7 @@ export default function ReportPage() {
       {available?.length === 0 ? (
         <p className="text-zinc-500">Aucune transaction pour l’instant : rien à mettre dans un rapport.</p>
       ) : report && month ? (
-        <Report report={report} month={month} inProgress={month === available?.[0]} />
+        <Report report={report} month={month} inProgress={month === available?.[0]} accounts={accounts} />
       ) : (
         !error && <p className="text-zinc-500">Chargement…</p>
       )}

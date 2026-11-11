@@ -6,12 +6,15 @@ import {
   dayMonth,
   netOfRefunds,
   notable,
+  partialInReport,
   reportLink,
   reportMonth,
   reportSummary,
   reportTitle,
+  splitNote,
   statementMonths,
   treeLeaves,
+  unclassifiedNote,
 } from "./report";
 
 const node = (id: number, name: string, over: Partial<AverageNode> = {}): AverageNode => ({
@@ -253,6 +256,38 @@ describe("treeLeaves", () => {
 
   it("shortens an operation's date to its day and month", () => {
     expect(dayMonth("2026-08-07")).toBe("07/08");
+  });
+});
+
+describe("unclassifiedNote", () => {
+  it("is silent when everything is classed", () => {
+    expect(unclassifiedNote(0)).toBeNull();
+  });
+
+  it("warns in the singular and the plural", () => {
+    expect(unclassifiedNote(1)).toBe(
+      "1 opération du mois n'est pas encore classée : les catégories peuvent encore bouger.",
+    );
+    expect(unclassifiedNote(3)).toBe(
+      "3 opérations du mois ne sont pas encore classées : les catégories peuvent encore bouger.",
+    );
+  });
+});
+
+describe("partialInReport", () => {
+  it("keeps the report's months that are partial, in the given order", () => {
+    expect(partialInReport(["2026-08", "2026-07", "2026-06"], ["2026-06", "2026-04"])).toEqual(["2026-06"]);
+    expect(partialInReport(["2026-08"], [])).toEqual([]);
+  });
+});
+
+describe("splitNote", () => {
+  it("names the whole amount of a split operation's part", () => {
+    expect(plain(splitNote({ total: 40 }) ?? "")).toBe("scindée, sur 40,00 €");
+  });
+
+  it("is null for a whole operation", () => {
+    expect(splitNote({ total: null })).toBeNull();
   });
 });
 
