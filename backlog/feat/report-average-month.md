@@ -39,9 +39,10 @@ Content, identical in both formats, from one pure helper in `lib/report.ts` (fig
 
 - Heading « Un mois moyen » with the period under it: `periodSummary(avg, REPORT_AVERAGE)` (« sur 12 mois (octobre 2025 - septembre 2026) »), « mois clos uniquement ».
 - The equation with the average of each card: Revenus - Dépenses - Épargne = Reste.
-- « Où part l'argent en moyenne »: spending per top-level category, largest average first, a bar scaled to the largest category, its sub-categories below (named by their path, as `breakdown` does), the target beside a category that has its own (`ownTarget`). A muted « Non classé » line when its average is not zero.
-- « D'où vient l'argent en moyenne »: the same for income.
+- « Où part l'argent en moyenne »: spending per top-level category, largest average first, a bar scaled to the largest category, the target beside a category that has its own (`ownTarget`). A muted « Non classé » line when its average is not zero. Sub-categories (named by their path, as `breakdown` does): folded under each category in the HTML page, absent from the PDF, which stays on one page (each month's « Le mois en détail » already prints every sub-category's average).
+- « D'où vient l'argent en moyenne »: in the PDF one line per source (income-side leaf: each salary, each rent), as the statement lists them, since a line per top-level category would say almost nothing; in the HTML page per top-level category with its sources folded, like the monthly block.
 - « Épargne » : the average net per savings account (set aside minus withdrawn), only when an account has some.
+- The four cards come from one small shared helper (label, value, "higher is better", tone) written for this section and used only by the new code; the three existing screens keep their copies until `backlog/tech/four-cards-block-repeated.md`.
 - No month column, no gap, no bold red/green: there is nothing to compare with.
 
 Invariant to keep and to test (product principle "numbers reconcile"): spending rows + « Non classé » = the Dépenses average, income rows + « Non classé » = the Revenus average, savings rows = the Épargne average, and Revenus - Dépenses - Épargne = Reste.
@@ -61,18 +62,22 @@ Leads:
 ### 3. Statistiques hosts « Les derniers mois »
 
 - A second section under « Moyennes mensuelles »: « Les derniers mois », the statement as the PDF shows it today (income by source, spending by top-level category, savings by account, « Non classé », totals, Reste; the displayed month's column shaded, its notable amounts bold).
-- Columns: the 6 budget months ending with the displayed month (`statementMonths`); with « Tous les mois » ticked, ending with the latest month, no column shaded.
+- Columns: the 6 budget months ending with the displayed month (`statementMonths`); with « Tous les mois » ticked, the 6 latest months, no column shaded and no bold amount (there is no reference month).
 - Data: its own fetch (one averages request per column, stale-answer guard as in `AveragesSection`), plus `history` from the dashboard payload the page already holds (`monthly_totals` is in every payload, `month=all` included).
 - `StatementTable` moves out of `app/rapport/` (it has no user left there). It imports `NUM`, `cell`, `CURRENT_COLUMN` and `highlight` from `app/rapport/tableStyles.ts`: move what both sides use to a shared place rather than import across two page folders. Screen size: `text-sm`, not the print `text-xs`.
 - The « Moyenne » column stays, over the fixed 12 months of `REPORT_AVERAGE` (its header already says how many months). It does not follow the period select of « Moyennes mensuelles ».
 - One line under the table: its Revenus and Dépenses are net of refunds, so they can be lower than the « Moyennes mensuelles » cards right above (gross); the Reste is the same. Without it the page shows two different « Revenus ».
 - While moving it: `StatementTable` picks a section's colour and its "higher is better" flag from the French title (`Record<string, ...>` keyed by « Revenus » / « Dépenses » / « Épargne »). A `kind` on `StatementSection` would not depend on a display string.
 
+### 4. Highlights on a month still filling
+
+`report.ts::notable` flags a month's amount that is far from its average, on either side. On the month still filling almost every amount is far below its average, so everything turns bold (green for spending, red for income), which means nothing. On that month, highlight only what is already true: an amount over its target, or already well above its average (red for spending, green for income); never an amount below its average. One rule in `notable` (it needs to know the month is the latest one), applied by every table of both report formats and by the « Où part l'argent » section of « Le mois » (`backlog/feat/month-spending-breakdown.md`, whichever lands first brings the rule).
+
 ### Tests, docs, checks
 
-- `lib/report.test.ts`: the new helper (order by average, a zero-average row left out, the reconciliation above, no section without a complete month); `buildStatement` tests stay.
+- `lib/report.test.ts`: the new helper (order by average, a zero-average row left out, the reconciliation above, no section without a complete month); `notable` on a month still filling; `buildStatement` tests stay.
 - `lib/mobileReport.test.ts`: with two months, « Un mois moyen » appears once and outside the month articles; no « Les derniers mois en tableau ».
-- `docs/guide.md`: the PDF and « Page web pour téléphone » paragraphs of « Export » (both list the last-months table), and « Statistiques » (new section; retake `docs/img/statistiques.png` on the demo data).
+- `docs/guide.md`: the PDF and « Page web pour téléphone » paragraphs of « Export » (both list the last-months table), and « Statistiques » (new section). `docs/img/statistiques.png` is not retaken here: it joins `backlog/tech/guide-export-screenshots.md`.
 - `.claude/rules/frontend-pages.md`: « Printable report » (data: one averages request per month; pages), « Mobile HTML report » (order), « Statistiques ». `.claude/CLAUDE.md`: the Statistiques entry of « Current State ».
 - UI check on the demo DB: a PDF of one month and of three months (the average sheet once, at the end, on one page), the HTML page with the picker, Statistiques at 1400 px with and without « Tous les mois ».
 
@@ -81,11 +86,18 @@ Leads:
 - A backend endpoint returning a per-month, per-category series: the statement keeps one averages request per column (6 on a local SQLite), enough for one page.
 - Any change to the averaging rules or to the Statistiques period select.
 
-### Open questions for the owner
+### Decisions (owner, 2026-11-12)
 
-- PDF placement of « Un mois moyen »: last (proposed, so a one-month report still opens on the month's answer) or first (the reference before the months)?
-- Statistiques: keep the « Moyenne » column of « Les derniers mois » (proposed, moved as it is) or drop it, since « Moyennes mensuelles » sits right above?
+- The statement is moved to Statistiques, not deleted: it is the only view of each category month by month.
+- The report average stays the last 12 complete months at the time of the export (`REPORT_AVERAGE`), not the whole history.
+- « Un mois moyen » is the last sheet of the PDF, so a one-month report still opens on the month's answer.
+- PDF: top-level categories only for spending, sources for income. HTML: sub-categories folded.
+- The section holds spending, income and savings, with the equation first.
+- Each month keeps its comparisons with the average (cards, « Moyenne » and « Écart » of « Le mois en détail »); only the full average table is shown once. The monthly « Où part l'argent » block of the HTML page is unchanged.
+- Statistiques: the « Moyenne » column of the statement stays on the fixed 12 months and does not follow the period select.
+- Titles: « Un mois moyen », « Où part l'argent en moyenne », « D'où vient l'argent en moyenne », « Épargne ».
+- Order of work: this item, then `backlog/feat/month-spending-breakdown.md`, then `backlog/bug/classify-link-opens-read-only-transactions.md`, one commit each; no push by the assistant.
 
 ## Progress
 
-- 2026-11-12: spec written from the owner's feedback; nothing implemented.
+- 2026-11-12: spec written from the owner's feedback; open questions settled with the owner the same day (decisions above); nothing implemented.

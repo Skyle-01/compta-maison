@@ -7,7 +7,7 @@ The amber warning of « Le mois » (« N opérations encore sans catégorie ... 
 ## To do / to investigate
 
 - Point the link to `/a-classer?month=M`: `FiltersProvider` applies `?month=` on every page (`lib/periodFilter.ts::applyUrl`), and « À classer » opens on the shared month.
-- Then check what still uses the `?uncategorized=1` preset of the Transactions page (`app/transactions/page.tsx`, read once through `useSearchParams`): if no link is left, the checkbox stays but the URL preset and its comment can go.
+- No other link uses the `?uncategorized=1` preset of the Transactions page (`app/transactions/page.tsx`, read once through `useSearchParams`; checked 2026-11-12): remove the URL preset and its comment in the same commit, the checkbox stays (owner decision, 2026-11-12).
 - Update the texts that describe the link: `.claude/rules/frontend-pages.md` (shared filters: « Les classer → » is given as the example relying on `withoutUrlFilters`) and `docs/guide.md` (the paragraph on shared filters names the link).
 - `lib/periodFilter.test.ts` uses `?uncategorized=1&month=` as its sample URL: still valid as a generic "other keys stay" case, keep or rename.
 

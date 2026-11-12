@@ -15,8 +15,9 @@ A new section « Où part l'argent » on « Le mois », between the notes under 
 Content, the same as the mobile block:
 
 - One line per top-level category with spending this month or on average, largest month amount first: name, amount, a bar scaled to the largest category. Neutral bar (dark grey on a `zinc-100` track, as in the mobile page), no bar on the sub-categories.
+- Unlike the mobile block, the category line itself shows its average in small grey under the name (« moyenne X », and « objectif Y » for a category with its own target): the average is what the owner reads first, and a category without sub-category would never show it otherwise.
 - A category with sub-categories unfolds (folded by default) to one line per sub-category, named by its path below the category: amount, then « moyenne X » and « objectif Y » when they exist. A category without sub-category is a plain line, no chevron.
-- A notable amount is bold red or green with the report's rule (`report.ts::notable`: over its own target, or at least 20 euros and 20 % away from its average).
+- A notable amount is bold red or green with the report's rule (`report.ts::notable`: over its own target, or at least 20 euros and 20 % away from its average). The page opens on the month still filling, where nearly every amount is far below its average: on that month only an amount over its target or already well above its average is highlighted (red), never one below. The rule lives in `notable` and serves the reports too (section 4 of `backlog/feat/report-average-month.md`).
 - Empty month: « Aucune dépense classée ce mois-ci. »
 
 Data and code:
@@ -30,12 +31,14 @@ One thing to handle: `breakdown` is net of refunds, the « Dépenses » card of 
 Tests, docs, checks:
 
 - Pure helpers only are unit-tested here, and `breakdown` already is: no new test unless a helper is added.
-- `docs/guide.md` « Le mois »: one bullet for the section; retake `docs/img/dashboard.png` on the demo data (see `backlog/tech/guide-export-screenshots.md`, same image).
+- `docs/guide.md` « Le mois »: one bullet for the section. `docs/img/dashboard.png` is not retaken here: it is already listed in `backlog/tech/guide-export-screenshots.md`.
 - `.claude/rules/frontend-pages.md` « Le mois »: one bullet.
 - UI check on the demo DB at 1400 px: a month with refunds (the note shows), the month still filling, a database with no complete month (no « moyenne »).
 
 Out of scope: « D'où vient l'argent » (the Sankey already shows the few income sources; `breakdown(avg, "income")` makes it cheap to add if wanted later), any link from a line to its operations.
 
+Decisions (owner, 2026-11-12): the section sits just before « Flux d'argent » and replaces nothing; the average shows on the category line; the gap with the gross « Dépenses » card is explained by a note, the cards stay gross; the monthly block of the mobile report keeps its current lines.
+
 ## Progress
 
-- 2026-11-12: spec written from the owner's feedback; nothing implemented.
+- 2026-11-12: spec written from the owner's feedback; open questions settled with the owner the same day; nothing implemented.
