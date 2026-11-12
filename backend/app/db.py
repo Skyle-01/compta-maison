@@ -1,25 +1,96 @@
 import hashlib
 import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path(os.environ.get("COMPTA_DB", str(Path(__file__).resolve().parents[2] / "compta.db")))
-# The private config dir (accounts, taxonomy, bank_profiles.toml), gitignored.
-DEFAULT_CONFIG_DIR = Path(
-    os.environ.get("COMPTA_CONFIG_DIR", str(Path(__file__).resolve().parents[2] / "_config"))
-)
-# The bank-statement archive (gitignored): reset_db.py rebuilds every transaction from it, and the
-# Import page copies each upload there.
-DEFAULT_INPUTS_DIR = Path(
-    os.environ.get("COMPTA_INPUTS_DIR", str(Path(__file__).resolve().parents[2] / "_inputs"))
+# The private data (the SQLite database, the config dir with accounts, taxonomy, bank_profiles.toml and
+# settings.toml, and the bank-statement archive that reset_db.py rebuilds every transaction from) lives
+# in one data folder outside the tracked files: `compta.db`, `config/`, `inputs/`, and `backups/`
+# next to the database (core/config_export.py::backups_dir). There is no default folder.
+DATA_DIR_VAR = "COMPTA_DATA_DIR"
+# Each of these overrides one path of the data folder (the demo and the tests point them elsewhere).
+DB_VAR = "COMPTA_DB"
+CONFIG_DIR_VAR = "COMPTA_CONFIG_DIR"
+INPUTS_DIR_VAR = "COMPTA_INPUTS_DIR"
+NOT_CONFIGURED = (
+    "Le dossier de données n'est pas configuré : choisissez-le dans l'application "
+    f"ou définissez la variable d'environnement {DATA_DIR_VAR}."
 )
 
+
+@dataclass(frozen=True)
+class DataPaths:
+    db: Path
+    config: Path
+    inputs: Path
+
+
+def pointer_file() -> Path:
+    """Per-user file holding the data folder chosen in the UI (the DB lives inside that folder, so it
+    cannot hold its own location)."""
+    base = Path(os.environ["APPDATA"]) if "APPDATA" in os.environ else Path.home() / ".config"
+    return base / "compta-maison" / "data_dir.txt"
+
+
+def data_dir_from(env: Mapping[str, str]) -> Path | None:
+    """The configured data folder: COMPTA_DATA_DIR, else the one chosen in the UI, else None."""
+    if DATA_DIR_VAR in env:
+        return Path(env[DATA_DIR_VAR])
+    pointer = pointer_file()
+    text = pointer.read_text(encoding="utf-8").strip() if pointer.is_file() else ""
+    return Path(text) if text else None
+
+
+def paths_in(data_dir: Path, env: Mapping[str, str]) -> DataPaths:
+    """The three private paths: each override variable if set, else its place in `data_dir`."""
+
+    def pick(var: str, name: str) -> Path:
+        return Path(env[var]) if var in env else data_dir / name
+
+    return DataPaths(
+        pick(DB_VAR, "compta.db"), pick(CONFIG_DIR_VAR, "config"), pick(INPUTS_DIR_VAR, "inputs")
+    )
+
+
+def locate_paths(env: Mapping[str, str] | None = None) -> tuple[DataPaths | None, str | None]:
+    """(paths, None) when configured, (None, None) when not, (None, French reason) when a data folder
+    is configured but missing (an unplugged drive, a typo)."""
+    env = os.environ if env is None else env
+    overridden = all(var in env for var in (DB_VAR, CONFIG_DIR_VAR, INPUTS_DIR_VAR))
+    data_dir = data_dir_from(env)
+    if overridden:
+        return paths_in(data_dir or Path(), env), None  # no path is taken from the data folder
+    if data_dir is None:
+        return None, None
+    if not data_dir.is_dir():
+        return None, f"Le dossier de données {data_dir} n'existe pas."
+    return paths_in(data_dir, env), None
+
+
+def set_data_dir(text: str) -> Path:
+    """Create the folder if needed and remember it as the data folder (French ValueError when unusable)."""
+    path = Path(text.strip().strip('"'))
+    if not path.is_absolute():
+        raise ValueError("Le chemin doit être absolu (par exemple D:\\compta-data).")
+    if path.exists() and not path.is_dir():
+        raise ValueError(f"{path} n'est pas un dossier.")
+    pointer = pointer_file()
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        pointer.parent.mkdir(parents=True, exist_ok=True)
+        pointer.write_text(str(path), encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"Impossible d'utiliser ce dossier : {exc.strerror}.") from exc
+    return path
+
+
 # Accounts are user data, not code: they are loaded from an `accounts.csv` (see
-# scripts/import_csv.py::import_accounts) by reset_db.py — from the private `_config/` dir, a
-# `_backups/<ts>/` snapshot, or the fictional example in `data/`. init_db seeds none.
+# scripts/import_csv.py::import_accounts) by reset_db.py — from the private config dir, a
+# `backups/<ts>/` snapshot, or the fictional example in `data/`. init_db seeds none.
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS accounts (
@@ -264,7 +335,7 @@ def _row_hash(
 
 
 @contextmanager
-def connect(db_path: Path = DEFAULT_DB_PATH) -> Iterator[sqlite3.Connection]:
+def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     """Connection with foreign keys on; commits on success, rolls back on error, always closes."""
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON")
@@ -283,7 +354,7 @@ def connect(db_path: Path = DEFAULT_DB_PATH) -> Iterator[sqlite3.Connection]:
 # ---------------------------------------------------------------------------
 
 
-def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
+def init_db(db_path: Path) -> None:
     """Create the schema if absent. Idempotent. Seeds no accounts (they're user data — see
     upsert_accounts; reset_db.py loads them from accounts.csv).
 
@@ -299,7 +370,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
 # ---------------------------------------------------------------------------
 
 
-def import_transactions(rows: list[dict], db_path: Path = DEFAULT_DB_PATH) -> int:
+def import_transactions(rows: list[dict], db_path: Path) -> int:
     """Insert rows into the transactions table, skipping duplicates.
 
     Each row must carry the keys produced by core.parsing.parse_csv plus 'account'.

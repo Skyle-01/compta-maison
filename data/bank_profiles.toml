@@ -1,4 +1,4 @@
-# Bank CSV formats beyond the built-in one. Copy this file to _config/bank_profiles.toml only if
+# Bank CSV formats beyond the built-in one. Copy this file to config/bank_profiles.toml only if
 # your bank's export isn't the default format:
 #   separator ";", encoding UTF-8 (else Windows-1252), dates dd/mm/yyyy, comma decimals, columns
 #   "Date operation";"Date valeur";"Libelle";"Debit";"Credit", filenames RELEVE_[COMPTE_]<ACCOUNT>_<yyyy>…
@@ -24,6 +24,6 @@ amount = "Montant"                   # one signed column (negative = debit)...
 # debit = "Débit"                    # ...or two unsigned columns, never both forms
 # credit = "Crédit"
 # Where to find the account in the filename: a regex with an "account" group ("_" become spaces),
-# matched against the aliases of accounts.csv. Needed to rebuild from _inputs/; on upload you can
+# matched against the aliases of accounts.csv. Needed to rebuild from inputs/; on upload you can
 # also pick the account by hand. Single quotes: a literal string, no backslash escaping.
 filename_pattern = '^export_(?P<account>.+?)_\d{8}'

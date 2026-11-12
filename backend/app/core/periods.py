@@ -2,7 +2,7 @@ import sqlite3
 from datetime import date
 from pathlib import Path
 
-from app.db import DEFAULT_DB_PATH, connect
+from app.db import connect
 
 
 def _anchor_month(date_valeur: str) -> str:
@@ -41,7 +41,7 @@ def budget_starts(conn: sqlite3.Connection) -> dict[str, str]:
     return dict(sorted(starts.items(), key=lambda item: item[1]))
 
 
-def recompute_budget_months(db_path: Path = DEFAULT_DB_PATH) -> int:
+def recompute_budget_months(db_path: Path) -> int:
     """Re-assign every transaction to a paycheck-to-paycheck budget month.
 
     Anchors are credit transactions matching any rule flagged `is_income_anchor`

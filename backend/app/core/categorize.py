@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.periods import partial_months
-from app.db import DEFAULT_DB_PATH, connect, euros, real_flow_clause, savings_accounts
+from app.db import connect, euros, real_flow_clause, savings_accounts
 
 UNBALANCED_TOLERANCE_CENTS = 1
 
@@ -35,7 +35,7 @@ def find_conflicts(conn: sqlite3.Connection) -> dict[int, list[tuple[int, str, i
     return conflicts
 
 
-def apply_rules(db_path: Path = DEFAULT_DB_PATH) -> None:
+def apply_rules(db_path: Path) -> None:
     """Re-categorise all non-manual transactions from label_rules.
 
     Patterns are plain substrings matched case-sensitively against libelle
@@ -63,7 +63,7 @@ def apply_rules(db_path: Path = DEFAULT_DB_PATH) -> None:
         )
 
 
-def uncategorized_balance(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> dict[str, Any]:
+def uncategorized_balance(db_path: Path, month: str | None = None) -> dict[str, Any]:
     """Credit/debit sums of uncategorised, non-transfer transactions. Auto-paired
     transfers are excluded (kind='transfer'), so a residual difference now means a
     genuinely missing rule rather than an unmatched internal movement."""
@@ -121,7 +121,7 @@ def _finalize(node: dict[str, Any]) -> dict[str, Any]:
     return node
 
 
-def category_tree(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> dict[str, Any]:
+def category_tree(db_path: Path, month: str | None = None) -> dict[str, Any]:
     """Build the category tree (total -> top-level groups -> descendants) with per-node
     credit/debit sums for one budget month (or all months if None). Transfers are
     excluded. A node's own transactions count alongside its children's.
@@ -217,7 +217,7 @@ def category_tree(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> 
     return _finalize(root)
 
 
-def income_and_expenses(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> tuple[float, float]:
+def income_and_expenses(db_path: Path, month: str | None = None) -> tuple[float, float]:
     """(income, expenses) in euros for one budget month (or all months). Income sums
     credits of kind='income', expenses sum debits of kind='expense'; transfers are
     excluded. Both totals span categorised and uncategorised transactions alike."""
@@ -238,7 +238,7 @@ def income_and_expenses(db_path: Path = DEFAULT_DB_PATH, month: str | None = Non
     return euros(income_cents), euros(expense_cents)
 
 
-def monthly_totals(db_path: Path = DEFAULT_DB_PATH) -> list[dict[str, Any]]:
+def monthly_totals(db_path: Path) -> list[dict[str, Any]]:
     """Per-budget-month totals (euros), oldest first, for trend/comparison.
 
     income/expenses use the same definition as income_and_expenses (income = Σ credits of
@@ -279,9 +279,7 @@ DEFICIT_GROUP = "Déficit"
 INCOME_GROUP = "Revenus"
 
 
-def budget_status(
-    db_path: Path = DEFAULT_DB_PATH, month: str | None = None, n_months: int = 1
-) -> dict[str, Any]:
+def budget_status(db_path: Path, month: str | None = None, n_months: int = 1) -> dict[str, Any]:
     """Spending vs budget targets (euros) for one budget month, or all months when `month` is None
     (targets are then multiplied by `n_months`, the number of budget months covered).
 
@@ -392,9 +390,7 @@ def averaging_window(months: list[str], n_months: int | None, partial: Collectio
     return complete[-n_months:] if n_months > 0 else []
 
 
-def category_averages(
-    db_path: Path = DEFAULT_DB_PATH, n_months: int | None = None, month: str | None = None
-) -> dict[str, Any]:
+def category_averages(db_path: Path, n_months: int | None = None, month: str | None = None) -> dict[str, Any]:
     """Average monthly spending and income (euros) per category over the complete, non-partial budget months of
     `averaging_window`, plus the values of the displayed `month` (None: no comparison) for the gaps.
 
@@ -542,7 +538,7 @@ def category_averages(
     }
 
 
-def transfers_summary(db_path: Path = DEFAULT_DB_PATH, month: str | None = None) -> dict[str, Any]:
+def transfers_summary(db_path: Path, month: str | None = None) -> dict[str, Any]:
     """Count and total (euros) of auto-paired internal transfers for the month. Single-legged
     external-savings deposits (transfer_group_id IS NULL) are excluded — they aren't internal
     movements between two of our accounts."""

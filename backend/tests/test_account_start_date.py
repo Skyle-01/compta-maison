@@ -56,8 +56,8 @@ class TestAccountCutoff:
         assert (body["rows_total"], body["rows_before_start"]) == (1, 2)  # the account's date
 
     def test_import_inputs_and_coverage_use_it(self, seeded_db, client, tmp_path):
-        (tmp_path / "_inputs").mkdir()
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_PERSO_2026.csv").write_bytes(PERSO_JUNE)
+        (tmp_path / "inputs").mkdir()
+        (tmp_path / "inputs" / "RELEVE_COMPTE_PERSO_2026.csv").write_bytes(PERSO_JUNE)
         _set_start_date(client, "PERSO", "2026-06-20")
         coverage = next(c for c in client.get("/api/imports/coverage").json() if c["code"] == "PERSO")
         assert coverage["files"] == 1
@@ -113,9 +113,9 @@ class TestStartWarning:
 
     def test_bulk_import_reports_it(self, seeded_db, client, tmp_path):
         self._joint(client)
-        (tmp_path / "_inputs").mkdir(exist_ok=True)
+        (tmp_path / "inputs").mkdir(exist_ok=True)
         late = _statement(("20/06/2026", "CARTE LIBRAIRIE", "9,00", ""))
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_PERSO_2026.csv").write_bytes(late)
+        (tmp_path / "inputs" / "RELEVE_COMPTE_PERSO_2026.csv").write_bytes(late)
         files = client.post("/api/imports/inputs").json()["files"]
         perso = next(f for f in files if f["account"] == "PERSO")
         assert "Date de départ suggérée : 03/07/2026" in perso["start_warning"]

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal, NamedTuple
 
 from app.core.triage import label_key
-from app.db import DEFAULT_DB_PATH, account_names, connect, get_transfer_markers, savings_accounts
+from app.db import account_names, connect, get_transfer_markers, savings_accounts
 
 TRANSFER_WINDOW_DAYS = 3
 # Label prefixes that mark a bank line as a virement. French banks start transfer labels with
@@ -222,7 +222,7 @@ def _next_group(conn: sqlite3.Connection) -> int:
     return conn.execute("SELECT COALESCE(MAX(transfer_group_id), 0) FROM transactions").fetchone()[0] + 1
 
 
-def recompute_transfers(db_path: Path = DEFAULT_DB_PATH) -> int:
+def recompute_transfers(db_path: Path) -> int:
     """Auto-pair internal transfers between canonical accounts and flag both legs.
 
     A transfer is a debit on one account matched to a credit on a *different* account with the

@@ -133,14 +133,14 @@ def upload_csv(
 
 @router.get("/coverage")
 def coverage(db_path: DbPath, config_dir: ConfigDir, inputs_dir: InputsDir) -> list[AccountCoverage]:
-    """Per account, the dates the DB and the _inputs/ statements cover, and the holes between them."""
+    """Per account, the dates the DB and the inputs/ statements cover, and the holes between them."""
     results = account_coverage(db_path, inputs_dir, _profiles(config_dir), _start_date(config_dir))
     return [AccountCoverage(**asdict(r)) for r in results]
 
 
 @router.post("/inputs")
 def import_inputs(db_path: DbPath, config_dir: ConfigDir, inputs_dir: InputsDir) -> InputsImportResult:
-    """Import every statement dropped in _inputs/ into the existing DB (already imported rows are
+    """Import every statement dropped in inputs/ into the existing DB (already imported rows are
     skipped), then recompute like an upload."""
     results = import_inputs_dir(db_path, inputs_dir, _profiles(config_dir), _start_date(config_dir))
     recompute_all(db_path)

@@ -1,7 +1,7 @@
 """Optional `settings.toml` in the config dir (see data/settings.toml for a commented example).
 
 `start_date`: the day the books open. Statement rows valued before it are never imported, so years
-of history nobody will categorise stay in the _inputs/ archive, out of the database. Moving it
+of history nobody will categorise stay in the inputs/ archive, out of the database. Moving it
 takes a rebuild (reset_db.py): rows already imported are not deleted.
 """
 

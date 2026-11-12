@@ -1,8 +1,8 @@
-"""Import the bank statements dropped in _inputs/ into the existing compta.db.
+"""Import the bank statements dropped in inputs/ into the existing compta.db.
 
 Usage: .venv/Scripts/python backend/scripts/import_inputs.py [--db PATH]   (or ./import_inputs.ps1)
 
-Unlike reset_db.py, nothing is deleted: every _inputs/*.csv is read again and only the rows not
+Unlike reset_db.py, nothing is deleted: every inputs/*.csv is read again and only the rows not
 yet in the DB are added (already imported statements and overlapping ones are deduped), then
 budget months, transfers and rules are recomputed, as after an upload. Manual categories, notes
 and transfer decisions are left alone. Safe to run while the server is up.
@@ -19,14 +19,16 @@ from app.core.bank_profiles import BankProfileError, load_bank_profiles  # noqa:
 from app.core.inputs import import_inputs_dir  # noqa: E402
 from app.core.recompute import recompute_all  # noqa: E402
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date  # noqa: E402
-from app.db import DEFAULT_CONFIG_DIR, DEFAULT_DB_PATH, DEFAULT_INPUTS_DIR  # noqa: E402
+from app.db import NOT_CONFIGURED, locate_paths  # noqa: E402
 
-INPUTS_DIR = DEFAULT_INPUTS_DIR
-CONFIG_DIR = DEFAULT_CONFIG_DIR
+PATHS, PROBLEM = locate_paths()
+# None until the data folder is configured: the entry point exits before using them.
+INPUTS_DIR = PATHS.inputs if PATHS else None
+CONFIG_DIR = PATHS.config if PATHS else None
 
 
 def import_inputs(db_path: Path) -> int:
-    """Import _inputs/ into the DB at `db_path`, printing a line per file. Returns the number of
+    """Import inputs/ into the DB at `db_path`, printing a line per file. Returns the number of
     new transactions."""
     if not db_path.exists():
         sys.exit(f"No database at {db_path}. Create it first with reset_db.py --source defaults.")
@@ -59,5 +61,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
-    import_inputs(parser.parse_args().db)
+    parser.add_argument("--db", type=Path, default=PATHS.db if PATHS else None)
+    args = parser.parse_args()
+    if PATHS is None or args.db is None:
+        sys.exit(PROBLEM or NOT_CONFIGURED)
+    import_inputs(args.db)

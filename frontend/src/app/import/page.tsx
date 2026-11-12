@@ -94,9 +94,9 @@ export default function ImportPage() {
 
       <div className="grid items-start gap-6 md:grid-cols-2">
         <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-6 text-sm">
-          <h2 className="font-semibold">Relevés déposés dans le dossier _inputs</h2>
+          <h2 className="font-semibold">Relevés déposés dans le dossier inputs</h2>
           <p className="text-zinc-500">
-            Relit tous les fichiers CSV de <code>_inputs/</code> et n’ajoute que les opérations absentes de
+            Relit tous les fichiers CSV de <code>inputs/</code> et n’ajoute que les opérations absentes de
             la base : les relevés déjà importés ou qui se chevauchent ne créent pas de doublons. Exportez
             vos relevés avec quelques jours de chevauchement : un trou entre deux relevés est alors
             signalé à coup sûr.
@@ -209,11 +209,11 @@ export default function ImportPage() {
               </p>
               {result.archived_as ? (
                 <p className="text-zinc-500">
-                  Copié dans <code>_inputs/</code> sous « {result.archived_as} ».
+                  Copié dans <code>inputs/</code> sous « {result.archived_as} ».
                 </p>
               ) : (
                 <p className="text-amber-800">
-                  Fichier non copié dans <code>_inputs/</code> : ajoutez-le à la main sous un nom qui
+                  Fichier non copié dans <code>inputs/</code> : ajoutez-le à la main sous un nom qui
                   désigne le compte, sinon une reconstruction de la base l’oubliera.
                 </p>
               )}
@@ -238,14 +238,14 @@ export default function ImportPage() {
   );
 }
 
-/** Per account, the dates the DB and the _inputs/ statements cover: a hole between two statements
+/** Per account, the dates the DB and the inputs/ statements cover: a hole between two statements
  *  means one is missing; the longest silence may only be a quiet spell. */
 function CoverageSection({ coverage, error }: { coverage: AccountCoverage[] | null; error: string | null }) {
   return (
     <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-6 text-sm">
       <h2 className="font-semibold">Couverture des relevés</h2>
       <p className="text-zinc-500">
-        Pour chaque compte, les dates couvertes par la base et par les relevés de <code>_inputs/</code>.
+        Pour chaque compte, les dates couvertes par la base et par les relevés de <code>inputs/</code>.
         Des jours couverts par aucun relevé entre deux fichiers signalent un relevé manquant. Le plus long
         silence (aucune opération en base) peut aussi être une simple période calme.
       </p>

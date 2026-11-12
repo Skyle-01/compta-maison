@@ -77,19 +77,19 @@ class TestImports:
         assert hashes == GOLDEN_HASHES
 
     def _drop_overlapping_statement(self, tmp_path) -> None:
-        """Statements dropped in _inputs/ by hand: one overlapping the uploaded SAMPLE_CSV (its last
+        """Statements dropped in inputs/ by hand: one overlapping the uploaded SAMPLE_CSV (its last
         two rows + two new ones), and one that names no account."""
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_12.csv").write_bytes(
+        (tmp_path / "inputs" / "RELEVE_COMPTE_JOINT_2026_06_12.csv").write_bytes(
             b'"Date operation";"Date valeur";"Libelle";"Debit";"Credit"\n'
             b'"07/06/2026";"07/06/2026";"BAR ANGELUS";"12,00";""\n'
             b'"08/06/2026";"08/06/2026";"MYSTERY SHOP";"10,00";""\n'
             b'"10/06/2026";"10/06/2026";"CARTE SUPERMARCHE";"20,00";""\n'
             b'"12/06/2026";"12/06/2026";"BAR ANGELUS";"8,00";""\n'
         )
-        (tmp_path / "_inputs" / "export.csv").write_bytes(SAMPLE_CSV)
+        (tmp_path / "inputs" / "export.csv").write_bytes(SAMPLE_CSV)
 
     def test_import_inputs_adds_only_new_rows(self, seeded_db, client, tmp_path):
-        _upload(client)  # archived to tmp_path/_inputs
+        _upload(client)  # archived to tmp_path/inputs
         mystery = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
         courses = _category_id(client, "courses")
         client.patch(f"/api/transactions/{mystery['id']}", json={"category_id": courses, "note": "à garder"})
@@ -119,8 +119,8 @@ class TestImports:
     def test_import_inputs_cli(self, seeded_db, client, tmp_path, monkeypatch):
         import scripts.import_inputs as cli
 
-        monkeypatch.setattr(cli, "INPUTS_DIR", tmp_path / "_inputs")
-        monkeypatch.setattr(cli, "CONFIG_DIR", tmp_path / "_config")
+        monkeypatch.setattr(cli, "INPUTS_DIR", tmp_path / "inputs")
+        monkeypatch.setattr(cli, "CONFIG_DIR", tmp_path / "config")
         _upload(client)
         self._drop_overlapping_statement(tmp_path)
         assert cli.import_inputs(seeded_db) == 2
@@ -145,7 +145,7 @@ class TestImports:
         assert body["uncategorized_count"] == 0 and body["balance_warnings"] == {}
 
     def test_import_inputs_skips_rows_before_start_date(self, seeded_db, client, tmp_path):
-        (tmp_path / "_inputs").mkdir()
+        (tmp_path / "inputs").mkdir()
         self._drop_overlapping_statement(tmp_path)
         _write_start_date(tmp_path, "2026-06-10")
         body = client.post("/api/imports/inputs").json()
@@ -189,7 +189,7 @@ class TestImports:
     def test_import_inputs_reports_a_gap(self, seeded_db, client, tmp_path):
         _upload(client)
         self._drop_overlapping_statement(tmp_path)  # 07/06 -> 12/06, overlaps
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
+        (tmp_path / "inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
         body = client.post("/api/imports/inputs").json()
         by_name = {f["name"]: f for f in body["files"]}
         assert by_name["RELEVE_COMPTE_JOINT_2026_06_12.csv"]["gap_warning"] is None
@@ -202,8 +202,8 @@ class TestImports:
     def test_coverage_shows_holes_between_statements(self, seeded_db, client, tmp_path):
         _upload(client)  # 05/06 -> 08/06
         self._drop_overlapping_statement(tmp_path)  # 07/06 -> 12/06, overlaps
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_14.csv").write_bytes(self._statement_from(16))
+        (tmp_path / "inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
+        (tmp_path / "inputs" / "RELEVE_COMPTE_JOINT_2026_06_14.csv").write_bytes(self._statement_from(16))
         client.post("/api/imports/inputs")
 
         resp = client.get("/api/imports/coverage")
@@ -231,14 +231,14 @@ class TestImports:
             "holes": [],
         }
 
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_14.csv").unlink()  # its rows stay in the DB
+        (tmp_path / "inputs" / "RELEVE_COMPTE_JOINT_2026_06_14.csv").unlink()  # its rows stay in the DB
         joint = {a["code"]: a for a in client.get("/api/imports/coverage").json()}["JOINT"]
         assert joint["holes"] == [{"start": "2026-06-13", "end": "2026-06-19", "days": 7}]
         assert joint["operations"] == 10 and joint["files"] == 3
 
     def test_coverage_ignores_rows_before_start_date(self, seeded_db, client, tmp_path):
         _upload(client)  # 05/06 -> 08/06, archived
-        (tmp_path / "_inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
+        (tmp_path / "inputs" / "RELEVE_COMPTE_JOINT_2026_06_30.csv").write_bytes(self._statement_from(20))
         _write_start_date(tmp_path, "2026-06-10")
         joint = {a["code"]: a for a in client.get("/api/imports/coverage").json()}["JOINT"]
         assert joint["files"] == 1 and joint["holes"] == []
@@ -250,7 +250,7 @@ class TestImports:
         assert resp.json()["detail"][0].startswith("settings.toml invalide : start_date doit être une date")
 
     def test_invalid_profiles_file_rejected(self, client, tmp_path):
-        config = tmp_path / "_config"
+        config = tmp_path / "config"
         config.mkdir()
         (config / "bank_profiles.toml").write_text("[[profile]]\nname = 'incomplet'\n", encoding="utf-8")
         resp = _upload(client)

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Import the bank statements dropped in _inputs/ into the existing compta.db.
+    Import the bank statements dropped in inputs/ into the existing compta.db.
 .DESCRIPTION
     Runs backend/scripts/import_inputs.py with the virtualenv's python: only rows not yet in the
     database are added, nothing is deleted. Extra arguments (e.g. --db PATH) are passed through.

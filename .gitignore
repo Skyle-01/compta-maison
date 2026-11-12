@@ -1,5 +1,10 @@
-# Ignore underscore folders (_inputs, _backups, …)
+# Ignore underscore folders (scratch folders...)
 _*/
+
+# Private data folders, if one is ever created at the repo root (the real data folder lives outside the repo)
+/config/
+/inputs/
+/backups/
 
 # Dot-folders to ignore (everything else under .claude/ is tracked)
 .venv/

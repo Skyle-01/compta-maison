@@ -1,6 +1,6 @@
 # Guide de compta
 
-Ce guide explique chaque page de l'application et les gestes courants. L'installation et les fichiers de `_config/` sont décrits dans le README à la racine du dépôt (en anglais). Chaque page a un lien « ? » à côté de son titre qui renvoie ici.
+Ce guide explique chaque page de l'application et les gestes courants. L'installation et les fichiers de `config/` sont décrits dans le README à la racine du dépôt (en anglais). Chaque page a un lien « ? » à côté de son titre qui renvoie ici.
 
 ## Bien démarrer
 
@@ -13,6 +13,8 @@ Les notions à connaître :
 - **Nature d'une opération** : revenu, dépense ou virement. Un virement interne (une sortie d'un compte et une entrée du même montant sur un autre compte, à moins de 3 jours) n'est ni un revenu ni une dépense.
 - **Catégorie** : un arbre unique. On classe une opération dans une **feuille** (une catégorie sans sous-catégorie), jamais dans un groupe.
 - **Règle** : un morceau de libellé (texte simple, majuscules et minuscules comptent) qui classe automatiquement les opérations qui le contiennent. Une règle peut être limitée à un compte (voir « Catégories »). Un classement fait à la main sur une opération n'est jamais écrasé par une règle.
+
+Au premier lancement, l'application demande le **dossier de données** : indiquez son chemin complet (il est créé s'il n'existe pas). Il contient la base, la configuration, les relevés et les sauvegardes, donc toutes vos données : choisissez un dossier en dehors du code de l'application et sauvegardez-le.
 
 Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qui reste dans « À classer », puis on lit « Le mois » et le « Budget ».
 
@@ -99,8 +101,8 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 ![La page Importer](img/import.png)
 
 - **Envoyer un relevé** : choisir le fichier CSV de la banque. Le compte est déduit du nom du fichier, qui doit contenir le nom du compte ou l'un de ses alias. Un fichier dont le compte est inconnu est refusé.
-- **Importer les nouveaux relevés** : prend en compte les fichiers déposés dans le dossier `_inputs/`. Les opérations déjà connues sont ignorées, rien n'est supprimé.
-- Les relevés envoyés sont archivés dans `_inputs/`. Les opérations antérieures à la date de départ sont écartées : celle de `settings.toml` (`start_date`, pour toute la comptabilité) ou celle du compte (voir Réglages), la plus tardive des deux.
+- **Importer les nouveaux relevés** : prend en compte les fichiers déposés dans le dossier `inputs/`. Les opérations déjà connues sont ignorées, rien n'est supprimé.
+- Les relevés envoyés sont archivés dans `inputs/`. Les opérations antérieures à la date de départ sont écartées : celle de `settings.toml` (`start_date`, pour toute la comptabilité) ou celle du compte (voir Réglages), la plus tardive des deux.
 - Au premier import d'un compte, si ses opérations commencent plus de 4 jours après l'ouverture du mois budgétaire (le versement du salaire qui l'ouvre), un avertissement orange le signale et propose la date du salaire suivant comme date de départ du compte : ce mois-là serait incomplet pour lui. L'avertissement n'empêche rien.
 - La couverture par compte signale les trous entre deux relevés.
 
@@ -121,11 +123,12 @@ Le rapport PDF montre une synthèse (cartes, tendance, « Comment lire »), les 
 - **Comptes** : la liste des comptes, avec ✎ pour modifier le libellé, les alias, le motif de dépôt, la date de départ et la couleur d'un compte, et un formulaire pour en ajouter un. Le code et le type ne changent plus après la création. Un relevé est rattaché à un compte par son nom de fichier : le code, le libellé ou un alias (par exemple le numéro de compte de la banque) doit s'y retrouver. Un nom ne peut désigner qu'un seul compte. La date de départ (comptes courants) écarte à l'import les opérations valorisées avant elle ; choisissez la date du salaire qui ouvre le premier mois du compte. Modifier cette date ne retire pas les lignes déjà importées : reconstruisez la base (`reset_db.py`). La couleur se choisit parmi huit pastilles ; sans choix (« Par défaut »), le compte prend une couleur selon sa position dans la liste, donc deux comptes peuvent partager la même. Enregistrer un compte recalcule les virements, car les noms des comptes servent à les reconnaître.
 - **Virements internes** : les débuts de libellé qui signalent un virement (par défaut `VIR`). `*` accepte n'importe quel libellé.
 - **Virements manuels** : les opérations appariées à la main, par paires, avec « Auto » pour rendre la main à la détection.
-- **Sauvegarde** : « Enregistrer la configuration » écrit les comptes, catégories, règles et décisions manuelles dans `_config/`, pour pouvoir reconstruire la base. « Exporter les opérations en CSV » écrit, à part, les opérations de la base en relevés réimportables (un fichier par compte) dans le sous-dossier `inputs/` d'un nouveau dossier daté de `_backups/`. Elle ne touche jamais à `_inputs/`, et ne contient que les opérations postérieures aux dates de début : ce n'est pas une copie de `_inputs/`.
+- **Sauvegarde** : « Enregistrer la configuration » écrit les comptes, catégories, règles et décisions manuelles dans `config/`, pour pouvoir reconstruire la base. « Exporter les opérations en CSV » écrit, à part, les opérations de la base en relevés réimportables (un fichier par compte) dans le sous-dossier `inputs/` d'un nouveau dossier daté de `backups/`. Elle ne touche jamais à `inputs/`, et ne contient que les opérations postérieures aux dates de début : ce n'est pas une copie de `inputs/`. Pour regrouper vos relevés en un seul jeu de fichiers, copiez ceux de l'export dans `inputs/` : réimportés, ils ne créent aucun doublon. Gardez pourtant les relevés d'origine, qui contiennent aussi les opérations plus anciennes que les dates de début.
+- **Dossier de données** : l'emplacement de la base, de la configuration (`config/`), des relevés (`inputs/`) et des sauvegardes (`backups/`). Changer de dossier ne déplace rien : copiez d'abord vos fichiers dans le nouveau. Quand le dossier est imposé par la variable d'environnement `COMPTA_DATA_DIR`, il s'affiche en lecture seule.
 
 ### Sauvegardes et reconstruction
 
-Les opérations viennent toujours de `_inputs/`. Une copie complète de l'état = « Enregistrer la configuration » + les fichiers de `_inputs/`. Si `_inputs/` est perdu, l'export des opérations sert de filet : lancez `reset_db.py` avec la variable `COMPTA_INPUTS_DIR` pointant sur le dossier `_backups/<date>/inputs/` pour reconstruire la base depuis ces fichiers. La reconstruction d'une base se fait en ligne de commande (`reset_db.py`) : voir le README à la racine du dépôt.
+Les opérations viennent toujours de `inputs/`. Une copie complète de l'état = « Enregistrer la configuration » + les fichiers de `inputs/`. Si `inputs/` est perdu, l'export des opérations sert de filet : lancez `reset_db.py` avec la variable `COMPTA_INPUTS_DIR` pointant sur le dossier `backups/<date>/inputs/` pour reconstruire la base depuis ces fichiers. La reconstruction d'une base se fait en ligne de commande (`reset_db.py`) : voir le README à la racine du dépôt.
 
 ## Aide
 

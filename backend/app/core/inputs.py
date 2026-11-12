@@ -1,4 +1,4 @@
-"""The _inputs/ statement archive: reset_db.py rebuilds every transaction from it, so an upload is
+"""The inputs/ statement archive: reset_db.py rebuilds every transaction from it, so an upload is
 copied there under a name that yields the same account string it was hashed with. Statements
 dropped there by hand are imported in bulk by import_inputs_dir."""
 
@@ -94,7 +94,7 @@ def gap_warning(last: str | None, rows: list[dict]) -> str | None:
     """French warning when the statement's first value date falls more than GAP_TOLERANCE_DAYS
     after `last` (read before inserting it). Overlapping or contiguous files, an account's first
     import and a file left empty by the start date give None. A heuristic: only the import that
-    creates a hole flags it (a rescan of _inputs then overlaps), and a quiet account can warn."""
+    creates a hole flags it (a rescan of inputs then overlaps), and a quiet account can warn."""
     if last is None or not rows:
         return None
     previous = date.fromisoformat(last[:10])
@@ -134,7 +134,7 @@ def start_warning(db_path: Path, last: str | None, rows: list[dict]) -> str | No
 
 @dataclass(frozen=True)
 class Silence:
-    """Days with no operation (in the DB) or covered by no statement (in _inputs), `start` to
+    """Days with no operation (in the DB) or covered by no statement (in inputs), `start` to
     `end` inclusive (ISO)."""
 
     start: str
@@ -154,15 +154,15 @@ class AccountCoverage:
     first: str | None  # value dates of the account's first and last operations in the DB
     last: str | None
     operations: int
-    files: int  # _inputs statements of the account with rows since the start date
+    files: int  # inputs statements of the account with rows since the start date
     longest_silence: Silence | None  # in the DB: a quiet stretch, maybe a missing statement
-    holes: list[Silence]  # between _inputs statements that don't overlap, as gap_warning judges them
+    holes: list[Silence]  # between inputs statements that don't overlap, as gap_warning judges them
 
 
 def account_coverage(
     db_path: Path, inputs_dir: Path, profiles: Sequence[BankProfile], start_date: date | None = None
 ) -> list[AccountCoverage]:
-    """Per account with statements (external savings excluded), what the DB and _inputs/ cover.
+    """Per account with statements (external savings excluded), what the DB and inputs/ cover.
     A statement covers its first to last value date; consecutive ones whose ranges are more than
     GAP_TOLERANCE_DAYS apart leave a hole that no file covers, which stays visible after the
     import that created it. Unreadable files and files of no known account are left out (the

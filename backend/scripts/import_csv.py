@@ -1,6 +1,6 @@
 """Loaders for the self-contained config/taxonomy CSVs (accounts, transfer markers, categories,
-rules, manual overrides): the format of data/, _config/, the Catégories page exports and the
-_backups/<ts>/ snapshots. Used by reset_db.py, the one rebuild CLI, on a database it has already
+rules, manual overrides): the format of data/, config/, the Catégories page exports and the
+backups/<ts>/ snapshots. Used by reset_db.py, the one rebuild CLI, on a database it has already
 initialised.
 """
 
@@ -211,7 +211,7 @@ def resolve_overrides(conn: sqlite3.Connection, rows: list[dict]) -> dict[str, i
 
     By import_hash first. A hash not in the DB falls back to the row's identity columns (account,
     operation date, libellé, amounts): a row uploaded under the account code used to hash
-    differently from the same row rebuilt from _inputs/ under the filename alias. Identical
+    differently from the same row rebuilt from inputs/ under the filename alias. Identical
     operations are matched in order, never twice. Rows found neither way are left out; files
     older than the identity columns match by hash only."""
     ids: dict[str, int] = {}

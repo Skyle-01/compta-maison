@@ -1,28 +1,30 @@
-"""Rebuild compta.db from a chosen taxonomy source + the _inputs bank statements.
+"""Rebuild compta.db from a chosen taxonomy source + the inputs bank statements.
 
 Usage: .venv/Scripts/python backend/scripts/reset_db.py [--source live|defaults|backup] [--from DIR] [--db PATH]
 
-A rebuild = fresh DB + load the accounts + import every _inputs/*.csv (deduped by import_hash) +
+A rebuild = fresh DB + load the accounts + import every inputs/*.csv (deduped by import_hash) +
 load a taxonomy (categories, rules, and manual overrides) from one source:
 
   --source live      (default) snapshot the current DB's accounts + taxonomy + overrides to
-                     _backups/<ts>/, then rebuild from that snapshot. Preserves your current setup
+                     backups/<ts>/, then rebuild from that snapshot. Preserves your current setup
                      across a schema change. Requires an existing DB.
   --source defaults  rebuild from your config dir (--from DIR, else $COMPTA_CONFIG_DIR, else
-                     _config/ when it holds a categories.csv), falling back to the fictional
+                     config/ of the data folder when it holds a categories.csv), falling back to the fictional
                      example in data/. First-time bootstrap, or reset to your reference setup.
-  --source backup    rebuild from a _backups/<ts>/ snapshot (latest, or --from DIR). Disaster
+  --source backup    rebuild from a backups/<ts>/ snapshot (latest, or --from DIR). Disaster
                      recovery when the DB is lost — does not need a live DB.
 
-Transactions always come from _inputs/*.csv (the durable bank-statement archive). The taxonomy
-snapshot under _backups/ is therefore taxonomy-only: a full restore point = the latest
-_backups/<ts>/ **plus** your current _inputs/. Whenever a DB already exists it is snapshotted to
-_backups/<ts>/ before being deleted, so every rebuild leaves a recoverable restore point.
-_backups/ sits next to the DB (--db, else $COMPTA_DB, else the repo's compta.db).
+Transactions always come from inputs/*.csv (the durable bank-statement archive). The taxonomy
+snapshot under backups/ is therefore taxonomy-only: a full restore point = the latest
+backups/<ts>/ **plus** your current inputs/. Whenever a DB already exists it is snapshotted to
+backups/<ts>/ before being deleted, so every rebuild leaves a recoverable restore point.
+backups/ sits next to the DB (--db, else $COMPTA_DB, else compta.db in the data folder).
 
-Personal data lives only in gitignored places: _inputs/ (statements), _config/ (your
-accounts.csv, categories.csv, rules.csv, optional overrides.csv, transfer_markers.csv,
-bank_profiles.toml and settings.toml), _backups/ and compta.db. Bank profiles and the start date
+Personal data lives in one data folder outside the tracked files ($COMPTA_DATA_DIR, else the folder
+chosen in the app; the script exits when neither is set): inputs/ (statements), config/ (your accounts.csv, categories.csv,
+rules.csv, optional overrides.csv, transfer_markers.csv, bank_profiles.toml and settings.toml),
+backups/ and compta.db. $COMPTA_DB, $COMPTA_CONFIG_DIR and $COMPTA_INPUTS_DIR each override one
+of them. Bank profiles and the start date
 (settings.toml) are always read from the config dir, whatever --source is: they describe which
 statement rows to import and how to parse them, not DB state.
 A source dir without accounts.csv (a snapshot older than accounts.csv) borrows the one from the
@@ -41,18 +43,15 @@ from app.core.bank_profiles import BankProfile, BankProfileError, load_bank_prof
 from app.core.config_export import backups_dir, export_config, new_backup_dir  # noqa: E402
 from app.core.inputs import import_inputs_dir  # noqa: E402
 from app.core.settings import SETTINGS_FILENAME, SettingsError, load_start_date  # noqa: E402
-from app.db import (  # noqa: E402
-    DEFAULT_CONFIG_DIR,
-    DEFAULT_DB_PATH,
-    DEFAULT_INPUTS_DIR,
-    init_db,
-)
+from app.db import NOT_CONFIGURED, init_db, locate_paths  # noqa: E402
 from scripts.import_csv import import_csv, load_accounts_csv, load_transfer_markers_csv  # noqa: E402
 
 REPO_ROOT = BACKEND_DIR.parent
 DATA_DIR = REPO_ROOT / "data"
-INPUTS_DIR = DEFAULT_INPUTS_DIR
-CONFIG_DIR = DEFAULT_CONFIG_DIR
+PATHS, PROBLEM = locate_paths()
+# None until the data folder is configured: the entry point exits before using them.
+INPUTS_DIR = PATHS.inputs if PATHS else None
+CONFIG_DIR = PATHS.config if PATHS else None
 
 
 def _defaults_dir() -> Path:
@@ -79,7 +78,7 @@ def _load_start_date() -> date | None:
 
 
 def _import_inputs(db_path: Path, profiles: list[BankProfile], start_date: date | None) -> int:
-    """Import every bank CSV in _inputs/ (see core.inputs.import_inputs_dir), printing a line per
+    """Import every bank CSV in inputs/ (see core.inputs.import_inputs_dir), printing a line per
     file. Returns the number of newly inserted transactions (re-runs are deduped by hash)."""
     results = import_inputs_dir(db_path, INPUTS_DIR, profiles, start_date)
     for r in results:
@@ -97,7 +96,7 @@ def _import_inputs(db_path: Path, profiles: list[BankProfile], start_date: date 
 
 def snapshot(db_path: Path) -> Path:
     """Dump the live DB's accounts, taxonomy, overrides and transfer markers to a new
-    _backups/<ts>/ (core.config_export), the restore point taken before every rebuild."""
+    backups/<ts>/ (core.config_export), the restore point taken before every rebuild."""
     out_dir = new_backup_dir(db_path)
     c = export_config(db_path, out_dir)
     print(
@@ -108,7 +107,7 @@ def snapshot(db_path: Path) -> Path:
 
 
 def _latest_backup(root: Path) -> Path:
-    """Most recent _backups/<ts>/ snapshot directory. Exits if there are none. A backup without a
+    """Most recent backups/<ts>/ snapshot directory. Exits if there are none. A backup without a
     categories.csv (the Réglages save taken while the config dir was empty holds only compta.db)
     is no taxonomy source, so it is skipped."""
     snaps = sorted((p for p in root.glob("*") if (p / "categories.csv").exists()), reverse=True)
@@ -127,8 +126,8 @@ def _rebuild(
     profiles: list[BankProfile],
     start_date: date | None,
 ) -> None:
-    """Fresh DB: load accounts, import _inputs, then load the taxonomy + overrides from the given
-    CSVs. Accounts come first so statement filenames resolve; _inputs is imported *before* the
+    """Fresh DB: load accounts, import inputs, then load the taxonomy + overrides from the given
+    CSVs. Accounts come first so statement filenames resolve; inputs is imported *before* the
     taxonomy so overrides reattach by import_hash."""
     if db_path.exists():
         db_path.unlink()
@@ -211,9 +210,11 @@ if __name__ == "__main__":
         dest="from_dir",
         type=Path,
         default=None,
-        help="With --source backup: the snapshot dir to restore (default: latest under the DB's _backups/). "
-        "With --source defaults: the config dir to rebuild from (default: _config/, else data/).",
+        help="With --source backup: the snapshot dir to restore (default: latest under the DB's backups/). "
+        "With --source defaults: the config dir to rebuild from (default: config/, else data/).",
     )
-    parser.add_argument("--db", type=Path, default=DEFAULT_DB_PATH)
+    parser.add_argument("--db", type=Path, default=PATHS.db if PATHS else None)
     args = parser.parse_args()
+    if PATHS is None or args.db is None:
+        sys.exit(PROBLEM or NOT_CONFIGURED)
     reset(args.db, args.source, args.from_dir)

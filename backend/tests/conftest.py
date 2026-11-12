@@ -24,12 +24,13 @@ TEST_ACCOUNT_ALIASES = [(code, code) for code, *_ in TEST_ACCOUNTS] + [
 
 
 @pytest.fixture(autouse=True)
-def _no_private_config(tmp_path, monkeypatch):
-    """Keep the developer's private _config/ (e.g. bank_profiles.toml) out of every app a test
-    creates, and keep uploads out of their _inputs/; tests that need a config write it to
-    tmp_path/_config, uploads land in tmp_path/_inputs."""
-    monkeypatch.setattr("app.main.DEFAULT_CONFIG_DIR", tmp_path / "_config")
-    monkeypatch.setattr("app.main.DEFAULT_INPUTS_DIR", tmp_path / "_inputs")
+def _no_private_data(tmp_path, monkeypatch):
+    """Keep the developer's private data folder out of every test: no COMPTA_* variable, and the file
+    remembering the folder chosen in the UI lives in tmp_path. An app created on tmp_path/test.db
+    reads its config from tmp_path/config and archives uploads to tmp_path/inputs (create_app)."""
+    for var in ("COMPTA_DATA_DIR", "COMPTA_DB", "COMPTA_CONFIG_DIR", "COMPTA_INPUTS_DIR"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setattr("app.db.pointer_file", lambda: tmp_path / "pointer" / "data_dir.txt")
 
 
 def cat_id(db_path: Path, name: str) -> int:
@@ -55,10 +56,10 @@ def make_db(path: Path) -> Path:
 
 
 def isolate_reset_db(tmp_path: Path, monkeypatch):
-    """Point reset_db.py's _inputs/ and config dir at tmp_path (the same _inputs/ the app archives
-    uploads to, see _no_private_config); returns the module. _backups/ follows the DB (tmp_path too)."""
-    monkeypatch.setattr(reset_db_module, "INPUTS_DIR", tmp_path / "_inputs")
-    monkeypatch.setattr(reset_db_module, "CONFIG_DIR", tmp_path / "_config")  # absent unless a test writes it
+    """Point reset_db.py's inputs/ and config dir at tmp_path (the same inputs/ the app archives
+    uploads to, see _no_private_config); returns the module. backups/ follows the DB (tmp_path too)."""
+    monkeypatch.setattr(reset_db_module, "INPUTS_DIR", tmp_path / "inputs")
+    monkeypatch.setattr(reset_db_module, "CONFIG_DIR", tmp_path / "config")  # absent unless a test writes it
     return reset_db_module
 
 

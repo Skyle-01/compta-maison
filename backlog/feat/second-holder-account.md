@@ -2,7 +2,7 @@
 
 ## Context
 
-The second holder's checking account (account B) is imported and wired in: profile, account with its `start_date` (2026-08-28 in `_config/accounts.csv`), transfer pairs, her salary landing in the right budget months, no coverage hole, months before her start ignored by the averages (partial months). What is left is data work on the live DB, not code.
+The second holder's checking account (account B) is imported and wired in: profile, account with its `start_date` (2026-08-28 in `config/accounts.csv`), transfer pairs, her salary landing in the right budget months, no coverage hole, months before her start ignored by the averages (partial months). What is left is data work on the live DB, not code.
 
 Decisions kept from the spec, still relevant while categorising:
 

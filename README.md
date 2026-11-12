@@ -10,15 +10,18 @@ shown in the app's « Aide » tab.
 
 ## Your data stays out of git
 
-| Path | Holds | Tracked? |
-| --- | --- | --- |
-| `data/` | a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles, a commented `settings.toml`) and six months of fictional statements in `data/demo/` | yes |
-| `_config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`, `bank_profiles.toml`, `settings.toml`) | no |
-| `_inputs/` | your bank statement CSVs | no |
-| `_backups/` | automatic snapshots taken before each rebuild or configuration save | no |
-| `compta.db` | the SQLite database | no |
+The repo only holds `data/`: a **fictional** example config (accounts, categories, rules, transfer markers, bank profiles, a commented `settings.toml`) and six months of fictional statements in `data/demo/`.
 
-Every folder starting with `_` is gitignored.
+Everything private lives in one **data folder**, which has no default: on first launch the app asks for its full path (it is created if missing), and remembers it in a small per-user file (`%APPDATA%\compta-maison\data_dir.txt`; `~/.config/compta-maison/` elsewhere). Pick a folder outside the repo. Alternatively set the `COMPTA_DATA_DIR` environment variable (the folder must exist; on Windows `setx COMPTA_DATA_DIR "<folder>"`, then open a new terminal): it wins over the remembered folder and the UI then shows it read-only. Until a folder is set, the API answers 409 and the CLI scripts stop with a message.
+
+| Inside the data folder | Holds |
+| --- | --- |
+| `config/` | **your** config: `accounts.csv`, `categories.csv`, `rules.csv` (+ optional `transfer_markers.csv`, `overrides.csv`, `bank_profiles.toml`, `settings.toml`) |
+| `inputs/` | your bank statement CSVs |
+| `backups/` | automatic snapshots taken before each rebuild or configuration save |
+| `compta.db` | the SQLite database |
+
+`COMPTA_DB`, `COMPTA_CONFIG_DIR` and `COMPTA_INPUTS_DIR` each override one of these paths (the snapshots always sit next to the database). Setting them all points the app at a throwaway data set, as the demo workflow does.
 
 ## Setup
 
@@ -33,16 +36,16 @@ npm ci --prefix frontend
 
 The commands below assume the virtualenv is active.
 
-To try the app before using your own data, copy `data/demo/*.csv` to `_inputs/` and run
+To try the app before using your own data, copy `data/demo/*.csv` to the data folder's `inputs/` and run
 `python backend/scripts/reset_db.py --source defaults`: six months of fictional statements for the
-example accounts. Delete them from `_inputs/` before you add your own statements and config (with
+example accounts. Delete them from `inputs/` before you add your own statements and config (with
 your own `accounts.csv` their account names no longer resolve).
 
-1. Put your bank exports in `_inputs/`. Files are named like
+1. Put your bank exports in `inputs/`. Files are named like
    `RELEVE_COMPTE_JOINT_2026_06_08.csv`: the part between `RELEVE_[COMPTE_]` and the date is the
    account name. If your bank uses another CSV layout or file name, see
    [Other banks](#other-banks).
-2. Copy `data/*.csv` to `_config/` and edit them:
+2. Copy `data/*.csv` to `config/` and edit them:
    - `accounts.csv`: one line per account. `aliases` (`|`-separated) are the account's other
      names besides its `label`: the account name taken from your statement filenames, or a former
      name your bank used in transfer labels (not a holder's name, which several accounts share). `type` is `checking` or `savings`. Set
@@ -67,7 +70,7 @@ your own `accounts.csv` their account names no longer resolve).
      legs could match and nothing tells them apart (a tenant's rent credited the same day as your
      own transfer of the same amount), none is paired: pair them by hand from « À classer » or the Transactions page.
    - `settings.toml` (optional, copy `data/settings.toml`): `start_date`, the day your books
-     open. Statement lines valued earlier stay in `_inputs/` and are not imported, so years of
+     open. Statement lines valued earlier stay in `inputs/` and are not imported, so years of
      history you will never categorise stay out. Pick the date of the paycheck that opens your
      first budget month; after changing it, rebuild with `reset_db.py`.
 3. Build the database: `python backend/scripts/reset_db.py --source defaults`.
@@ -75,28 +78,28 @@ your own `accounts.csv` their account names no longer resolve).
    `cd backend && python -m uvicorn app.main:app --port 8000` and `npm run dev --prefix frontend`.
    Open http://localhost:3000.
 
-After that, import new statements from the Import page: each upload is also copied to `_inputs/`
+After that, import new statements from the Import page: each upload is also copied to `inputs/`
 (under its own name, or `RELEVE_<account>_<date>_<name>.csv` when you picked the account by hand),
-so a rebuild keeps it. To add several statements at once, drop them in `_inputs/` and click
+so a rebuild keeps it. To add several statements at once, drop them in `inputs/` and click
 "Importer les nouveaux relevés" on the Import page, or run `./import_inputs.ps1`: only operations
-not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. An import also warns when a statement starts more than 4 days after its account's last operation (a statement may be missing): export statements with a few days of overlap to make that check reliable. The Import page also lists, per account, the dates covered, the longest stretch without any operation and any hole between two `_inputs/` statements, so a missing statement stays visible after its import. Edit categories, rules and manual assignments from the app's Catégories page (it also moves rules and manual assignments between categories), and transfer markers from Settings. Accounts are added and edited in Settings → « Comptes » (label, aliases, deposit pattern; saving re-pairs the transfers, and « Sauvegarde » writes them to `_config/accounts.csv`). A code or a type never changes, and deleting or reordering an account is not offered: for that, run `reset_db.py` once to take a fresh snapshot, copy the new `_backups/<timestamp>/` folder, edit its `accounts.csv`, run `reset_db.py --source backup --from <that copy>` (categories, rules and manual decisions are kept), and make the same edit in `_config/accounts.csv`. To classify what the rules missed, open « À classer »: similar operations are grouped, each with a category suggested from the ones already classified (computed locally), and a whole group goes to one rule or one manual assignment, from the keyboard; an operation that could be one leg of an internal transfer lists its possible other legs, each with an « Associer en virement » button. On the
+not yet in the database are added (overlapping statements are deduped), nothing is rebuilt. An import also warns when a statement starts more than 4 days after its account's last operation (a statement may be missing): export statements with a few days of overlap to make that check reliable. The Import page also lists, per account, the dates covered, the longest stretch without any operation and any hole between two `inputs/` statements, so a missing statement stays visible after its import. Edit categories, rules and manual assignments from the app's Catégories page (it also moves rules and manual assignments between categories), and transfer markers from Settings. Accounts are added and edited in Settings → « Comptes » (label, aliases, deposit pattern; saving re-pairs the transfers, and « Sauvegarde » writes them to `config/accounts.csv`). A code or a type never changes, and deleting or reordering an account is not offered: for that, run `reset_db.py` once to take a fresh snapshot, copy the new `backups/<timestamp>/` folder, edit its `accounts.csv`, run `reset_db.py --source backup --from <that copy>` (categories, rules and manual decisions are kept), and make the same edit in `config/accounts.csv`. To classify what the rules missed, open « À classer »: similar operations are grouped, each with a category suggested from the ones already classified (computed locally), and a whole group goes to one rule or one manual assignment, from the keyboard; an operation that could be one leg of an internal transfer lists its possible other legs, each with an « Associer en virement » button. On the
 Transactions page, tick two operations to pair them as a transfer, or use "Dissocier" on a wrong
 pair; these manual decisions are listed in Settings (« Virements manuels ») and kept across rebuilds. To rebuild while
 keeping them (for example after a schema change), run `reset_db.py` with no arguments. It snapshots the current
-setup to `_backups/<timestamp>/` (next to the database) first. `--source backup` restores the latest snapshot. Copy a
-snapshot's files into `_config/` to make it your new reference setup. Or let the app do it: Settings → « Sauvegarde » →
+setup to `backups/<timestamp>/` (next to the database) first. `--source backup` restores the latest snapshot. Copy a
+snapshot's files into `config/` to make it your new reference setup. Or let the app do it: Settings → « Sauvegarde » →
 « Enregistrer la configuration » writes your accounts, categories, rules, manual decisions and transfer markers from the
-database into `_config/` (after copying the files it replaces, and the database itself, to `_backups/<timestamp>/`; your
+database into `config/` (after copying the files it replaces, and the database itself, to `backups/<timestamp>/`; your
 `bank_profiles.toml` and `settings.toml` are never touched), so `reset_db.py --source defaults` rebuilds the same database
-if `compta.db` is ever lost. As a safety net for `_inputs/`, « Exporter les opérations en CSV » (same section) writes the
-operations kept in the database as re-importable statements, one file per account, to `_backups/<timestamp>/inputs/`
-(never to `_inputs/`); to rebuild from them, run `reset_db.py` with `COMPTA_INPUTS_DIR` pointing at that folder.
+if `compta.db` is ever lost. As a safety net for `inputs/`, « Exporter les opérations en CSV » (same section) writes the
+operations kept in the database as re-importable statements, one file per account, to `backups/<timestamp>/inputs/`
+(never to `inputs/`); to rebuild from them, run `reset_db.py` with `COMPTA_INPUTS_DIR` pointing at that folder.
 
 ## Other banks
 
 The built-in format is `"Date operation";"Date valeur";"Libelle";"Debit";"Credit"`, separated by
 `;`, dates `dd/mm/yyyy`, comma decimals (`1 234,56`), UTF-8 or Windows-1252. For any other export,
-copy `data/bank_profiles.toml` to `_config/` and describe your bank's file there: column names,
+copy `data/bank_profiles.toml` to `config/` and describe your bank's file there: column names,
 separator, date format, decimal mark, encodings, and either one signed amount column (negative =
 debit) or separate debit and credit columns. The example file documents every key.
 
@@ -106,9 +109,9 @@ debit) or separate debit and credit columns. The example file documents every ke
 - Without a value-date column, the operation date is used.
 - `filename_pattern` is a regular expression with an `account` group that finds the account in the
   file name (`_` become spaces); the result must be one of the aliases in `accounts.csv`. It is
-  needed to rebuild from `_inputs/`. When uploading from the Import page you can also pick the
+  needed to rebuild from `inputs/`. When uploading from the Import page you can also pick the
   account by hand.
-- The server and `reset_db.py` both read `bank_profiles.toml` from `_config/` (or
+- The server and `reset_db.py` both read `bank_profiles.toml` from `config/` (or
   `$COMPTA_CONFIG_DIR`), so an upload and a rebuild read a file the same way.
 - Once statements are imported with a profile, don't change how it reads them (columns, dates,
   amounts). Each operation is identified by its parsed values, so a change imports the rows again

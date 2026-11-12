@@ -20,7 +20,7 @@ class ImportResult(BaseModel):
     )
     profile: str = Field("default", description="Name of the bank profile that parsed the file")
     archived_as: str | None = Field(
-        None, description="File name the statement was copied to in _inputs/; None if it couldn't be"
+        None, description="File name the statement was copied to in inputs/; None if it couldn't be"
     )
     gap_warning: str | None = Field(
         None, description="French warning when the file starts after a hole in its account's data"
@@ -57,25 +57,38 @@ class Silence(BaseModel):
 
 
 class AccountCoverage(BaseModel):
-    """What the DB and the _inputs/ statements cover for one account (core.inputs.account_coverage)."""
+    """What the DB and the inputs/ statements cover for one account (core.inputs.account_coverage)."""
 
     code: str
     label: str
     first: str | None = Field(description="Value date of the account's first operation in the DB")
     last: str | None
     operations: int
-    files: int = Field(description="_inputs/ statements of the account with rows since the start date")
+    files: int = Field(description="inputs/ statements of the account with rows since the start date")
     longest_silence: Silence | None = Field(description="Longest stretch without any operation in the DB")
-    holes: list[Silence] = Field(description="Days covered by no _inputs/ statement, between two of them")
+    holes: list[Silence] = Field(description="Days covered by no inputs/ statement, between two of them")
 
 
 class StatementsExportResult(BaseModel):
-    """What « Exporter les opérations en CSV » wrote: `backup_dir` is the `_backups/<ts>/` holding
+    """What « Exporter les opérations en CSV » wrote: `backup_dir` is the `backups/<ts>/` holding
     the `inputs/` folder, None when the DB has no operation."""
 
     backup_dir: str | None
     files: int
     operations: int
+
+
+class DataDirStatus(BaseModel):
+    """Where the private data lives (api/data_dir.py)."""
+
+    configured: bool = Field(description="False until a data folder is chosen: every other route answers 409")
+    path: str | None = Field(description="The data folder, when one is chosen (even if unusable)")
+    locked: bool = Field(description="Set by the COMPTA_DATA_DIR variable: the UI cannot change it")
+    problem: str | None = Field(description="French reason a chosen folder cannot be used (missing)")
+
+
+class DataDirSet(BaseModel):
+    path: str = Field(description="Absolute path of the data folder; created when missing")
 
 
 class ConfigExportResult(BaseModel):

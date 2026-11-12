@@ -40,16 +40,16 @@ def _upload(client, filename="RELEVE_COMPTE_JOINT_2026_06_08.csv", account="", c
 
 
 def _write_profiles(tmp_path) -> Path:
-    """Install the example bank profiles in the test's config dir (tmp_path/_config)."""
-    config = tmp_path / "_config"
+    """Install the example bank profiles in the test's config dir (tmp_path/config)."""
+    config = tmp_path / "config"
     config.mkdir(exist_ok=True)
     shutil.copy(EXAMPLE_PROFILES, config / "bank_profiles.toml")
     return config
 
 
 def _write_start_date(tmp_path, start_date: str) -> None:
-    """Open the books at `start_date` in the test's config dir (tmp_path/_config)."""
-    config = tmp_path / "_config"
+    """Open the books at `start_date` in the test's config dir (tmp_path/config)."""
+    config = tmp_path / "config"
     config.mkdir(exist_ok=True)
     (config / "settings.toml").write_text(f"start_date = {start_date}\n", encoding="utf-8")
 

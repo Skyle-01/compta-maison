@@ -2,12 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AccountDot from "@/components/AccountDot";
+import DataDirForm from "@/components/DataDirForm";
 import HelpLink from "@/components/HelpLink";
 import {
   api,
   errorMessage,
   type Account,
   type ConfigExportResult,
+  type DataDirStatus,
   type StatementsExportResult,
   type Transaction,
   frenchDate,
@@ -24,6 +26,7 @@ const SECTIONS = [
   { id: "virements-internes", label: "Virements internes" },
   { id: "virements-manuels", label: "Virements manuels" },
   { id: "sauvegarde", label: "Sauvegarde" },
+  { id: "dossier-donnees", label: "Dossier de données" },
 ] as const;
 
 // scroll-mt keeps a section title clear of the sticky table of contents when jumping to it.
@@ -77,7 +80,31 @@ export default function SettingsPage() {
       <TransferMarkersSection />
       <ManualTransfersSection />
       <BackupSection />
+      <DataDirSection />
     </div>
+  );
+}
+
+/** Where the database, config, statements and backups are stored (the folder chosen at first launch). */
+function DataDirSection() {
+  const [status, setStatus] = useState<DataDirStatus | null>(null);
+
+  useEffect(() => {
+    api
+      .dataDir()
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+
+  return (
+    <section id="dossier-donnees" className={SECTION_CLASS}>
+      <h2 className="text-base font-semibold">Dossier de données</h2>
+      <p className="text-sm text-zinc-500">
+        Contient la base, la configuration, les relevés (<code className="rounded bg-zinc-100 px-1 text-zinc-700">inputs/</code>)
+        et les sauvegardes. Changer de dossier ne déplace rien : copiez d&apos;abord vos fichiers dans le nouveau.
+      </p>
+      {status && <DataDirForm status={status} />}
+    </section>
   );
 }
 
@@ -552,7 +579,7 @@ function BackupSection() {
         dans le dossier de configuration, pour reconstruire la base sans rien reclasser avec
         <code className="mx-1 rounded bg-zinc-100 px-1 text-zinc-700">reset_db.py --source defaults</code>
         si elle est perdue ou abîmée. Les fichiers remplacés sont d’abord copiés, avec la base, dans
-        un dossier daté de <code className="rounded bg-zinc-100 px-1 text-zinc-700">_backups/</code>.
+        un dossier daté de <code className="rounded bg-zinc-100 px-1 text-zinc-700">backups/</code>.
         Les profils de banque et la date de début ne sont jamais modifiés.
       </p>
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
@@ -568,10 +595,10 @@ function BackupSection() {
       <p className="text-sm text-zinc-500">
         Écrit les opérations de la base en relevés CSV réimportables (un fichier par compte) dans le
         sous-dossier <code className="rounded bg-zinc-100 px-1 text-zinc-700">inputs/</code> d&apos;un
-        nouveau dossier daté de <code className="rounded bg-zinc-100 px-1 text-zinc-700">_backups/</code>,
-        sans toucher à <code className="rounded bg-zinc-100 px-1 text-zinc-700">_inputs/</code>. Seules
+        nouveau dossier daté de <code className="rounded bg-zinc-100 px-1 text-zinc-700">backups/</code>,
+        sans toucher à <code className="rounded bg-zinc-100 px-1 text-zinc-700">inputs/</code>. Seules
         les opérations postérieures aux dates de début sont dans la base : ce n&apos;est pas une copie de
-        <code className="mx-1 rounded bg-zinc-100 px-1 text-zinc-700">_inputs/</code>.
+        <code className="mx-1 rounded bg-zinc-100 px-1 text-zinc-700">inputs/</code>.
       </p>
       <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm">
         <button onClick={exportStatements} disabled={exporting} className="btn-secondary">

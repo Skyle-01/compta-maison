@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 @router.post("/export")
 def export_config_dir(db_path: DbPath, config_dir: ConfigDir) -> ConfigExportResult:
     """Regenerate the config dir's CSVs from the DB (for reset_db.py --source defaults), after
-    backing up the files it replaces and the DB to _backups/<ts>/."""
+    backing up the files it replaces and the DB to backups/<ts>/."""
     try:
         saved = save_config(db_path, config_dir)
     except OSError as exc:  # e.g. a CSV open in Excel on Windows (os.replace names it filename2)
@@ -35,7 +35,7 @@ def export_config_dir(db_path: DbPath, config_dir: ConfigDir) -> ConfigExportRes
 @router.post("/export-statements")
 def export_statements_dir(db_path: DbPath) -> StatementsExportResult:
     """Write the DB's operations as re-importable bank CSVs (one per account) to a new
-    _backups/<ts>/inputs/, a safety net for _inputs/. Never writes to _inputs/."""
+    backups/<ts>/inputs/, a safety net for inputs/. Never writes to inputs/."""
     try:
         exported = export_statements(db_path)
     except ValueError as exc:

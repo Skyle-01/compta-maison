@@ -1,7 +1,7 @@
 """The config dir's CSVs written from the DB: accounts, categories, rules, manual overrides and
 transfer markers, in the format scripts/import_csv.py reads. One writer for the Réglages
 « Enregistrer la configuration » button (save_config, into the config dir) and for reset_db.py's
-_backups/<ts>/ snapshots (export_config)."""
+backups/<ts>/ snapshots (export_config)."""
 
 import csv
 import io
@@ -21,7 +21,7 @@ from app.db import account_aliases_by_code, connect, euros, get_transfer_markers
 PATH_SEP = " / "
 
 ACCOUNTS_HEADER = ["code", "label", "type", "sort_order", "deposit_pattern", "aliases", "start_date", "color"]
-# categories.csv columns (the config dir, _backups/ snapshots, data/).
+# categories.csv columns (the config dir, backups/ snapshots, data/).
 CATEGORIES_HEADER = ["path", "budget_target"]
 RULES_HEADER = ["category_path", "pattern", "is_income_anchor", "description", "account"]
 OVERRIDES_HEADER = [
@@ -217,13 +217,13 @@ def export_config(db_path: Path, out_dir: Path) -> ConfigCounts:
 
 
 def backups_dir(db_path: Path) -> Path:
-    """Where a DB's snapshots go: `_backups/` next to it (the repo root for the default compta.db),
+    """Where a DB's snapshots go: `backups/` next to it (in the data folder for the default compta.db),
     so a throwaway DB (a demo, a test) never adds a snapshot to the real restore points."""
-    return db_path.parent / "_backups"
+    return db_path.parent / "backups"
 
 
 def new_backup_dir(db_path: Path) -> Path:
-    """A fresh, empty `_backups/<timestamp>/` (suffixed `_2`, `_3`... within the same second)."""
+    """A fresh, empty `backups/<timestamp>/` (suffixed `_2`, `_3`... within the same second)."""
     root = backups_dir(db_path)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     candidate, n = root / stamp, 1
@@ -242,7 +242,7 @@ def backup_db(db_path: Path, dest: Path) -> None:
 
 def save_config(db_path: Path, config_dir: Path) -> ConfigSave:
     """Regenerate the config dir from the DB, after copying the files it replaces and the DB itself
-    to a new `_backups/<ts>/`: a save made from a damaged DB never loses the last good config.
+    to a new `backups/<ts>/`: a save made from a damaged DB never loses the last good config.
     Nothing is written to the config dir if that backup fails."""
     backup = new_backup_dir(db_path)
     for name in CONFIG_FILES:
@@ -284,10 +284,10 @@ def _statement_text(rows: list[tuple]) -> str:
 
 
 def export_statements(db_path: Path) -> StatementsExport:
-    """Safety net for _inputs/: write the DB's operations as re-importable bank CSVs, one file per
+    """Safety net for inputs/: write the DB's operations as re-importable bank CSVs, one file per
     raw `transactions.account` string (the string feeds import_hash), into a new
-    `_backups/<ts>/inputs/`. Only the rows kept since the start dates exist in the DB, so this is
-    not a copy of _inputs/. Never writes to _inputs/. Raises ValueError (French) when a file name
+    `backups/<ts>/inputs/`. Only the rows kept since the start dates exist in the DB, so this is
+    not a copy of inputs/. Never writes to inputs/. Raises ValueError (French) when a file name
     would not give its account back through infer_account; nothing is written then."""
     with connect(db_path) as conn:
         found = conn.execute(

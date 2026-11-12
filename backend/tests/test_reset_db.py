@@ -21,16 +21,16 @@ from tests.conftest import isolate_reset_db
 
 
 class TestResetDb:
-    """reset_db.py rebuilds the DB from _inputs/ + a taxonomy source, preserving manual overrides."""
+    """reset_db.py rebuilds the DB from inputs/ + a taxonomy source, preserving manual overrides."""
 
     def _isolate(self, tmp_path, monkeypatch):
-        """Point reset_db at a temp _inputs/ (holding the sample statement); return the _backups/ next
+        """Point reset_db at a temp inputs/ (holding the sample statement); return the backups/ next
         to seeded_db, where reset_db snapshots it."""
         reset_db = isolate_reset_db(tmp_path, monkeypatch)
         reset_db.INPUTS_DIR.mkdir()
         # Same filename _upload uses, so the inferred account (and thus import_hash) matches.
         (reset_db.INPUTS_DIR / "RELEVE_COMPTE_JOINT_2026_06_08.csv").write_bytes(SAMPLE_CSV)
-        return reset_db, tmp_path / "_backups"  # next to seeded_db
+        return reset_db, tmp_path / "backups"  # next to seeded_db
 
     @staticmethod
     def _mystery_row(db_path):
@@ -53,10 +53,10 @@ class TestResetDb:
             return conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
     def test_defaults_falls_back_to_example_data(self, tmp_path, monkeypatch):
-        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
         db_path = tmp_path / "new.db"
 
-        reset_db.reset(db_path, "defaults", None)  # no _config/ -> the fictional data/ example
+        reset_db.reset(db_path, "defaults", None)  # no config/ -> the fictional data/ example
 
         assert [code for code, *_ in self._accounts(db_path)] == [
             "PERSO",
@@ -69,7 +69,7 @@ class TestResetDb:
         assert self._count(db_path, "transactions") == 4  # the sample statement resolved to JOINT
 
     def test_demo_statements_build_a_working_example(self, tmp_path, monkeypatch):
-        # data/demo/ holds fictional statements for data/'s example accounts: copied into _inputs/,
+        # data/demo/ holds fictional statements for data/'s example accounts: copied into inputs/,
         # they must all import, pair their transfers and leave little uncategorised.
         reset_db = isolate_reset_db(tmp_path, monkeypatch)
         shutil.copytree(EXAMPLE_PROFILES.parent / "demo", reset_db.INPUTS_DIR)
@@ -119,8 +119,8 @@ class TestResetDb:
                 assert (saved, dipped) == pytest.approx((totals["epargne"], totals["desepargne"]), abs=0.01)
 
     def test_defaults_prefers_private_config_dir(self, tmp_path, monkeypatch):
-        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
-        config = tmp_path / "_config"
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
+        config = tmp_path / "config"
         config.mkdir()
         # An older accounts.csv with the since-removed include_in_full_view column still loads.
         (config / "accounts.csv").write_text(
@@ -159,7 +159,7 @@ class TestResetDb:
 
         reset_db.reset(seeded_db, "live", None)
 
-        # A restore point was written under _backups/<ts>/, and the override survived the rebuild.
+        # A restore point was written under backups/<ts>/, and the override survived the rebuild.
         snaps = list(backups.glob("*"))
         assert len(snaps) == 1 and (snaps[0] / "overrides.csv").exists()
         assert self._mystery_row(seeded_db) == (1, "courses", "cadeau")
@@ -177,7 +177,7 @@ class TestResetDb:
 
         reset_db.reset(demo_db, "defaults", None)  # the demo DB exists now: it gets snapshotted
 
-        assert len(list((demo_db.parent / "_backups").glob("*"))) == 1
+        assert len(list((demo_db.parent / "backups").glob("*"))) == 1
         assert not backups.exists()
 
     def test_live_rebuild_keeps_transfer_markers(self, seeded_db, client, tmp_path, monkeypatch):
@@ -202,15 +202,15 @@ class TestResetDb:
         export_config(seeded_db, backups / "20260101_000000")
         seeded_db.unlink()  # simulate a lost DB
 
-        reset_db.reset(seeded_db, "backup", None)  # restore from the latest snapshot + _inputs
+        reset_db.reset(seeded_db, "backup", None)  # restore from the latest snapshot + inputs
 
         assert seeded_db.exists()
         assert self._mystery_row(seeded_db) == (1, "courses", "cadeau")
 
     def test_inputs_use_user_profiles(self, tmp_path, monkeypatch):
-        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
         _write_profiles(tmp_path)
-        (tmp_path / "_inputs" / PROFILE_FILENAME).write_bytes(PROFILE_CSV)
+        (tmp_path / "inputs" / PROFILE_FILENAME).write_bytes(PROFILE_CSV)
         db_path = tmp_path / "new.db"
 
         reset_db.reset(db_path, "defaults", None)
@@ -222,7 +222,7 @@ class TestResetDb:
         assert by_account == {"JOINT": 4, "PERSO": 2}
 
     def test_rebuild_skips_rows_before_start_date(self, tmp_path, monkeypatch):
-        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
         _write_start_date(tmp_path, "2026-06-07")
         db_path = tmp_path / "new.db"
 
@@ -237,9 +237,9 @@ class TestResetDb:
     def test_live_rebuild_with_profiles_keeps_overrides(self, seeded_db, client, tmp_path, monkeypatch):
         # An upload and a rebuild parse the statement with the same profile, so the override made
         # on the uploaded row reattaches to the rebuilt one by import_hash.
-        reset_db, _backups = self._isolate(tmp_path, monkeypatch)
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
         _write_profiles(tmp_path)
-        (tmp_path / "_inputs" / PROFILE_FILENAME).write_bytes(PROFILE_CSV)
+        (tmp_path / "inputs" / PROFILE_FILENAME).write_bytes(PROFILE_CSV)
         _upload(client, filename=PROFILE_FILENAME, content=PROFILE_CSV)
         row = client.get("/api/transactions", params={"libelle_contains": "BOULANGERIE"}).json()["items"][0]
         client.patch(
@@ -257,7 +257,7 @@ class TestResetDb:
 
     def test_invalid_profiles_exit_before_delete(self, seeded_db, tmp_path, monkeypatch):
         reset_db, backups = self._isolate(tmp_path, monkeypatch)
-        config = tmp_path / "_config"
+        config = tmp_path / "config"
         config.mkdir()
         (config / "bank_profiles.toml").write_text("pas du toml [", encoding="utf-8")
 
@@ -269,7 +269,7 @@ class TestResetDb:
 
 
 class TestUploadMatchesRebuild:
-    """An upload hashes its rows like reset_db.py rebuilds them, and lands in _inputs/, so manual
+    """An upload hashes its rows like reset_db.py rebuilds them, and lands in inputs/, so manual
     overrides made after an upload survive a rebuild."""
 
     LIVRET_FILE = "RELEVE_LIVRET_A_2026_06_08.csv"
@@ -295,7 +295,7 @@ class TestUploadMatchesRebuild:
         body = resp.json()
         assert body["account"] == "LIVRET A"  # what reset_db.py infers from the filename
         assert body["archived_as"] == self.LIVRET_FILE
-        assert (tmp_path / "_inputs" / self.LIVRET_FILE).read_bytes() == SAMPLE_CSV
+        assert (tmp_path / "inputs" / self.LIVRET_FILE).read_bytes() == SAMPLE_CSV
 
     def test_override_survives_rebuild(self, seeded_db, client, tmp_path, monkeypatch):
         reset_db = isolate_reset_db(tmp_path, monkeypatch)
@@ -320,7 +320,7 @@ class TestUploadMatchesRebuild:
         assert self._mystery(seeded_db) == ("PERSO", 1, "courses", "cadeau")
 
     def test_archive_never_overwrites(self, client, tmp_path):
-        inputs = tmp_path / "_inputs"
+        inputs = tmp_path / "inputs"
         inputs.mkdir()
         (inputs / self.LIVRET_FILE).write_bytes(b"another statement")
 
@@ -341,8 +341,8 @@ class TestUploadMatchesRebuild:
         for row in rows:
             row["account"] = "LIVRET"
         import_transactions(rows, seeded_db)
-        (tmp_path / "_inputs").mkdir()
-        (tmp_path / "_inputs" / self.LIVRET_FILE).write_bytes(SAMPLE_CSV)
+        (tmp_path / "inputs").mkdir()
+        (tmp_path / "inputs" / self.LIVRET_FILE).write_bytes(SAMPLE_CSV)
         self._set_override(client)
 
         reset_db.reset(seeded_db, "live", None)

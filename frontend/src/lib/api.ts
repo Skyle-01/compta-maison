@@ -8,7 +8,7 @@ export interface ImportResult {
   balance_warnings: Record<string, number>;
   /** Bank profile that parsed the file ("default" = the built-in format). */
   profile: string;
-  /** File name the statement was copied to in _inputs/ (null: not copied, a rebuild will miss it). */
+  /** File name the statement was copied to in inputs/ (null: not copied, a rebuild will miss it). */
   archived_as: string | null;
   /** French warning when the file starts after a hole in its account's data. */
   gap_warning: string | null;
@@ -16,7 +16,7 @@ export interface ImportResult {
   start_warning: string | null;
 }
 
-/** One _inputs/ statement of a bulk import (error: why it was skipped). */
+/** One inputs/ statement of a bulk import (error: why it was skipped). */
 export interface InputFileResult {
   name: string;
   account: string | null;
@@ -41,7 +41,7 @@ export interface Silence {
   days: number;
 }
 
-/** What the DB and the _inputs/ statements cover for one account (external savings excluded). */
+/** What the DB and the inputs/ statements cover for one account (external savings excluded). */
 export interface AccountCoverage {
   code: string;
   label: string;
@@ -49,12 +49,21 @@ export interface AccountCoverage {
   first: string | null;
   last: string | null;
   operations: number;
-  /** _inputs/ statements of the account with rows since the start date. */
+  /** inputs/ statements of the account with rows since the start date. */
   files: number;
   /** Longest stretch without any operation in the DB: a quiet spell or a missing statement. */
   longest_silence: Silence | null;
-  /** Days covered by no _inputs/ statement, between two of them: a statement is missing. */
+  /** Days covered by no inputs/ statement, between two of them: a statement is missing. */
   holes: Silence[];
+}
+
+/** Where the private data lives (`GET|PUT /api/data-dir`). Until `configured`, every other route
+ *  answers 409. `locked`: fixed by the COMPTA_DATA_DIR variable, the UI cannot change it. */
+export interface DataDirStatus {
+  configured: boolean;
+  path: string | null;
+  locked: boolean;
+  problem: string | null;
 }
 
 /** What « Enregistrer la configuration » wrote to the config dir, and where the files it replaced
@@ -606,6 +615,10 @@ export const api = {
   updateRule: (id: number, r: RuleInput): Promise<Rule> =>
     request(`/api/rules/${id}`, json("PUT", r)),
   deleteRule: (id: number): Promise<void> => request(`/api/rules/${id}`, { method: "DELETE" }),
+
+  dataDir: (): Promise<DataDirStatus> => request("/api/data-dir"),
+  /** Choose the data folder (created when missing); the running app switches to it. */
+  setDataDir: (path: string): Promise<DataDirStatus> => request("/api/data-dir", json("PUT", { path })),
 
   /** Regenerate the config dir's CSVs from the DB (after backing up the old ones and the DB). */
   exportConfig: (): Promise<ConfigExportResult> => request("/api/config/export", { method: "POST" }),

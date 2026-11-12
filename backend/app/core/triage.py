@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.core.categorize import find_conflicts
-from app.db import DEFAULT_DB_PATH, connect, real_flow_clause
+from app.db import connect, real_flow_clause
 
 # Bank vocabulary and French glue words: they say how money moved, not to whom, so they never
 # identify a merchant on their own.
@@ -240,7 +240,7 @@ def _scope(month: str | None, account: str | None) -> tuple[str, tuple]:
 
 
 def uncategorized_groups(
-    db_path: Path = DEFAULT_DB_PATH, month: str | None = None, account: str | None = None
+    db_path: Path, month: str | None = None, account: str | None = None
 ) -> list[UncategorizedGroup]:
     """Uncategorised non-transfer operations (optionally of one budget month and/or one account)
     grouped by label key, largest gross total (debits + credits) first. Suggestions learn from every
@@ -335,7 +335,7 @@ def rule_preview(
 
 
 def conflicted_operations(
-    db_path: Path = DEFAULT_DB_PATH, month: str | None = None, account: str | None = None
+    db_path: Path, month: str | None = None, account: str | None = None
 ) -> list[tuple[int, list[tuple[int, str, int]]]]:
     """(transaction id, rules in cause) of the operations in conflict (optionally of one budget
     month and/or one account), newest first."""

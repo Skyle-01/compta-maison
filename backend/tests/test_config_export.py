@@ -29,14 +29,14 @@ PRESERVED = {
 }
 
 
-def _config(tmp_path):
-    return tmp_path / "_config"
+def config(tmp_path):
+    return tmp_path / "config"
 
 
 def _write_preserved(tmp_path) -> None:
-    _config(tmp_path).mkdir(exist_ok=True)
+    config(tmp_path).mkdir(exist_ok=True)
     for name, content in PRESERVED.items():
-        (_config(tmp_path) / name).write_bytes(content)
+        (config(tmp_path) / name).write_bytes(content)
 
 
 def _state(db_path) -> dict:
@@ -53,7 +53,7 @@ def _state(db_path) -> dict:
 
 
 def test_tests_never_write_the_real_config_dir(client, tmp_path):
-    assert client.app.state.config_dir == _config(tmp_path)
+    assert client.app.state.config_dir == config(tmp_path)
 
 
 def test_writes_the_config_files(seeded_db, client, tmp_path):
@@ -69,7 +69,7 @@ def test_writes_the_config_files(seeded_db, client, tmp_path):
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["config_dir"] == str(_config(tmp_path))
+    assert body["config_dir"] == str(config(tmp_path))
     assert {k: body[k] for k in ("accounts", "categories", "rules", "overrides", "transfer_markers")} == {
         "accounts": 5,
         "categories": 6,
@@ -79,7 +79,7 @@ def test_writes_the_config_files(seeded_db, client, tmp_path):
     }
 
     def read(name: str) -> list[str]:
-        return (_config(tmp_path) / name).read_text(encoding="utf-8-sig").splitlines()
+        return (config(tmp_path) / name).read_text(encoding="utf-8-sig").splitlines()
 
     assert read("accounts.csv")[0] == "code;label;type;sort_order;deposit_pattern;aliases;start_date;color"
     assert "ENFANT;Livret enfant;savings;5;VERS LIVRET ENFANT;;;" in read("accounts.csv")
@@ -89,7 +89,7 @@ def test_writes_the_config_files(seeded_db, client, tmp_path):
         ";variable / courses;;MYSTERY SHOP;à vérifier;;JOINT;" in line for line in read("overrides.csv")
     )
     assert read("transfer_markers.csv") == ["marker", "VIR"]
-    assert not list(_config(tmp_path).glob("*.tmp"))
+    assert not list(config(tmp_path).glob("*.tmp"))
 
 
 def test_leaves_other_config_files_alone(seeded_db, client, tmp_path):
@@ -98,31 +98,31 @@ def test_leaves_other_config_files_alone(seeded_db, client, tmp_path):
     assert client.post("/api/config/export").status_code == 200
 
     for name, content in PRESERVED.items():
-        assert (_config(tmp_path) / name).read_bytes() == content
-    assert sorted(p.name for p in _config(tmp_path).iterdir()) == sorted([*PRESERVED, *CONFIG_FILES])
+        assert (config(tmp_path) / name).read_bytes() == content
+    assert sorted(p.name for p in config(tmp_path).iterdir()) == sorted([*PRESERVED, *CONFIG_FILES])
 
 
 def test_backs_up_the_previous_config_and_the_db(seeded_db, client, tmp_path):
     _upload(client)
     _write_preserved(tmp_path)
-    export_config(seeded_db, _config(tmp_path))
+    export_config(seeded_db, config(tmp_path))
     client.post("/api/rules", json={"category_id": _category_id(client, "bar"), "pattern": "PUB"})
-    previous = {name: (_config(tmp_path) / name).read_bytes() for name in CONFIG_FILES}
+    previous = {name: (config(tmp_path) / name).read_bytes() for name in CONFIG_FILES}
 
     body = client.post("/api/config/export").json()
 
     backup = Path(body["backup_dir"])
-    assert backup.parent == tmp_path / "_backups"  # next to the DB
+    assert backup.parent == tmp_path / "backups"  # next to the DB
     assert {name: (backup / name).read_bytes() for name in CONFIG_FILES} == previous
     assert not (backup / "bank_profiles.toml").exists()  # only the files the save replaces
     with sqlite3.connect(backup / "compta.db") as copy:
         assert copy.execute("SELECT COUNT(*) FROM transactions").fetchone() == (4,)
-    assert (_config(tmp_path) / "rules.csv").read_bytes() != previous["rules.csv"]  # now has PUB
+    assert (config(tmp_path) / "rules.csv").read_bytes() != previous["rules.csv"]  # now has PUB
 
 
 def test_first_save_backs_up_only_the_db_and_is_no_restore_source(seeded_db, client, tmp_path, monkeypatch):
     reset_db = isolate_reset_db(tmp_path, monkeypatch)
-    older = tmp_path / "_backups" / "20000101_000000"
+    older = tmp_path / "backups" / "20000101_000000"
     export_config(seeded_db, older)
 
     body = client.post("/api/config/export").json()
@@ -130,13 +130,13 @@ def test_first_save_backs_up_only_the_db_and_is_no_restore_source(seeded_db, cli
     backup = Path(body["backup_dir"])
     assert backup != older
     assert [p.name for p in backup.iterdir()] == ["compta.db"]
-    assert reset_db._latest_backup(tmp_path / "_backups") == older  # the DB-only backup is skipped
+    assert reset_db._latest_backup(tmp_path / "backups") == older  # the DB-only backup is skipped
 
 
 def test_an_interrupted_save_leaves_no_truncated_csv(seeded_db, client, tmp_path, monkeypatch):
-    _config(tmp_path).mkdir()
+    config(tmp_path).mkdir()
     for name in CONFIG_FILES:
-        (_config(tmp_path) / name).write_text("ancien\n", encoding="utf-8")
+        (config(tmp_path) / name).write_text("ancien\n", encoding="utf-8")
     real_replace = config_export.os.replace
     calls = []
 
@@ -152,19 +152,19 @@ def test_an_interrupted_save_leaves_no_truncated_csv(seeded_db, client, tmp_path
 
     assert resp.status_code == 500
     assert resp.json()["detail"] == [
-        f"Impossible d’écrire {_config(tmp_path) / 'categories.csv'} : Permission refusée"
+        f"Impossible d’écrire {config(tmp_path) / 'categories.csv'} : Permission refusée"
     ]
-    assert not list(_config(tmp_path).glob("*.tmp"))
-    assert (_config(tmp_path) / "accounts.csv").read_text(encoding="utf-8-sig").startswith("code;")
+    assert not list(config(tmp_path).glob("*.tmp"))
+    assert (config(tmp_path) / "accounts.csv").read_text(encoding="utf-8-sig").startswith("code;")
     for name in CONFIG_FILES[1:]:  # never half-written: still the old content
-        assert (_config(tmp_path) / name).read_text(encoding="utf-8") == "ancien\n"
+        assert (config(tmp_path) / name).read_text(encoding="utf-8") == "ancien\n"
 
 
 def test_round_trip_through_reset_db_defaults(seeded_db, client, tmp_path, monkeypatch):
     reset_db = isolate_reset_db(tmp_path, monkeypatch)
     _write_preserved(tmp_path)
-    (_config(tmp_path) / "bank_profiles.toml").unlink()  # not a valid profile; the statements use the default
-    (_config(tmp_path) / "settings.toml").unlink()  # its start date would drop the June rows
+    (config(tmp_path) / "bank_profiles.toml").unlink()  # not a valid profile; the statements use the default
+    (config(tmp_path) / "settings.toml").unlink()  # its start date would drop the June rows
     # Every kind of state the config carries: a described rule, a budget target, a manual category
     # with a note, a manual pair, a manual "not a transfer", and explicit transfer markers.
     _upload(client)

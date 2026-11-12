@@ -75,18 +75,18 @@ def test_a_file_name_that_does_not_give_the_account_back_is_an_error(db):
 
     with pytest.raises(ValueError, match="COMPTE JOINT"):
         export_statements(db)
-    assert not (db.parent / "_backups").exists()
+    assert not (db.parent / "backups").exists()
 
 
 def test_nothing_is_written_to_the_inputs_dir(db, tmp_path):
     import_rows(db, *ROWS)
-    inputs = tmp_path / "_inputs"
+    inputs = tmp_path / "inputs"
     inputs.mkdir()
 
     result = export_statements(db)
 
     assert list(inputs.iterdir()) == []
-    assert _inputs_of(result).parent.parent == db.parent / "_backups"
+    assert _inputs_of(result).parent.parent == db.parent / "backups"
     assert list(_inputs_of(result).glob("*.tmp")) == []
 
 
@@ -94,7 +94,7 @@ def test_empty_db_writes_nothing(db):
     result = export_statements(db)
 
     assert (result.backup_dir, result.files, result.operations) == (None, 0, 0)
-    assert not (db.parent / "_backups").exists()
+    assert not (db.parent / "backups").exists()
 
 
 def test_route(client, db):
