@@ -30,7 +30,7 @@ export function parseReportRequest(search: string, available: string[]): ReportR
   const params = new URLSearchParams(search);
   const asked = (params.get("months") ?? params.get("month") ?? "").split(",");
   const months = [...new Set(asked.filter((m) => available.includes(m)))].sort();
-  const fallback = reportMonth(available, null);
+  const fallback = reportMonth(available);
   return {
     months: months.length > 0 ? months : fallback ? [fallback] : [],
     operations: params.get("operations") !== "0",

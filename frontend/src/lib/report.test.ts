@@ -24,6 +24,7 @@ const node = (id: number, name: string, over: Partial<AverageNode> = {}): Averag
   name,
   expenses: 0,
   income: 0,
+  STATEMENT_MONTHS,
   month_expenses: 0,
   month_income: 0,
   target: null,
@@ -61,13 +62,10 @@ const plain = (s: string) => s.replace(/[  ]/g, " ");
 describe("report months", () => {
   const available = ["2026-09", "2026-08", "2026-07"]; // newest first, 2026-09 still filling
 
-  it("defaults to the latest complete month, honours a known requested one", () => {
-    expect(reportMonth(available, null)).toBe("2026-08");
-    expect(reportMonth(available, "2026-07")).toBe("2026-07");
-    expect(reportMonth(available, "2026-09")).toBe("2026-09");
-    expect(reportMonth(available, "2020-01")).toBe("2026-08");
-    expect(reportMonth(["2026-09"], null)).toBe("2026-09");
-    expect(reportMonth([], null)).toBeNull();
+  it("defaults to the latest complete month, else the only one", () => {
+    expect(reportMonth(available)).toBe("2026-08");
+    expect(reportMonth(["2026-09"])).toBe("2026-09");
+    expect(reportMonth([])).toBeNull();
   });
 
   it("links the dashboard's month, except the month still filling", () => {
@@ -77,7 +75,8 @@ describe("report months", () => {
 
   it("lists the statement months oldest first, ending with the report month", () => {
     expect(statementMonths(available, "2026-08")).toEqual(["2026-07", "2026-08"]);
-    expect(statementMonths(available, "2026-09", 2)).toEqual(["2026-08", "2026-09"]);
+    const many = ["2026-09", "2026-08", "2026-07", "2026-06", "2026-05", "2026-04", "2026-03", "2026-02"];
+    expect(statementMonths(many, "2026-09")).toEqual(many.slice(0, STATEMENT_MONTHS).reverse());
   });
 
   it("titles the report with the month", () => {

@@ -34,11 +34,10 @@ export function isFilling(avg: CategoryAverages): boolean {
   return avg.month !== null && avg.month === avg.current_month;
 }
 
-/** The month the report covers: the requested one when it exists, else the latest complete month
- *  (the latest one is still filling until the next paycheck), else the only one. `available` is
- *  newest first, like Dashboard.months_available. */
-export function reportMonth(available: string[], requested: string | null): string | null {
-  if (requested && available.includes(requested)) return requested;
+/** The month the report covers by default: the latest complete month (the latest one is still filling
+ *  until the next paycheck), else the only one. `available` is newest first, like
+ *  Dashboard.months_available. */
+export function reportMonth(available: string[]): string | null {
   return available[1] ?? available[0] ?? null;
 }
 
@@ -48,11 +47,11 @@ export function exportLink(month: string, available: string[]): string {
   return month === available[0] ? "/export" : `/export?month=${month}`;
 }
 
-/** The statement's columns, oldest first: up to `count` budget months ending with `month`. */
-export function statementMonths(available: string[], month: string, count = STATEMENT_MONTHS): string[] {
+/** The statement's columns, oldest first: up to `STATEMENT_MONTHS` budget months ending with `month`. */
+export function statementMonths(available: string[], month: string): string[] {
   return available
     .filter((m) => m <= month)
-    .slice(0, count)
+    .slice(0, STATEMENT_MONTHS)
     .reverse();
 }
 
