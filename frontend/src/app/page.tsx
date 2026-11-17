@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import BudgetGlance from "@/components/BudgetGlance";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
+import MonthNotice from "@/components/MonthNotice";
 import { useFilters } from "@/components/FiltersProvider";
 import PeriodFilter from "@/components/PeriodFilter";
 import ResteTrend from "@/components/ResteTrend";
@@ -196,17 +197,7 @@ export default function DashboardPage() {
     };
   }, [tree, treeMonth]);
 
-  if (error) return <p className="text-red-700">{error}</p>;
-  if (!data) return <p className="text-zinc-500">Chargement…</p>;
-
-  if (!data.month) {
-    return (
-      <p className="text-zinc-500">
-        Aucune transaction pour l’instant — commencez par importer un relevé bancaire depuis la page
-        Importer.
-      </p>
-    );
-  }
+  if (error || !data?.month) return <MonthNotice data={data} error={error} />;
 
   const month = data.month;
   const shown = operations?.month === month ? operations : null; // none until this month's answer

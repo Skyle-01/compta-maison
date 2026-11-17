@@ -3,6 +3,7 @@
 import Link from "next/link";
 import BudgetSection from "@/components/BudgetSection";
 import HelpLink from "@/components/HelpLink";
+import MonthNotice from "@/components/MonthNotice";
 import PeriodFilter from "@/components/PeriodFilter";
 import { hasTargets } from "@/lib/budget";
 import { useMonthDashboard } from "@/lib/useMonthDashboard";
@@ -10,16 +11,7 @@ import { useMonthDashboard } from "@/lib/useMonthDashboard";
 export default function BudgetPage() {
   const { data, error } = useMonthDashboard();
 
-  if (error) return <p className="text-red-700">{error}</p>;
-  if (!data) return <p className="text-zinc-500">Chargement…</p>;
-  if (!data.month) {
-    return (
-      <p className="text-zinc-500">
-        Aucune transaction pour l&apos;instant : commencez par importer un relevé bancaire depuis la page
-        Importer.
-      </p>
-    );
-  }
+  if (error || !data?.month) return <MonthNotice data={data} error={error} />;
 
   return (
     <div className="space-y-6">
