@@ -1,19 +1,30 @@
 import { describe, expect, it } from "vitest";
-import type { AverageNode, CategoryAverages, CategoryNode, MonthTotals } from "./api";
+import {
+  type AverageNode,
+  type CategoryAverages,
+  type CategoryNode,
+  type Dashboard,
+  type MonthTotals,
+} from "./api";
 import {
   averageMonth,
+  averageNote,
   breakdown,
   buildStatement,
   dayMonth,
+  monthFigures,
   netOfRefunds,
   notable,
   partialInReport,
+  partialNote,
   exportLink,
   reportCards,
   reportMonth,
   reportSummary,
+  reportSummaryParts,
   reportTitle,
   splitNote,
+  STATEMENT_MONTHS,
   statementMonths,
   treeLeaves,
   unclassifiedNote,
@@ -24,7 +35,6 @@ const node = (id: number, name: string, over: Partial<AverageNode> = {}): Averag
   name,
   expenses: 0,
   income: 0,
-  STATEMENT_MONTHS,
   month_expenses: 0,
   month_income: 0,
   target: null,
@@ -258,11 +268,11 @@ describe("breakdown on a month still filling", () => {
 describe("reportCards", () => {
   it("lists the four cards, the savings amber and the reste red when negative", () => {
     const cards = reportCards({ income: 2000, expenses: 1500, epargne: 100, desepargne: 400, reste: -200 });
-    expect(cards.map((c) => [c.label, c.value, c.tone])).toEqual([
-      ["Revenus", 2000, "good"],
-      ["Dépenses", 1500, "bad"],
-      ["Épargne", -300, "warn"],
-      ["Reste", -200, "bad"],
+    expect(cards.map((c) => [c.label, c.value, c.tone, c.goodIsUp])).toEqual([
+      ["Revenus", 2000, "good", true],
+      ["Dépenses", 1500, "bad", false],
+      ["Épargne", -300, "warn", true],
+      ["Reste", -200, "bad", true],
     ]);
   });
 });
@@ -382,18 +392,100 @@ describe("splitNote", () => {
 
 describe("reportSummary", () => {
   it("tells the month in one sentence, with the average leftover", () => {
-    expect(
-      plain(reportSummary("2026-08", { income: 2000, expenses: 1500, epargne: 300, desepargne: 0, reste: 200 }, 150)),
-    ).toBe(
+    const parts = reportSummaryParts(
+      "2026-08",
+      { income: 2000, expenses: 1500, epargne: 300, desepargne: 0, reste: 200 },
+      150,
+    );
+    expect(plain(reportSummary(parts))).toBe(
       "En août 2026, le foyer a gagné 2 000,00 € et dépensé 1 500,00 €. Il a mis 300,00 € de côté. Il reste 200,00 € (en moyenne 150,00 € par mois).",
     );
   });
 
   it("says what is missing in a deficit month, without an average", () => {
-    expect(
-      plain(reportSummary("2026-08", { income: 1000, expenses: 1500, epargne: 0, desepargne: 100, reste: -400 }, null)),
-    ).toBe(
+    const parts = reportSummaryParts(
+      "2026-08",
+      { income: 1000, expenses: 1500, epargne: 0, desepargne: 100, reste: -400 },
+      null,
+    );
+    expect(plain(reportSummary(parts))).toBe(
       "En août 2026, le foyer a gagné 1 000,00 € et dépensé 1 500,00 €. Il a puisé 100,00 € dans son épargne. Il manque 400,00 €.",
     );
+  });
+});
+
+describe("partialNote and averageNote", () => {
+  it("says nothing without a partial month, and names one or several", () => {
+    expect(partialNote([])).toBeNull();
+    expect(partialNote(["2026-06"])).toContain("juin 2026 est un mois partiel");
+    expect(partialNote(["2026-06", "2026-07"])).toContain("juin 2026, juillet 2026 sont des mois partiels");
+  });
+
+  it("tells what the averages cover, or that none is ready", () => {
+    expect(averageNote("sur 12 mois (a – b)")).toBe("Moyennes sur 12 mois (a – b), mois clos uniquement.");
+    expect(averageNote(null)).toContain("Pas encore de mois clos");
+  });
+});
+
+describe("monthFigures", () => {
+  const dashboard = (over: Partial<Dashboard> = {}): Dashboard => ({
+    month: "2026-08",
+    months_available: ["2026-09", "2026-08"],
+    months_partial: ["2026-07"],
+    income: 2000,
+    expenses: 1500,
+    epargne: 300,
+    desepargne: 0,
+    reste: 200,
+    by_category: { id: null, name: "total", credit: 0, debit: 0, balance: 0, children: [] },
+    uncategorized: { count: 2, credit: 0, debit: 0, difference: 0, balanced: true },
+    transfers: { count: 0, total: 0 },
+    history: [totals("2026-07"), totals("2026-08"), totals("2026-09")],
+    budget: {
+      months: 1,
+      target: 0,
+      actual: 0,
+      untargeted: 0,
+      groups: [],
+      savings_target: null,
+      income_reference: 0,
+      savings_actual: 0,
+    },
+    ...over,
+  });
+
+  it("nets the refunds off Revenus and Dépenses, with the average beside each card", () => {
+    const avg = averages({
+      totals: { income: 1810, expenses: 1310, epargne: 250, desepargne: 50, reste: 300 },
+      offset: { value: 10, month_value: 20 },
+    });
+    const f = monthFigures(dashboard(), avg, "2026-08");
+    expect(f.cards.map((c) => [c.label, c.value, c.average])).toEqual([
+      ["Revenus", 1980, 1800],
+      ["Dépenses", 1480, 1300],
+      ["Épargne", 300, 200],
+      ["Reste", 200, 300],
+    ]);
+    expect(plain(f.parts.average ?? "")).toBe("en moyenne 300,00 € par mois");
+    expect(f.averageNote).toContain("Moyennes sur 12 mois");
+  });
+
+  it("has no average while no budget month is complete", () => {
+    const f = monthFigures(dashboard(), averages({ months: 0, first_month: null, last_month: null }), "2026-08");
+    expect(f.cards.map((c) => c.average)).toEqual([null, null, null, null]);
+    expect(f.parts.average).toBeNull();
+    expect(f.averageNote).toContain("Pas encore de mois clos");
+  });
+
+  it("stops the Reste chart at the month and flags its partial months and unclassed operations", () => {
+    const f = monthFigures(dashboard(), averages({}), "2026-08");
+    expect(f.history.map((h) => h.month)).toEqual(["2026-07", "2026-08"]);
+    expect(f.partialNote).toContain("juillet 2026 est un mois partiel");
+    expect(f.unclassified).toBe(unclassifiedNote(2));
+    const clean = dashboard({
+      months_partial: [],
+      uncategorized: { count: 0, credit: 0, debit: 0, difference: 0, balanced: true },
+    });
+    expect(monthFigures(clean, averages({}), "2026-08")).toMatchObject({ partialNote: null, unclassified: null });
   });
 });

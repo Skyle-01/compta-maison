@@ -13,7 +13,7 @@ import {
   signedAmount,
   treeLabel,
 } from "./api";
-import { averageGap, gapText, gapTone, periodSummary } from "./averages";
+import { averageGap, gapText, gapTone } from "./averages";
 import { barWidth, budgetLeft, budgetRatio, budgetTone, hasTargets } from "./budget";
 import { MOBILE_CSS } from "./mobileReportStyle";
 import {
@@ -22,17 +22,18 @@ import {
   type BreakdownGroup,
   type BreakdownLine,
   type BreakdownSide,
+  type MonthCard,
+  type ReportCard,
   REPORT_AVERAGE,
+  REPORT_AVERAGE_TEXT,
   REPORT_NAME,
-  REPORT_TREND_MONTHS,
   averageMonth,
+  averageNote,
   breakdown,
+  cell,
   dayMonth,
-  netOfRefunds,
-  partialInReport,
-  reportSummaryParts,
+  monthFigures,
   splitNote,
-  unclassifiedNote,
 } from "./report";
 import type { ReportData } from "./reportData";
 import { reportRangeTitle } from "./reportRequest";
@@ -53,10 +54,6 @@ const esc = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const euros0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-
-/** A table cell's amount: nothing without a value, a dash for zero. */
-const amount = (value: number | null): string =>
-  value === null ? "" : Math.abs(value) < 0.005 ? "–" : formatEuro(value);
 
 const signClass = (value: number): string => (value >= 0 ? "good" : "bad");
 
@@ -79,24 +76,22 @@ function gapSpan(month: number, average: number | null, goodIsUp: boolean): stri
 }
 
 /** One line of the equation « Revenus − Dépenses − Épargne = Reste » with its average and gap. */
-function equationRow(
-  op: string,
-  label: string,
-  value: number,
-  average: number | null,
-  goodIsUp: boolean,
-  valueClass: string,
-  total = false,
-): string {
-  const gap = gapSpan(value, average, goodIsUp);
+function equationRow(op: string, card: ReportCard, average: number | null, total = false): string {
+  const gap = gapSpan(card.value, average, card.goodIsUp);
   const sub =
     average === null ? "" : `<span class="sub">moyenne ${esc(formatEuro(average))}${gap ? ` · ${gap}` : ""}</span>`;
-  return `<div class="row${total ? " total" : ""}"><dt><span class="op">${op}</span>${esc(label)}</dt><dd class="${valueClass}">${esc(formatEuro(value))}</dd>${sub}</div>`;
+  return `<div class="row${total ? " total" : ""}"><dt><span class="op">${op}</span>${esc(card.label)}</dt><dd class="${card.tone}">${esc(formatEuro(card.value))}</dd>${sub}</div>`;
+}
+
+/** The four cards as « Revenus − Dépenses − Épargne = Reste ». */
+const CARD_OPERATORS = ["", "−", "−", "="];
+function equationHtml(cards: MonthCard[]): string {
+  return cards.map((c, i) => equationRow(CARD_OPERATORS[i], c, c.average, i === cards.length - 1)).join("");
 }
 
 function line(side: BreakdownSide, l: BreakdownLine, max: number, bar: boolean): string {
   const cls = l.tone ? ` n-${l.tone}` : "";
-  return `<div class="line"><span>${esc(l.name)}</span><span class="amt${cls}">${esc(amount(l.month))}</span>${
+  return `<div class="line"><span>${esc(l.name)}</span><span class="amt${cls}">${esc(cell(l.month))}</span>${
     bar ? `<span class="bar ${side}"><i style="width:${share(l.month, max)}%"></i></span>` : ""
   }</div>`;
 }
@@ -117,7 +112,7 @@ function breakdownHtml(title: string, groups: BreakdownGroup[], side: BreakdownS
           .join(" · ");
         return `<li><span class="nm">${esc(l.name)}${
           detail ? `<span class="detail">${esc(detail)}</span>` : ""
-        }</span><span class="amt${l.tone ? ` n-${l.tone}` : ""}">${esc(amount(l.month))}</span></li>`;
+        }</span><span class="amt${l.tone ? ` n-${l.tone}` : ""}">${esc(cell(l.month))}</span></li>`;
       })
       .join("");
     return `<details class="cat"><summary>${line(side, g, max, true)}</summary><ul class="leaves">${leaves}</ul></details>`;
@@ -234,25 +229,12 @@ function treeHtml(node: CategoryNode, depth: number, operations: Map<CategoryNod
 
 function monthArticle(month: string, r: ReportData, input: MobileReportInput): string {
   const { data, averages: avg } = r;
-  const net = netOfRefunds(data, avg.offset.month_value ?? 0);
-  const totals = avg.months > 0 ? netOfRefunds(avg.totals, avg.offset.value) : null;
-  const epargneNet = data.epargne - data.desepargne;
-  const history = data.history.filter((h) => h.month <= month).slice(-REPORT_TREND_MONTHS);
-  const parts = reportSummaryParts(month, net, totals?.reste ?? null);
-  const average = periodSummary(avg, REPORT_AVERAGE);
-  const unclassified = unclassifiedNote(data.uncategorized.count);
-  const partial = partialInReport(
-    history.map((h) => h.month),
-    data.months_partial,
+  const { parts, cards, history, unclassified, partialNote, averageNote: averageLine } = monthFigures(
+    data,
+    avg,
+    month,
   );
   const inProgress = month === input.available[0];
-
-  const equation = [
-    equationRow("", "Revenus", net.income, totals?.income ?? null, true, "good"),
-    equationRow("−", "Dépenses", net.expenses, totals?.expenses ?? null, false, "bad"),
-    equationRow("−", "Épargne", epargneNet, totals ? totals.epargne - totals.desepargne : null, true, "save"),
-    equationRow("=", "Reste", data.reste, totals?.reste ?? null, true, signClass(data.reste), true),
-  ].join("");
 
   const operations = input.operations
     ? `<details class="more"><summary>Opérations par catégorie</summary><div class="tree">${treeHtml(
@@ -267,22 +249,14 @@ function monthArticle(month: string, r: ReportData, input: MobileReportInput): s
 <p class="verdict ${signClass(data.reste)}">${esc(parts.verdict)}</p>
 ${parts.average ? `<p class="avg muted">${esc(parts.average)}</p>` : ""}
 <p class="story">${esc(parts.story)}</p>
-<dl class="eq">${equation}</dl>
-<p class="note">${
-    average ? `Moyennes ${esc(average)}, mois clos uniquement.` : "Pas encore de mois clos : les moyennes viendront avec le prochain mois."
-  }</p>
+<dl class="eq">${equationHtml(cards)}</dl>
+<p class="note">${esc(averageLine)}</p>
 ${unclassified ? `<p class="alert">${esc(unclassified)}</p>` : ""}
 ${breakdownHtml("Où part l'argent", breakdown(avg, "expenses"), "expenses", "Aucune dépense classée ce mois-ci.")}
 ${breakdownHtml("D'où vient l'argent", breakdown(avg, "income"), "income", "Aucun revenu classé ce mois-ci.")}
 ${budgetHtml(data.budget)}
 ${trendHtml(history, month, data.history.at(-1)?.month, data.months_partial)}
-${
-  partial.length > 0
-    ? `<p class="note">${esc(partial.map(frenchMonth).join(", "))} ${
-        partial.length === 1 ? "est un mois partiel" : "sont des mois partiels"
-      } : un compte courant n'y avait pas encore commencé, les totaux sont incomplets et ne comptent pas dans les moyennes.</p>`
-    : ""
-}
+${partialNote ? `<p class="note">${esc(partialNote)}</p>` : ""}
 ${operations}
 </article>`;
 }
@@ -295,7 +269,7 @@ function averageListHtml(title: string, groups: AverageGroup[], side: BreakdownS
   const target = (l: AverageLine) =>
     l.target === null ? "" : `<span class="detail">objectif ${esc(formatEuro(l.target))}</span>`;
   const head = (g: AverageGroup) =>
-    `<div class="line"><span>${esc(g.name)}${target(g)}</span><span class="amt">${esc(amount(g.value))}</span><span class="bar ${side}"><i style="width:${share(
+    `<div class="line"><span>${esc(g.name)}${target(g)}</span><span class="amt">${esc(cell(g.value))}</span><span class="bar ${side}"><i style="width:${share(
       g.value,
       max,
     )}%"></i></span></div>`;
@@ -305,40 +279,35 @@ function averageListHtml(title: string, groups: AverageGroup[], side: BreakdownS
       : `<details class="cat"><summary>${head(g)}</summary><ul class="leaves">${g.leaves
           .map(
             (l) =>
-              `<li><span class="nm">${esc(l.name)}${target(l)}</span><span class="amt">${esc(amount(l.value))}</span></li>`,
+              `<li><span class="nm">${esc(l.name)}${target(l)}</span><span class="amt">${esc(cell(l.value))}</span></li>`,
           )
           .join("")}</ul></details>`,
   );
   const muted =
     unclassified === null
       ? ""
-      : `<div class="cat"><div class="line flat"><span class="muted">Non classé</span><span class="amt muted">${esc(amount(unclassified))}</span></div></div>`;
+      : `<div class="cat"><div class="line flat"><span class="muted">Non classé</span><span class="amt muted">${esc(cell(unclassified))}</span></div></div>`;
   return `<h3>${title}</h3>${rows.join("")}${muted}`;
 }
-
-const CARD_OPERATORS = ["", "−", "−", "="];
 
 /** « Un mois moyen »: the average of the complete months, once for the whole export (so outside the
  *  month articles); empty while no budget month is complete. */
 function averageMonthHtml(avg: CategoryAverages): string {
   const m = averageMonth(avg, REPORT_AVERAGE);
   if (!m) return "";
-  const equation = m.cards
-    .map((c, i) => equationRow(CARD_OPERATORS[i], c.label, c.value, null, true, c.tone, i === m.cards.length - 1))
-    .join("");
   const savings =
     m.savings.length === 0
       ? ""
       : `<h3>Épargne</h3>${m.savings
           .map(
             (s) =>
-              `<div class="cat"><div class="line flat"><span>${esc(s.name)}</span><span class="amt">${esc(amount(s.value))}</span></div></div>`,
+              `<div class="cat"><div class="line flat"><span>${esc(s.name)}</span><span class="amt">${esc(cell(s.value))}</span></div></div>`,
           )
           .join("")}`;
   return `<section class="avgmonth">
 <h2>Un mois moyen</h2>
-<p class="note">Moyennes ${esc(m.period)}, mois clos uniquement.</p>
-<dl class="eq">${equation}</dl>
+<p class="note">${esc(averageNote(m.period))}</p>
+<dl class="eq">${equationHtml(m.cards.map((c) => ({ ...c, average: null })))}</dl>
 ${averageListHtml("Où part l'argent en moyenne", m.spending, "expenses", m.spendingUnclassified)}
 ${averageListHtml("D'où vient l'argent en moyenne", m.income, "income", m.incomeUnclassified)}
 ${savings}
@@ -350,7 +319,7 @@ const HELP = [
   "Revenus − Dépenses − Épargne = Reste : ce qui reste sur les comptes courants une fois l'épargne mise de côté. Négatif, il a fallu puiser dans les réserves ou le découvert.",
   "Les remboursements (Sécurité sociale, achat rendu...) sont déduits de la dépense au lieu de compter comme un revenu.",
   "Les virements entre nos propres comptes ne sont ni des revenus ni des dépenses.",
-  "La moyenne porte sur les 12 derniers mois clos. En gras rouge : un montant bien au-dessus de la normale pour une dépense, ou de l'objectif. En gras vert : un écart aussi net mais favorable.",
+  `La moyenne porte sur ${REPORT_AVERAGE_TEXT}. En gras rouge : un montant bien au-dessus de la normale pour une dépense, ou de l'objectif. En gras vert : un écart aussi net mais favorable.`,
 ];
 
 /** The whole page. Months are listed oldest first (the newest one opens first when the script runs). */

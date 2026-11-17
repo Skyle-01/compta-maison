@@ -1,8 +1,15 @@
 import { Fragment } from "react";
 import type { CategoryAverages, MonthTotals } from "@/lib/api";
-import { buildStatement, isFilling, notable, type StatementRow, type StatementSection } from "@/lib/report";
+import {
+  buildStatement,
+  cell,
+  isFilling,
+  notable,
+  type StatementRow,
+  type StatementSection,
+} from "@/lib/report";
 import { monthTick } from "@/lib/trend";
-import { cell, CURRENT_COLUMN, highlight, NUM } from "./tableStyles";
+import { CURRENT_COLUMN, highlight, NUM } from "./tableStyles";
 
 const SECTION_COLOR: Record<StatementSection["kind"], string> = {
   income: "text-green-700",

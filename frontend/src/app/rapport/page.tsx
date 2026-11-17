@@ -6,18 +6,15 @@ import { type Account, errorMessage, formatEuro, frenchMonth } from "@/lib/api";
 import { useFilters } from "@/components/FiltersProvider";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
-import { periodSummary } from "@/lib/averages";
 import { moneyFlow } from "@/lib/moneyFlow";
 import {
   averageMonth,
+  monthFigures,
   NOTABLE_MIN,
   NOTABLE_RATIO,
-  netOfRefunds,
-  partialInReport,
   REPORT_AVERAGE,
-  REPORT_TREND_MONTHS,
+  REPORT_AVERAGE_TEXT,
   reportSummary,
-  unclassifiedNote,
 } from "@/lib/report";
 import { loadReport, type ReportData } from "@/lib/reportData";
 import { parseReportRequest, reportRangeTitle, type ReportRequest } from "@/lib/reportRequest";
@@ -47,18 +44,8 @@ function Report({
   withFlow: boolean;
 }) {
   const { data, averages: avg } = report;
-  // Revenus and Dépenses net of refunds, as in the report's tables (lib/report.ts::netOfRefunds).
-  const net = netOfRefunds(data, avg.offset.month_value ?? 0);
-  const totals = avg.months > 0 ? netOfRefunds(avg.totals, avg.offset.value) : null;
-  const summary = periodSummary(avg, REPORT_AVERAGE);
-  const epargneNet = data.epargne - data.desepargne;
+  const figures = monthFigures(data, avg, month);
   const flow = moneyFlow(data);
-  const history = data.history.filter((h) => h.month <= month).slice(-REPORT_TREND_MONTHS);
-  const unclassified = unclassifiedNote(data.uncategorized.count);
-  const partial = partialInReport(
-    history.map((h) => h.month),
-    data.months_partial,
-  );
   const today = new Intl.DateTimeFormat("fr-FR").format(new Date());
 
   return (
@@ -76,49 +63,20 @@ function Report({
         </header>
 
         <p className="text-base leading-relaxed text-zinc-700">
-          {reportSummary(month, net, totals?.reste ?? null)}
+          {reportSummary(figures.parts)}
         </p>
 
         <div className="mt-5 grid grid-cols-4 gap-3">
-          <ReportStat
-            label="Revenus"
-            value={net.income}
-            average={totals?.income ?? null}
-            goodIsUp
-            valueClass="text-green-700"
-          />
-          <ReportStat
-            label="Dépenses"
-            value={net.expenses}
-            average={totals?.expenses ?? null}
-            goodIsUp={false}
-            valueClass="text-red-700"
-          />
-          <ReportStat
-            label="Épargne"
-            value={epargneNet}
-            average={totals ? totals.epargne - totals.desepargne : null}
-            goodIsUp
-            valueClass={epargneNet >= 0 ? "text-violet-700" : "text-amber-700"}
-          />
-          <ReportStat
-            label="Reste"
-            value={data.reste}
-            average={totals?.reste ?? null}
-            goodIsUp
-            valueClass={data.reste >= 0 ? "text-green-700" : "text-red-700"}
-          />
+          {figures.cards.map((card) => (
+            <ReportStat key={card.label} card={card} />
+          ))}
         </div>
-        <p className="mt-2 text-xs text-zinc-500">
-          {summary
-            ? `Moyennes ${summary}, mois clos uniquement.`
-            : "Pas encore de mois clos : les moyennes viendront avec le prochain mois."}
-        </p>
-        {unclassified && <p className="mt-1 text-xs text-amber-700">{unclassified}</p>}
+        <p className="mt-2 text-xs text-zinc-500">{figures.averageNote}</p>
+        {figures.unclassified && <p className="mt-1 text-xs text-amber-700">{figures.unclassified}</p>}
 
         <div className="mt-5">
           <ResteTrend
-            history={history}
+            history={figures.history}
             current={month}
             latest={data.history.at(-1)?.month}
             partial={data.months_partial}
@@ -154,18 +112,10 @@ function Report({
               .
             </li>
             <li>
-              La moyenne porte sur les {REPORT_TREND_MONTHS} derniers mois clos ; l’écart compare le mois à cette
-              moyenne (en vert quand c’est favorable, en rouge sinon).
+              La moyenne porte sur {REPORT_AVERAGE_TEXT} ; l’écart compare le mois à cette moyenne (en vert
+              quand c’est favorable, en rouge sinon).
             </li>
-            {partial.length > 0 && (
-              <li>
-                {partial.length === 1
-                  ? `${frenchMonth(partial[0])} est un mois partiel`
-                  : `${partial.map(frenchMonth).join(", ")} sont des mois partiels`}{" "}
-                : un compte courant n&apos;y avait pas encore commencé, donc les totaux sont incomplets. Ils ne
-                comptent pas dans les moyennes.
-              </li>
-            )}
+            {figures.partialNote && <li>{figures.partialNote}</li>}
             <li>
               Dans les tableaux, un montant en gras signale un mois inhabituel : en{" "}
               <span className={HIGHLIGHT.bad}>rouge</span> un objectif dépassé ou un écart défavorable d’au

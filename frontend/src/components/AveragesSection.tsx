@@ -24,6 +24,8 @@ import {
   visibleAverageNodes,
 } from "@/lib/averages";
 import { budgetRatio, budgetTone } from "@/lib/budget";
+import { CARD_TEXT } from "@/components/tableStyles";
+import { reportCards, type ReportCard } from "@/lib/report";
 
 /** The Objectif cell's colour: green while under 90 % of the target, then the Budget bands. */
 const OBJECTIVE_TEXT = { ...TONE_TEXT, ok: "text-green-700" };
@@ -139,28 +141,22 @@ function AverageRow({
 
 /** A card average, with its gap to the displayed month when there is one. */
 function AverageStat({
-  label,
-  value,
+  card,
   month,
   monthLabel,
-  goodIsUp,
-  valueClass,
 }: {
-  label: string;
-  value: number;
+  card: ReportCard;
   month: number | null;
   monthLabel: string;
-  goodIsUp: boolean;
-  valueClass: string;
 }) {
   return (
     <div className="rounded-md border border-zinc-100 px-3 py-2">
-      <div className="text-xs text-zinc-500">{label}</div>
-      <div className={`text-lg font-semibold tabular-nums ${valueClass}`}>{formatEuro(value)}</div>
+      <div className="text-xs text-zinc-500">{card.label} / mois</div>
+      <div className={`text-lg font-semibold tabular-nums ${CARD_TEXT[card.tone]}`}>{formatEuro(card.value)}</div>
       {month !== null && (
         <div className="text-xs text-zinc-500">
           {monthLabel} : <span className="tabular-nums text-zinc-700">{formatEuro(month)}</span>{" "}
-          <Gap month={month} average={value} goodIsUp={goodIsUp} wrap />
+          <Gap month={month} average={card.value} goodIsUp={card.goodIsUp} wrap />
         </div>
       )}
     </div>
@@ -206,7 +202,7 @@ export default function AveragesSection({ data }: { data: Dashboard }) {
   const gaps = avg?.month != null;
   const monthLabel = avg?.month ? frenchMonthShort(avg.month) : "";
   // The cards' month values come from the dashboard payload (same definitions as the averages).
-  const cardMonth = (value: number) => (gaps ? value : null);
+  const monthCards = reportCards(data);
 
   let body: ReactNode;
   if (error) body = <p className="text-sm text-red-700">{error}</p>;
@@ -223,38 +219,14 @@ export default function AveragesSection({ data }: { data: Dashboard }) {
     body = (
       <>
         <div className="grid grid-cols-4 gap-3">
-          <AverageStat
-            label="Revenus / mois"
-            value={totals.income}
-            month={cardMonth(data.income)}
-            monthLabel={monthLabel}
-            goodIsUp
-            valueClass="text-green-700"
-          />
-          <AverageStat
-            label="Dépenses / mois"
-            value={totals.expenses}
-            month={cardMonth(data.expenses)}
-            monthLabel={monthLabel}
-            goodIsUp={false}
-            valueClass="text-red-700"
-          />
-          <AverageStat
-            label="Épargne / mois"
-            value={totals.epargne - totals.desepargne}
-            month={cardMonth(data.epargne - data.desepargne)}
-            monthLabel={monthLabel}
-            goodIsUp
-            valueClass={totals.epargne >= totals.desepargne ? "text-violet-700" : "text-amber-700"}
-          />
-          <AverageStat
-            label="Reste / mois"
-            value={totals.reste}
-            month={cardMonth(data.reste)}
-            monthLabel={monthLabel}
-            goodIsUp
-            valueClass={totals.reste >= 0 ? "text-green-700" : "text-red-700"}
-          />
+          {reportCards(totals).map((card, i) => (
+            <AverageStat
+              key={card.label}
+              card={card}
+              month={gaps ? monthCards[i].value : null}
+              monthLabel={monthLabel}
+            />
+          ))}
         </div>
 
         <table className="mt-4 w-full text-sm">

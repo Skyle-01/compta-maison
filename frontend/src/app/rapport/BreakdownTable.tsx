@@ -1,8 +1,8 @@
 import { Fragment } from "react";
 import { formatEuro } from "@/lib/api";
 import Gap from "@/components/Gap";
-import type { BreakdownGroup, BreakdownLine, BreakdownSide } from "@/lib/report";
-import { cell, highlight, NUM } from "@/components/tableStyles";
+import { cell, type BreakdownGroup, type BreakdownLine, type BreakdownSide } from "@/lib/report";
+import { highlight, NUM } from "@/components/tableStyles";
 
 const BAR_COLORS: Record<BreakdownSide, { strong: string; light: string }> = {
   expenses: { strong: "bg-red-500", light: "bg-red-300" },

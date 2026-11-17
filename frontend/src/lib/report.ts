@@ -15,12 +15,18 @@ import { gapTone, ownTarget, periodSummary } from "./averages";
 export const STATEMENT_MONTHS = 6;
 /** The period every report average covers (complete budget months). */
 export const REPORT_AVERAGE: AveragePeriod = "12";
+/** What `REPORT_AVERAGE` covers, as the « Comment lire » boxes say it. */
+export const REPORT_AVERAGE_TEXT = `les ${REPORT_AVERAGE} derniers mois clos`;
 /** A month worth highlighting: at least this many euros away from the average and this share of it. */
 export const NOTABLE_MIN = 20;
 export const NOTABLE_RATIO = 0.2;
 
 const EPS = 0.005;
 const nonZero = (value: number | null | undefined) => Math.abs(value ?? 0) >= EPS;
+
+/** A table cell's amount: nothing without a value, a dash for zero. */
+export const cell = (value: number | null): string =>
+  value === null ? "" : Math.abs(value) < EPS ? "–" : formatEuro(value);
 
 export const REPORT_NAME = "Comptes du foyer";
 
@@ -79,7 +85,7 @@ export interface Statement {
   reste: StatementRow;
 }
 
-type Totals = Omit<MonthTotals, "month">;
+export type Totals = Omit<MonthTotals, "month">;
 const NO_TOTALS: Totals = { income: 0, expenses: 0, epargne: 0, desepargne: 0, reste: 0 };
 
 /** Every leaf below `nodes`, named by its path from them (« Sortie / Bar »). */
@@ -309,16 +315,18 @@ export interface ReportCard {
   value: number;
   /** How a screen colours the value: green/red by nature or sign, violet savings (amber when negative). */
   tone: "good" | "bad" | "save" | "warn";
+  /** Whether a rise is good news (everything but Dépenses): colours the gap or delta beside it. */
+  goodIsUp: boolean;
 }
 
 /** The four reconciling cards of `totals` (Revenus - Dépenses - Épargne = Reste), in that order. */
 export function reportCards(totals: Totals): ReportCard[] {
   const epargne = totals.epargne - totals.desepargne;
   return [
-    { label: "Revenus", value: totals.income, tone: "good" },
-    { label: "Dépenses", value: totals.expenses, tone: "bad" },
-    { label: "Épargne", value: epargne, tone: epargne >= 0 ? "save" : "warn" },
-    { label: "Reste", value: totals.reste, tone: totals.reste >= 0 ? "good" : "bad" },
+    { label: "Revenus", value: totals.income, tone: "good", goodIsUp: true },
+    { label: "Dépenses", value: totals.expenses, tone: "bad", goodIsUp: false },
+    { label: "Épargne", value: epargne, tone: epargne >= 0 ? "save" : "warn", goodIsUp: true },
+    { label: "Reste", value: totals.reste, tone: totals.reste >= 0 ? "good" : "bad", goodIsUp: true },
   ];
 }
 
@@ -421,6 +429,24 @@ export function partialInReport(months: string[], partial: string[]): string[] {
   return months.filter((m) => partial.includes(m));
 }
 
+/** The « Comment lire » line about the report's partial months (`partialInReport`); null when none. */
+export function partialNote(partial: string[]): string | null {
+  if (partial.length === 0) return null;
+  const who =
+    partial.length === 1
+      ? `${frenchMonth(partial[0])} est un mois partiel`
+      : `${partial.map(frenchMonth).join(", ")} sont des mois partiels`;
+  return `${who} : un compte courant n'y avait pas encore commencé, donc les totaux sont incomplets. Ils ne comptent pas dans les moyennes.`;
+}
+
+/** The note under the cards: what the averages cover, or why there are none yet. `summary` is
+ *  `periodSummary` of the report's average. */
+export function averageNote(summary: string | null): string {
+  return summary
+    ? `Moyennes ${summary}, mois clos uniquement.`
+    : "Pas encore de mois clos : les moyennes viendront avec le prochain mois.";
+}
+
 /** The note beside a split operation's part listed under a leaf (« scindée, sur 40,00 € »); null
  *  for a whole operation (`total` is set only when the amounts show one part). */
 export function splitNote(tx: { total: number | null }): string | null {
@@ -460,11 +486,45 @@ export function reportSummaryParts(
 
 /** The month in one plain sentence, e.g. « En septembre 2026, le foyer a gagné … et dépensé … Il a
  *  mis … de côté. Il reste … (en moyenne … par mois). » */
-export function reportSummary(
-  month: string,
-  d: Pick<Dashboard, "income" | "expenses" | "epargne" | "desepargne" | "reste">,
-  averageReste: number | null,
-): string {
-  const { story, verdict, average } = reportSummaryParts(month, d, averageReste);
+export function reportSummary({ story, verdict, average }: SummaryParts): string {
   return `${story} ${verdict}${average ? ` (${average})` : ""}.`;
+}
+
+/** A card of the month with the average month beside it (null while no budget month is complete). */
+export type MonthCard = ReportCard & { average: number | null };
+
+/** What the PDF and the mobile page both show of one report month, so the two lay out the same figures. */
+export interface MonthFigures {
+  /** Revenus, Dépenses, Épargne, Reste of the month, net of refunds like the tables. */
+  cards: MonthCard[];
+  parts: SummaryParts;
+  /** The note under the cards (`averageNote`). */
+  averageNote: string;
+  /** The warning about unclassed operations; null when there are none. */
+  unclassified: string | null;
+  /** The Reste chart's months, oldest first, ending with `month`. */
+  history: MonthTotals[];
+  /** The « Comment lire » line about the partial months of that chart; null when none. */
+  partialNote: string | null;
+}
+
+/** The figures of `month` from its dashboard payload and the averages payload of the same month. */
+export function monthFigures(data: Dashboard, avg: CategoryAverages, month: string): MonthFigures {
+  const net = netOfRefunds(data, avg.offset.month_value ?? 0);
+  const averageTotals = avg.months > 0 ? netOfRefunds(avg.totals, avg.offset.value) : null;
+  const averageCards = averageTotals ? reportCards(averageTotals) : null;
+  const history = data.history.filter((h) => h.month <= month).slice(-REPORT_TREND_MONTHS);
+  return {
+    cards: reportCards(net).map((card, i) => ({ ...card, average: averageCards?.[i].value ?? null })),
+    parts: reportSummaryParts(month, net, averageTotals?.reste ?? null),
+    averageNote: averageNote(periodSummary(avg, REPORT_AVERAGE)),
+    unclassified: unclassifiedNote(data.uncategorized.count),
+    history,
+    partialNote: partialNote(
+      partialInReport(
+        history.map((h) => h.month),
+        data.months_partial,
+      ),
+    ),
+  };
 }

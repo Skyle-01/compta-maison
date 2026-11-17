@@ -1,14 +1,13 @@
 import { formatEuro } from "@/lib/api";
-import { cell, NUM } from "@/components/tableStyles";
-import type { AverageLine, AverageMonth as AverageMonthData, ReportCard } from "@/lib/report";
+import { CARD_TEXT, NUM } from "@/components/tableStyles";
+import {
+  averageNote,
+  cell,
+  type AverageLine,
+  type AverageMonth as AverageMonthData,
+  type ReportCard,
+} from "@/lib/report";
 import { Bar } from "./BreakdownTable";
-
-const TONE_TEXT: Record<ReportCard["tone"], string> = {
-  good: "text-green-700",
-  bad: "text-red-700",
-  save: "text-violet-700",
-  warn: "text-amber-700",
-};
 
 /** « Revenus − Dépenses − Épargne = Reste », each card with its average. */
 function Equation({ cards }: { cards: ReportCard[] }) {
@@ -20,7 +19,7 @@ function Equation({ cards }: { cards: ReportCard[] }) {
           {operators[i] && <span className="text-lg text-zinc-500">{operators[i]}</span>}
           <div className="flex-1 rounded-lg border border-zinc-200 p-3">
             <div className="text-sm text-zinc-500">{card.label}</div>
-            <div className={`mt-1 text-xl font-semibold tabular-nums ${TONE_TEXT[card.tone]}`}>
+            <div className={`mt-1 text-xl font-semibold tabular-nums ${CARD_TEXT[card.tone]}`}>
               {formatEuro(card.value)}
             </div>
           </div>
@@ -83,7 +82,7 @@ function AverageRows({
 export default function AverageMonth({ average }: { average: AverageMonthData }) {
   return (
     <div className="space-y-6">
-      <p className="text-sm text-zinc-700">Moyennes {average.period}, mois clos uniquement.</p>
+      <p className="text-sm text-zinc-700">{averageNote(average.period)}</p>
       <Equation cards={average.cards} />
       <AverageRows
         title="Où part l'argent en moyenne"

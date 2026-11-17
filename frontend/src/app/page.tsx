@@ -24,8 +24,9 @@ import { useFilters } from "@/components/FiltersProvider";
 import PeriodFilter from "@/components/PeriodFilter";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
+import { CARD_TEXT } from "@/components/tableStyles";
 import { moneyFlow } from "@/lib/moneyFlow";
-import { exportLink, treeLeaves } from "@/lib/report";
+import { exportLink, reportCards, treeLeaves, type ReportCard } from "@/lib/report";
 import { useAccounts } from "@/lib/useAccounts";
 import { useMonthDashboard } from "@/lib/useMonthDashboard";
 
@@ -45,22 +46,17 @@ function DeltaLine({ delta, prevMonth, goodIsUp }: { delta: number; prevMonth: s
 }
 
 function Stat({
-  label,
-  value,
-  valueClass,
+  card,
   delta,
 }: {
-  label: string;
-  value: number;
-  valueClass?: string;
-  delta?: { delta: number; prevMonth: string; goodIsUp: boolean } | null;
+  card: ReportCard;
+  delta: { delta: number; prevMonth: string } | null;
 }) {
-  const color = valueClass ?? (value >= 0 ? "text-green-700" : "text-red-700");
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-4">
-      <div className="text-sm text-zinc-500">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${color}`}>{formatEuro(value)}</div>
-      {delta && <DeltaLine {...delta} />}
+      <div className="text-sm text-zinc-500">{card.label}</div>
+      <div className={`mt-1 text-2xl font-semibold ${CARD_TEXT[card.tone]}`}>{formatEuro(card.value)}</div>
+      {delta && <DeltaLine {...delta} goodIsUp={card.goodIsUp} />}
     </div>
   );
 }
@@ -205,11 +201,8 @@ export default function DashboardPage() {
   const hist = data.history;
   const cur = hist.findIndex((h) => h.month === month);
   const prev = cur > 0 ? hist[cur - 1] : null;
-  const epargneNet = data.epargne - data.desepargne;
-  const deltaProps = (current: number, previous: number | undefined, goodIsUp: boolean) =>
-    prev && previous !== undefined
-      ? { delta: current - previous, prevMonth: prev.month, goodIsUp }
-      : null;
+  const cards = reportCards(data);
+  const prevCards = prev ? reportCards(prev) : null;
 
   return (
     <div className="space-y-6">
@@ -229,25 +222,13 @@ export default function DashboardPage() {
       <HeroSummary data={data} />
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat
-          label="Revenus"
-          value={data.income}
-          valueClass="text-green-700"
-          delta={deltaProps(data.income, prev?.income, true)}
-        />
-        <Stat
-          label="Dépenses"
-          value={data.expenses}
-          valueClass="text-red-700"
-          delta={deltaProps(data.expenses, prev?.expenses, false)}
-        />
-        <Stat
-          label="Épargne"
-          value={epargneNet}
-          valueClass={epargneNet >= 0 ? "text-violet-700" : "text-amber-700"}
-          delta={deltaProps(epargneNet, prev ? prev.epargne - prev.desepargne : undefined, true)}
-        />
-        <Stat label="Reste" value={data.reste} delta={deltaProps(data.reste, prev?.reste, true)} />
+        {cards.map((card, i) => (
+          <Stat
+            key={card.label}
+            card={card}
+            delta={prev && prevCards ? { delta: card.value - prevCards[i].value, prevMonth: prev.month } : null}
+          />
+        ))}
       </div>
 
       <ResteTrend
