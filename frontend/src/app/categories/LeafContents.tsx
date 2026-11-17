@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { Category, Rule, Transaction } from "@/lib/api";
 import { emptyRuleForm, type RuleForm } from "@/lib/ruleForm";
 import ManualRow from "./ManualRow";
-import RuleEditor from "./RuleEditor";
-import RuleRow from "./RuleRow";
+import RuleEditor from "@/components/RuleEditor";
+import RuleRow from "@/components/RuleRow";
 
 /** What the page does for a leaf's rules and manual operations. The `Promise<boolean>` ones resolve
  *  false when the change failed (the row's editor stays open). */

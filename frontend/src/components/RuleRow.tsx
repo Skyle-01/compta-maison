@@ -1,16 +1,16 @@
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import type { Category, Rule, Transaction } from "@/lib/api";
 import { emptyRuleForm, type RuleForm, ruleToForm } from "@/lib/ruleForm";
 import Net from "./Net";
 import RuleEditor from "./RuleEditor";
 import RuleOperations from "./RuleOperations";
 
-/** One rule of a leaf: its summary line (tick, expand to its operations, edit, delete), or its
- *  inline editor. `onSave` resolves false when the save failed (the editor stays open). */
+/** One rule: its summary line (tick, expand to its operations, edit, delete), or its inline editor.
+ *  `onSave` resolves false when the save failed (the editor stays open). */
 export default function RuleRow({
   rule,
   categories,
-  selected,
+  selected = false,
   open,
   version,
   onToggleSelected,
@@ -18,18 +18,22 @@ export default function RuleRow({
   onSave,
   onDelete,
   onClassAside,
+  extra,
 }: {
   rule: Rule;
   categories: Category[];
-  selected: boolean;
+  selected?: boolean;
   open: boolean;
   /** Bumped after every reload, so the open operation list refetches. */
   version: number;
-  onToggleSelected: () => void;
+  /** The tick box is shown only where a page lets rules be selected. */
+  onToggleSelected?: () => void;
   onToggleOpen: () => void;
   onSave: (form: RuleForm) => Promise<boolean>;
   onDelete: () => void;
   onClassAside: (tx: Transaction, categoryId: number) => void;
+  /** What a page adds between the description and the counts (category cell, badges). */
+  extra?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<RuleForm>(emptyRuleForm());
@@ -55,12 +59,14 @@ export default function RuleRow({
   return (
     <div>
       <div className="flex items-center gap-2 px-3 py-1">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={onToggleSelected}
-          aria-label={`Sélectionner la règle « ${rule.pattern} »`}
-        />
+        {onToggleSelected && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelected}
+            aria-label={`Sélectionner la règle « ${rule.pattern} »`}
+          />
+        )}
         <button
           onClick={onToggleOpen}
           disabled={rule.operation_count === 0}
@@ -80,6 +86,7 @@ export default function RuleRow({
         )}
         {rule.is_income_anchor && <span title="Ancre de revenu : ouvre un mois budgétaire">⚓</span>}
         {rule.description && <span className="truncate text-zinc-500">{rule.description}</span>}
+        {extra}
         <span className="ml-auto flex items-center gap-3 whitespace-nowrap">
           {rule.operation_count === 0 ? (
             <span className="text-xs text-amber-700" title="Cette règle ne classe aucune opération">

@@ -7,7 +7,6 @@ import {
   errorMessage,
   type Category,
   type CategoryAverages,
-  notifyUncategorizedChanged,
   type Rule,
   shortPath,
   type Transaction,
@@ -28,18 +27,16 @@ import {
   searchTree,
   undoMoves,
 } from "@/lib/categoryTree";
-import { conflictsMessage, queryFromSearch } from "@/lib/triage";
+import { queryFromSearch } from "@/lib/triage";
 import { fold } from "@/lib/categorySearch";
 import { type RuleForm, ruleFormToPayload } from "@/lib/ruleForm";
+import { useChanges } from "@/lib/useChanges";
+import { ChangeNotices, UndoToast } from "@/components/ChangeNotices";
 import CategoryRow from "./CategoryRow";
 import LeafContents, { type LeafActions } from "./LeafContents";
 
-const UNDO_DELAY_MS = 8000;
 // The node amounts: a monthly average over the last 12 complete budget months, to set targets by.
 const AVERAGE_PERIOD = "12";
-
-/** The last move's confirmation; `undo` reverts it. */
-type Toast = { message: string; undo: () => Promise<unknown> };
 
 /** Every manual assignment (the list endpoint caps a page at 1000 rows). */
 async function listAllManual(): Promise<Transaction[]> {
@@ -67,12 +64,8 @@ export default function CategoriesPage() {
   const [averages, setAverages] = useState<CategoryAverages | null>(null);
   // Bumped after every reload so the open rules' operation lists refetch.
   const [version, setVersion] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
 
   const [query, setQuery] = useState("");
-  // Conflicts the last saved rule created (a warning, the rule is saved anyway).
-  const [warning, setWarning] = useState<string | null>(null);
   const [openLeaves, setOpenLeaves] = useState<Set<number>>(new Set());
   const [openRules, setOpenRules] = useState<Set<number>>(new Set());
 
@@ -96,6 +89,7 @@ export default function CategoriesPage() {
       ),
     [],
   );
+  const { error, setError, warning, toast, run, act, undo, warnOfConflicts } = useChanges(load, categories);
 
   useEffect(() => {
     load()
@@ -105,63 +99,7 @@ export default function CategoriesPage() {
         if (fromUrl) setQuery(fromUrl);
       })
       .catch((e) => setError(errorMessage(e)));
-  }, [load]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(null), UNDO_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
-  /** Run a change, then reload; false (and the message shown) when it failed. */
-  async function run(action: () => Promise<unknown>): Promise<boolean> {
-    setError(null);
-    setWarning(null);
-    try {
-      await action();
-      // Rule and category changes, and clearing a manual assignment, move the « À classer » count.
-      notifyUncategorizedChanged();
-      await load();
-      return true;
-    } catch (e) {
-      setError(errorMessage(e));
-      return false;
-    }
-  }
-
-  /** A change that « Annuler » (the toast, or Alt+Z) can revert. */
-  async function act(perform: () => Promise<Toast>): Promise<boolean> {
-    let next: Toast | null = null;
-    const ok = await run(async () => {
-      next = await perform();
-    });
-    if (ok) setToast(next);
-    return ok;
-  }
-
-  const undo = useCallback(async () => {
-    if (!toast) return;
-    setToast(null);
-    setError(null);
-    try {
-      await toast.undo();
-      notifyUncategorizedChanged();
-      await load();
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  }, [toast, load]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.altKey && e.code === "KeyZ") {
-        e.preventDefault();
-        undo();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [undo]);
+  }, [load, setError]);
 
   const byId = new Map(categories.map((c) => [c.id, c]));
   const tree = buildTree(categories);
@@ -198,17 +136,6 @@ export default function CategoriesPage() {
       clearSelection();
       setOpenLeaves((prev) => new Set(prev).add(target.id));
     }
-  }
-
-  function warnOfConflicts(rule: Rule) {
-    if (!rule.conflicts.length) return;
-    const pathOf = (id: number) => {
-      const c = categories.find((x) => x.id === id);
-      return c ? shortPath(c) : `#${id}`;
-    };
-    setWarning(
-      `Règle « ${rule.pattern} » enregistrée, mais ${conflictsMessage(rule.conflicts, pathOf)} : ces opérations restent sans catégorie, à classer dans « À classer ».`,
-    );
   }
 
   const leafActions: LeafActions = {
@@ -341,23 +268,7 @@ export default function CategoriesPage() {
         </div>
       </details>
 
-      {error && (
-        <div
-          role="alert"
-          className="flex items-start gap-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800"
-        >
-          <p className="flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="text-red-700 hover:text-red-900" title="Fermer" aria-label="Fermer">
-            ✕
-          </button>
-        </div>
-      )}
-
-      {warning && (
-        <p role="status" className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          ⚠ {warning}
-        </p>
-      )}
+      <ChangeNotices error={error} warning={warning} onDismiss={() => setError(null)} />
 
       <div className="sticky top-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-b border-zinc-200 bg-zinc-50/95 px-6 py-2 backdrop-blur">
         <input
@@ -424,14 +335,7 @@ export default function CategoriesPage() {
         </button>
       </form>
 
-      {toast && (
-        <div className="fixed bottom-6 right-6 flex items-center gap-4 rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm shadow-lg">
-          <span className="text-green-700">{toast.message}</span>
-          <button onClick={undo} className="font-medium text-zinc-600 hover:text-zinc-900" title="Alt+Z">
-            Annuler
-          </button>
-        </div>
-      )}
+      <UndoToast toast={toast} undo={undo} />
     </div>
   );
 }

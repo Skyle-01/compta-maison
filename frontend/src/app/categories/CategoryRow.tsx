@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, type Category, shortPath } from "@/lib/api";
 import { type CategoryTreeNode, type Contents, reparentOptions } from "@/lib/categoryTree";
 import CategoryTarget from "./CategoryTarget";
-import Net from "./Net";
+import Net from "@/components/Net";
 
 /** « 3 ⚙ (42 op.) · 2 ✎ » (what classifies operations into the node) and its monthly average. */
 function NodeSummary({
