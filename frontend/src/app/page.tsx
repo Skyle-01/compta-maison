@@ -24,6 +24,7 @@ import { useFilters } from "@/components/FiltersProvider";
 import PeriodFilter from "@/components/PeriodFilter";
 import ResteTrend from "@/components/ResteTrend";
 import SignedAmount from "@/components/SignedAmount";
+import SpendingBreakdown from "@/components/SpendingBreakdown";
 import { CARD_TEXT } from "@/components/tableStyles";
 import { moneyFlow } from "@/lib/moneyFlow";
 import { exportLink, reportCards, treeLeaves, type ReportCard } from "@/lib/report";
@@ -252,14 +253,13 @@ export default function DashboardPage() {
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {data.uncategorized.count} opération{data.uncategorized.count > 1 ? "s" : ""} encore sans
           catégorie ({formatEuro(Math.abs(data.uncategorized.difference))} d’écart dans les totaux).{" "}
-          <Link
-            href={`/transactions?uncategorized=1&month=${month}`}
-            className="font-medium underline hover:no-underline"
-          >
+          <Link href={`/a-classer?month=${month}`} className="font-medium underline hover:no-underline">
             Les classer →
           </Link>
         </div>
       )}
+
+      <SpendingBreakdown month={month} />
 
       <section>
         <h2 className="mb-3 font-semibold">Flux d’argent</h2>

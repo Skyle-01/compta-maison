@@ -1,6 +1,5 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFilters } from "@/components/FiltersProvider";
 import HelpLink from "@/components/HelpLink";
@@ -17,10 +16,7 @@ export default function TransactionsPage() {
   const [total, setTotal] = useState(0);
   const accounts = useAccounts();
   const { ready, monthFilter, account } = useFilters();
-  // The dashboard warning's deep-link (?uncategorized=1&month=YYYY-MM): the month is the shared
-  // filter's business (FiltersProvider), this one is the page's own, read once.
-  const urlUncategorized = useSearchParams().get("uncategorized");
-  const [onlyUncategorized, setOnlyUncategorized] = useState(Boolean(urlUncategorized));
+  const [onlyUncategorized, setOnlyUncategorized] = useState(false);
   // The page offset belongs to the filters it was reached with: another month or account starts over.
   const scope = `${monthFilter ?? ""}\u0000${account ?? ""}`;
   const [paging, setPaging] = useState({ scope, offset: 0 });
