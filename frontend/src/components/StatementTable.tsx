@@ -1,14 +1,21 @@
 import { Fragment } from "react";
-import type { CategoryAverages, Dashboard } from "@/lib/api";
-import { buildStatement, notable, type StatementRow } from "@/lib/report";
+import type { CategoryAverages, MonthTotals } from "@/lib/api";
+import { buildStatement, isFilling, notable, type StatementRow, type StatementSection } from "@/lib/report";
 import { monthTick } from "@/lib/trend";
 import { cell, CURRENT_COLUMN, highlight, NUM } from "./tableStyles";
 
-/** A statement line: the label, one amount per month (the report month shaded, and highlighted
- *  when notable if `goodIsUp` is given), the average. */
+const SECTION_COLOR: Record<StatementSection["kind"], string> = {
+  income: "text-green-700",
+  expenses: "text-red-700",
+  savings: "text-violet-700",
+};
+
+/** A statement line: the label, one amount per month (the reference month shaded, and highlighted
+ *  when notable if `goodIsUp` is given), the average. `current` is that column, -1 for none. */
 function StatementLine({
   row,
   current,
+  filling,
   className = "border-b border-zinc-100",
   labelClass = "pl-3",
   amountClass,
@@ -16,6 +23,7 @@ function StatementLine({
 }: {
   row: StatementRow;
   current: number;
+  filling: boolean;
   className?: string;
   labelClass?: string;
   amountClass?: (value: number) => string;
@@ -28,7 +36,7 @@ function StatementLine({
         <td
           key={i}
           className={`${NUM} ${i === current ? CURRENT_COLUMN : ""} ${amountClass?.(v) ?? ""} ${
-            i === current && goodIsUp !== undefined ? highlight(notable(v, row.average, goodIsUp)) : ""
+            i === current && goodIsUp !== undefined ? highlight(notable(v, row.average, goodIsUp, null, filling)) : ""
           }`}
         >
           {cell(v)}
@@ -41,38 +49,38 @@ function StatementLine({
   );
 }
 
-/** Page 2: the last months side by side, a household income statement. */
+/** The last months side by side, a household income statement. `columns` are the averages payloads
+ *  of the months, oldest first; `reference` tells whether the last one is the month the reader is
+ *  looking at (shaded, its notable amounts in bold) or just the latest of several. */
 export default function StatementTable({
   columns,
-  data,
+  history,
+  reference,
 }: {
   columns: CategoryAverages[];
-  data: Dashboard;
+  history: MonthTotals[];
+  reference: boolean;
 }) {
-  const statement = buildStatement(columns, data.history);
-  const current = statement.months.length - 1;
-  const average = columns[current];
+  const statement = buildStatement(columns, history);
+  const last = statement.months.length - 1;
+  const current = reference ? last : -1;
+  const average = columns[last];
+  const filling = isFilling(average);
   const span = statement.months.length + 2;
-  const sectionColor: Record<string, string> = {
-    Revenus: "text-green-700",
-    Dépenses: "text-red-700",
-    Épargne: "text-violet-700",
-  };
-  const goodIsUp: Record<string, boolean> = { Revenus: true, Dépenses: false, Épargne: true };
   return (
-    <table className="w-full text-xs">
+    <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-zinc-300 text-zinc-500">
           <th className="py-1 text-left font-normal" />
           {statement.months.map((m, i) => (
             <th key={m} className={`${NUM} font-normal ${i === current ? CURRENT_COLUMN : ""}`}>
               {monthTick(m)}
-              <div className="text-[10px]">{m.slice(0, 4)}</div>
+              <div className="text-xs">{m.slice(0, 4)}</div>
             </th>
           ))}
           <th className={`${NUM} border-l border-zinc-200 font-normal`}>
             Moyenne
-            <div className="text-[10px]">{average.months > 0 ? `${average.months} mois` : "aucun mois clos"}</div>
+            <div className="text-xs">{average.months > 0 ? `${average.months} mois` : "aucun mois clos"}</div>
           </th>
         </tr>
       </thead>
@@ -80,7 +88,7 @@ export default function StatementTable({
         {statement.sections.map((section) => (
           <Fragment key={section.title}>
             <tr>
-              <td colSpan={span} className={`pb-1 pt-3 text-sm font-semibold ${sectionColor[section.title] ?? ""}`}>
+              <td colSpan={span} className={`pb-1 pt-3 font-semibold ${SECTION_COLOR[section.kind]}`}>
                 {section.title}
               </td>
             </tr>
@@ -89,13 +97,15 @@ export default function StatementTable({
                 key={row.key}
                 row={row}
                 current={current}
+                filling={filling}
                 className={`border-b border-zinc-100 ${i % 2 === 1 ? "bg-zinc-50" : ""}`}
-                goodIsUp={row.muted ? undefined : goodIsUp[section.title]}
+                goodIsUp={row.muted ? undefined : section.kind !== "expenses"}
               />
             ))}
             <StatementLine
               row={section.total}
               current={current}
+              filling={filling}
               className="border-b border-zinc-300 font-semibold"
               labelClass=""
             />
@@ -107,7 +117,8 @@ export default function StatementTable({
         <StatementLine
           row={statement.reste}
           current={current}
-          className="border-y-2 border-zinc-300 text-sm font-semibold"
+          filling={filling}
+          className="border-y-2 border-zinc-300 font-semibold"
           labelClass=""
           amountClass={(v) => (v >= 0 ? "text-green-700" : "text-red-700")}
         />

@@ -47,10 +47,12 @@ article{padding-top:1.5rem}
 .bar>i{display:block;height:100%;border-radius:.25rem;background:#52525b}
 .bar.income>i{background:var(--good)}
 .bar.ok>i{background:#16a34a}.bar.near>i{background:#f59e0b}.bar.over>i{background:#dc2626}
+.line .amt.muted{color:var(--muted);font-weight:400}
+.avgmonth{margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--line)}
 .n-good{font-weight:700;color:var(--good)}.n-bad{font-weight:700;color:var(--bad)}
 .cat>.line.flat{padding-left:0}
 .leaves{padding:0 0 .625rem 1.375rem;list-style:none}
-.leaves .detail{display:block;font-size:.8125rem;color:var(--muted)}
+.detail{display:block;font-size:.8125rem;color:var(--muted)}
 .leaves li{display:flex;justify-content:space-between;gap:1rem;padding:.25rem 0;font-size:.9375rem}
 .leaves .nm{color:var(--text)}
 .leaves .amt{white-space:nowrap}
@@ -65,18 +67,6 @@ details[open]>summary::before{transform:rotate(90deg)}
 .more>summary{font-weight:600;color:var(--ink)}
 .more[open]{padding-bottom:.5rem}
 .chart{display:block;width:100%;height:auto;margin-top:.25rem}
-.scroll{overflow-x:auto;margin:0 calc(-1 * max(1rem,env(safe-area-inset-left)));padding:0 max(1rem,env(safe-area-inset-left))}
-table{border-collapse:collapse;width:100%;min-width:30rem;font-size:.875rem}
-th,td{padding:.375rem .5rem;text-align:right;white-space:nowrap}
-th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:#fff;padding-left:0;white-space:normal;min-width:7rem}
-thead th{font-weight:400;color:var(--muted);border-bottom:1px solid #a1a1aa}
-tbody td{border-bottom:1px solid var(--line)}
-td.cur,th.cur{background:var(--soft)}
-td.avgc,th.avgc{border-left:1px solid var(--line);font-weight:600}
-tr.sec td{padding-top:1rem;font-weight:700;border-bottom:0}
-tr.sum td{font-weight:700;border-bottom:1px solid #a1a1aa}
-tr.fin td{font-weight:700;font-size:1rem;border-top:2px solid #a1a1aa;border-bottom:0}
-td.mutedrow:first-child{color:var(--muted)}
 .tree{margin-top:.5rem}
 .trow{display:flex;justify-content:space-between;gap:1rem;padding:.25rem 0;border-bottom:1px solid var(--line);font-size:.9375rem}
 .trow.strong{font-weight:600;color:var(--ink)}

@@ -2,23 +2,15 @@
 
 import AveragesSection from "@/components/AveragesSection";
 import HelpLink from "@/components/HelpLink";
+import MonthNotice from "@/components/MonthNotice";
 import PeriodFilter from "@/components/PeriodFilter";
+import StatementSection from "@/components/StatementSection";
 import { useMonthDashboard } from "@/lib/useMonthDashboard";
 
 export default function StatisticsPage() {
   const { data, error } = useMonthDashboard({ allowAll: true });
 
-  if (error) return <p className="text-red-700">{error}</p>;
-  if (!data) return <p className="text-zinc-500">Chargement…</p>;
-
-  if (!data.month) {
-    return (
-      <p className="text-zinc-500">
-        Aucune transaction pour l&apos;instant : commencez par importer un relevé bancaire depuis la page
-        Importer.
-      </p>
-    );
-  }
+  if (error || !data?.month) return <MonthNotice data={data} error={error} />;
 
   return (
     <div className="space-y-6">
@@ -31,6 +23,7 @@ export default function StatisticsPage() {
       </div>
 
       <AveragesSection data={data} />
+      <StatementSection data={data} />
     </div>
   );
 }

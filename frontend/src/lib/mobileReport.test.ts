@@ -96,7 +96,7 @@ function report(month: string, withOperation = true): ReportData {
       savings_actual: 0,
     },
   };
-  return { data, columns: [averages(month)], operations: new Map(withOperation ? [[leaf, [operation]]] : []) };
+  return { data, averages: averages(month), operations: new Map(withOperation ? [[leaf, [operation]]] : []) };
 }
 
 const input = (operations: boolean, months = ["2026-07", "2026-08"]) => ({
@@ -120,6 +120,20 @@ describe("buildMobileReport", () => {
     expect(html.indexOf('id="2026-07"')).toBeLessThan(html.indexOf('id="2026-08"'));
     expect(html).toContain('<select id="month"><option value="2026-08">');
     expect(html).toContain("<script>");
+  });
+
+  it("shows the average month once, after every month, and no statement table", () => {
+    const html = plain(buildMobileReport(input(false)));
+    expect(html.match(/Un mois moyen/g)).toHaveLength(1);
+    expect(html.indexOf("Un mois moyen")).toBeGreaterThan(html.lastIndexOf("</article>"));
+    expect(html).toContain("Où part l'argent en moyenne");
+    expect(html).not.toContain("Les derniers mois en tableau");
+  });
+
+  it("leaves the average month out while no budget month is complete", () => {
+    const first = report("2026-08");
+    const none = { ...first, averages: { ...first.averages, months: 0, first_month: null, last_month: null } };
+    expect(buildMobileReport({ ...input(false, ["2026-08"]), reports: [none] })).not.toContain("Un mois moyen");
   });
 
   it("has no picker and no script for a single month", () => {

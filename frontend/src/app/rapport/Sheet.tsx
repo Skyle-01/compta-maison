@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { reportTitle } from "@/lib/report";
+import { REPORT_NAME, reportTitle } from "@/lib/report";
 
-/** One A4 page of the report (see .sheet in globals.css): previewed on screen at its print width. */
+/** One A4 page of the report (see .sheet in globals.css): previewed on screen at its print width.
+ *  A page of one month carries it in its corner; the page of the average month has none. */
 export default function Sheet({
   title,
   month,
@@ -9,7 +10,7 @@ export default function Sheet({
   children,
 }: {
   title: string;
-  month: string;
+  month?: string;
   landscape?: boolean;
   children: ReactNode;
 }) {
@@ -17,7 +18,7 @@ export default function Sheet({
     <section className={`sheet ${landscape ? "sheet-landscape" : ""}`}>
       <header className="mb-4 flex items-baseline justify-between border-b border-zinc-200 pb-2">
         <h2 className="text-lg font-semibold">{title}</h2>
-        <span className="text-xs text-zinc-500">{reportTitle(month)}</span>
+        <span className="text-xs text-zinc-500">{month ? reportTitle(month) : REPORT_NAME}</span>
       </header>
       {children}
     </section>

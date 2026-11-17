@@ -9,7 +9,7 @@ import {
   formatEuro,
   frenchMonth,
 } from "./api";
-import { gapTone, ownTarget } from "./averages";
+import { gapTone, ownTarget, periodSummary } from "./averages";
 
 /** Budget months in the « Les derniers mois » statement. */
 export const STATEMENT_MONTHS = 6;
@@ -22,9 +22,16 @@ export const NOTABLE_RATIO = 0.2;
 const EPS = 0.005;
 const nonZero = (value: number | null | undefined) => Math.abs(value ?? 0) >= EPS;
 
+export const REPORT_NAME = "Comptes du foyer";
+
 /** "Comptes du foyer - septembre 2026": the report heading and the PDF's default file name. */
 export function reportTitle(month: string): string {
-  return `Comptes du foyer - ${frenchMonth(month)}`;
+  return `${REPORT_NAME} - ${frenchMonth(month)}`;
+}
+
+/** Whether the averages payload's month is the latest budget month, still filling. */
+export function isFilling(avg: CategoryAverages): boolean {
+  return avg.month !== null && avg.month === avg.current_month;
 }
 
 /** The month the report covers: the requested one when it exists, else the latest complete month
@@ -61,6 +68,7 @@ export interface StatementRow {
 }
 
 export interface StatementSection {
+  kind: "income" | "expenses" | "savings";
   title: string;
   rows: StatementRow[];
   total: StatementRow;
@@ -142,6 +150,7 @@ export function buildStatement(columns: CategoryAverages[], history: MonthTotals
   const muted = (rows: StatementRow[]) => rows.map((r) => ({ ...r, muted: true }));
 
   const income: StatementSection = {
+    kind: "income",
     title: "Revenus",
     rows: [
       ...collect(
@@ -174,6 +183,7 @@ export function buildStatement(columns: CategoryAverages[], history: MonthTotals
   };
 
   const expenses: StatementSection = {
+    kind: "expenses",
     title: "Dépenses",
     rows: [
       ...collect(
@@ -206,6 +216,7 @@ export function buildStatement(columns: CategoryAverages[], history: MonthTotals
   };
 
   const savings: StatementSection = {
+    kind: "savings",
     title: "Épargne",
     rows: collect(
       columns,
@@ -236,6 +247,8 @@ export interface BreakdownLine {
   month: number;
   average: number | null;
   target: number | null;
+  /** The highlight of the month's amount (see `notable`). */
+  tone: "good" | "bad" | null;
 }
 
 export interface BreakdownGroup extends BreakdownLine {
@@ -249,14 +262,14 @@ export type BreakdownSide = "expenses" | "income";
  *  category with none of it this month nor on average is left out. */
 export function breakdown(avg: CategoryAverages, side: BreakdownSide): BreakdownGroup[] {
   const hasAverage = avg.months > 0;
-  const line = (n: AverageNode, name: string): BreakdownLine => ({
-    id: n.id,
-    name,
-    month: (side === "expenses" ? n.month_expenses : n.month_income) ?? 0,
-    average: hasAverage ? n[side] : null,
+  const filling = isFilling(avg);
+  const line = (n: AverageNode, name: string): BreakdownLine => {
+    const month = (side === "expenses" ? n.month_expenses : n.month_income) ?? 0;
+    const average = hasAverage ? n[side] : null;
     // Only an own target is comparable (a Σ of children's targets leaves untargeted ones out).
-    target: side === "expenses" && ownTarget(n) ? n.target : null,
-  });
+    const target = side === "expenses" && ownTarget(n) ? n.target : null;
+    return { id: n.id, name, month, average, target, tone: notable(month, average, side === "income", target, filling) };
+  };
   const relevant = (l: BreakdownLine) => nonZero(l.month) || nonZero(l.average);
   const order = (a: BreakdownLine, b: BreakdownLine) =>
     b.month - a.month || (b.average ?? 0) - (a.average ?? 0) || a.name.localeCompare(b.name, "fr");
@@ -274,19 +287,113 @@ export function breakdown(avg: CategoryAverages, side: BreakdownSide): Breakdown
 
 /** Whether a month's amount deserves a highlight: "bad" for spending over its target, else the
  *  gap's tone when the month is at least NOTABLE_MIN € and NOTABLE_RATIO of the average away from
- *  it; null for an ordinary month (or no average to compare with). */
+ *  it; null for an ordinary month (or no average to compare with). A month still filling (`filling`)
+ *  is below its average almost everywhere, so only an amount already above it is highlighted. */
 export function notable(
   month: number,
   average: number | null,
   goodIsUp: boolean,
   target: number | null = null,
+  filling = false,
 ): "good" | "bad" | null {
   if (target !== null && month - target >= EPS) return "bad";
   if (average === null) return null;
   const gap = month - average;
+  if (filling && gap < 0) return null;
   if (Math.abs(gap) < NOTABLE_MIN || Math.abs(gap) < NOTABLE_RATIO * Math.abs(average)) return null;
   const tone = gapTone(gap, goodIsUp);
   return tone === "flat" ? null : tone;
+}
+
+export interface ReportCard {
+  label: string;
+  value: number;
+  /** How a screen colours the value: green/red by nature or sign, violet savings (amber when negative). */
+  tone: "good" | "bad" | "save" | "warn";
+}
+
+/** The four reconciling cards of `totals` (Revenus - Dépenses - Épargne = Reste), in that order. */
+export function reportCards(totals: Totals): ReportCard[] {
+  const epargne = totals.epargne - totals.desepargne;
+  return [
+    { label: "Revenus", value: totals.income, tone: "good" },
+    { label: "Dépenses", value: totals.expenses, tone: "bad" },
+    { label: "Épargne", value: epargne, tone: epargne >= 0 ? "save" : "warn" },
+    { label: "Reste", value: totals.reste, tone: totals.reste >= 0 ? "good" : "bad" },
+  ];
+}
+
+export interface AverageLine {
+  id: number | string;
+  name: string;
+  value: number;
+  /** The category's own monthly target (spending only); null when it has none. */
+  target: number | null;
+}
+
+export interface AverageGroup extends AverageLine {
+  /** Its sub-categories with some money, named by their path below the group. */
+  leaves: AverageLine[];
+}
+
+export interface AverageMonth {
+  /** What the average covers: « sur 12 mois (octobre 2025 – septembre 2026) ». */
+  period: string;
+  cards: ReportCard[];
+  /** Spending per top-level category, largest average first. */
+  spending: AverageGroup[];
+  /** The unclassed side of the spending and income cards; null when zero. */
+  spendingUnclassified: number | null;
+  income: AverageGroup[];
+  /** The income sources (each income-side leaf), largest first: the PDF's flat view of `income`. */
+  incomeSources: AverageLine[];
+  incomeUnclassified: number | null;
+  /** The average net per savings account (set aside minus withdrawn). */
+  savings: AverageLine[];
+}
+
+/** The average month of the complete months `avg` covers, net of refunds like the rest of the
+ *  report: spending rows + Non classé = the Dépenses card, income rows + Non classé = the Revenus
+ *  card, savings rows = the Épargne card. Null while no budget month is complete. */
+export function averageMonth(avg: CategoryAverages, period: AveragePeriod): AverageMonth | null {
+  const summary = periodSummary(avg, period);
+  if (summary === null) return null;
+  const byValue = (a: AverageLine, b: AverageLine) => b.value - a.value || a.name.localeCompare(b.name, "fr");
+  const nonEmpty = (l: AverageLine) => nonZero(l.value);
+  const line = (n: AverageNode, name: string, side: BreakdownSide): AverageLine => ({
+    id: n.id,
+    name,
+    value: n[side],
+    target: side === "expenses" && ownTarget(n) ? n.target : null,
+  });
+  const groups = (side: BreakdownSide): AverageGroup[] =>
+    avg.groups
+      .map((g) => ({
+        ...line(g, g.name, side),
+        leaves: leaves(g.children)
+          .map(({ node, name }) => line(node, name, side))
+          .filter(nonEmpty)
+          .sort(byValue),
+      }))
+      .filter(nonEmpty)
+      .sort(byValue);
+  const orNull = (value: number) => (nonZero(value) ? value : null);
+  return {
+    period: summary,
+    cards: reportCards(netOfRefunds(avg.totals, avg.offset.value)),
+    spending: groups("expenses"),
+    spendingUnclassified: orNull(avg.uncategorized.expenses),
+    income: groups("income"),
+    incomeSources: leaves(avg.groups)
+      .map(({ node }) => line(node, node.name, "income"))
+      .filter(nonEmpty)
+      .sort(byValue),
+    incomeUnclassified: orNull(avg.uncategorized.income),
+    savings: avg.savings
+      .map((s) => ({ id: s.account_id, name: s.name, value: s.epargne - s.desepargne, target: null }))
+      .filter(nonEmpty)
+      .sort(byValue),
+  };
 }
 
 /** The balance tree's leaves with some money (below the root), in display order: the nodes whose

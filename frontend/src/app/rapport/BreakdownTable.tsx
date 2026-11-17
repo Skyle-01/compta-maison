@@ -1,8 +1,8 @@
 import { Fragment } from "react";
 import { formatEuro } from "@/lib/api";
 import Gap from "@/components/Gap";
-import { type BreakdownGroup, type BreakdownLine, type BreakdownSide, notable } from "@/lib/report";
-import { cell, highlight, NUM } from "./tableStyles";
+import type { BreakdownGroup, BreakdownLine, BreakdownSide } from "@/lib/report";
+import { cell, highlight, NUM } from "@/components/tableStyles";
 
 const BAR_COLORS: Record<BreakdownSide, { strong: string; light: string }> = {
   expenses: { strong: "bg-red-500", light: "bg-red-300" },
@@ -10,7 +10,7 @@ const BAR_COLORS: Record<BreakdownSide, { strong: string; light: string }> = {
 };
 
 /** A bar scaled to the largest category of the month. */
-function Bar({ value, max, side, strong }: { value: number; max: number; side: BreakdownSide; strong?: boolean }) {
+export function Bar({ value, max, side, strong }: { value: number; max: number; side: BreakdownSide; strong?: boolean }) {
   const width = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
   const colors = BAR_COLORS[side];
   return (
@@ -25,20 +25,17 @@ function BreakdownRow({
   max,
   side,
   group,
-  target,
 }: {
   line: BreakdownLine;
   max: number;
   side: BreakdownSide;
   group?: boolean;
-  /** The target the month is held to: a group's sums only its targeted leaves, so it gets none. */
-  target: number | null;
 }) {
   const goodIsUp = side === "income";
   return (
     <tr className={group ? "border-t border-zinc-200" : ""}>
       <td className={`py-1 pr-2 ${group ? "font-medium" : "pl-4 text-zinc-700"}`}>{line.name}</td>
-      <td className={`${NUM} ${group ? "font-medium" : ""} ${highlight(notable(line.month, line.average, goodIsUp, target))}`}>
+      <td className={`${NUM} ${group ? "font-medium" : ""} ${highlight(line.tone)}`}>
         {cell(line.month)}
       </td>
       <td className="w-1/4 px-2">
@@ -86,9 +83,9 @@ export default function BreakdownTable({
           <tbody>
             {groups.map((g) => (
               <Fragment key={g.id}>
-                <BreakdownRow line={g} max={max} side={side} group target={g.target} />
+                <BreakdownRow line={g} max={max} side={side} group />
                 {g.leaves.map((l) => (
-                  <BreakdownRow key={l.id} line={l} max={max} side={side} target={l.target} />
+                  <BreakdownRow key={l.id} line={l} max={max} side={side} />
                 ))}
               </Fragment>
             ))}

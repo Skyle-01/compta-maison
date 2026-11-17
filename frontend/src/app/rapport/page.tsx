@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { type Account, api, errorMessage, formatEuro, frenchMonth } from "@/lib/api";
+import { type Account, errorMessage, formatEuro, frenchMonth } from "@/lib/api";
+import { useFilters } from "@/components/FiltersProvider";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import ResteTrend from "@/components/ResteTrend";
 import { periodSummary } from "@/lib/averages";
 import { moneyFlow } from "@/lib/moneyFlow";
 import {
+  averageMonth,
   NOTABLE_MIN,
   NOTABLE_RATIO,
   netOfRefunds,
@@ -20,11 +22,11 @@ import {
 import { loadReport, type ReportData } from "@/lib/reportData";
 import { parseReportRequest, reportRangeTitle, type ReportRequest } from "@/lib/reportRequest";
 import { useAccounts } from "@/lib/useAccounts";
+import AverageMonth from "./AverageMonth";
 import MonthDetail from "./MonthDetail";
 import ReportStat from "./ReportStat";
 import Sheet from "./Sheet";
-import StatementTable from "./StatementTable";
-import { HIGHLIGHT } from "./tableStyles";
+import { HIGHLIGHT } from "@/components/tableStyles";
 import TreeRows from "./TreeRows";
 
 /** Sankey height that fits a landscape A4 page (186 mm of content, about 700 px) under the sheet
@@ -44,8 +46,7 @@ function Report({
   accounts: Account[];
   withFlow: boolean;
 }) {
-  const { data, columns } = report;
-  const avg = columns[columns.length - 1];
+  const { data, averages: avg } = report;
   // Revenus and Dépenses net of refunds, as in the report's tables (lib/report.ts::netOfRefunds).
   const net = netOfRefunds(data, avg.offset.month_value ?? 0);
   const totals = avg.months > 0 ? netOfRefunds(avg.totals, avg.offset.value) : null;
@@ -175,10 +176,6 @@ function Report({
         </div>
       </section>
 
-      <Sheet title="Les derniers mois" month={month}>
-        <StatementTable data={data} columns={columns} />
-      </Sheet>
-
       <Sheet title="Le mois en détail" month={month}>
         <MonthDetail data={data} avg={avg} />
       </Sheet>
@@ -215,27 +212,21 @@ function Report({
 
 export default function ReportPage() {
   const accounts = useAccounts();
-  const [available, setAvailable] = useState<string[] | null>(null);
-  const [request, setRequest] = useState<ReportRequest | null>(null);
+  const { ready, months: available } = useFilters();
+  // The months and options come from the Export page's link, read client-side once the month list is
+  // loaded (`ready` is false during the server render, so `window` is never touched there).
+  const request = useMemo<ReportRequest | null>(
+    () => (ready ? parseReportRequest(window.location.search, available) : null),
+    [ready, available],
+  );
   // One report per requested month, in the request's order (oldest first).
   const [reports, setReports] = useState<ReportData[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // The months and options come from the Export page's link; read once, client-side.
-    api
-      .dashboard()
-      .then((d) => {
-        setAvailable(d.months_available);
-        setRequest(parseReportRequest(window.location.search, d.months_available));
-      })
-      .catch((e) => setError(errorMessage(e)));
-  }, []);
-
-  useEffect(() => {
-    if (!request || !available) return;
+    if (!request) return;
     let stale = false;
-    Promise.all(request.months.map((m) => loadReport(available, m, request.operations)))
+    Promise.all(request.months.map((m) => loadReport(m, request.operations)))
       .then((loaded) => {
         if (stale) return;
         setReports(loaded);
@@ -247,7 +238,7 @@ export default function ReportPage() {
     return () => {
       stale = true;
     };
-  }, [request, available]);
+  }, [request]);
 
   // The browser names the saved PDF after the page title.
   useEffect(() => {
@@ -258,6 +249,9 @@ export default function ReportPage() {
       document.title = previous;
     };
   }, [request]);
+
+  // The average month is the same whatever the month: shown once, after the last month's pages.
+  const average = reports?.length ? averageMonth(reports[reports.length - 1].averages, REPORT_AVERAGE) : null;
 
   return (
     <div className="space-y-6">
@@ -283,7 +277,7 @@ export default function ReportPage() {
       </p>
 
       {error && <p className="text-red-700">{error}</p>}
-      {available?.length === 0 ? (
+      {ready && available.length === 0 ? (
         <p className="text-zinc-500">Aucune transaction pour l&apos;instant : rien à mettre dans un rapport.</p>
       ) : reports && request ? (
         // Centred on screen, so the landscape page may overflow the content column on both sides.
@@ -293,11 +287,16 @@ export default function ReportPage() {
               key={request.months[i]}
               report={report}
               month={request.months[i]}
-              inProgress={request.months[i] === available?.[0]}
+              inProgress={request.months[i] === available[0]}
               accounts={accounts}
               withFlow={request.flow}
             />
           ))}
+          {average && (
+            <Sheet title="Un mois moyen">
+              <AverageMonth average={average} />
+            </Sheet>
+          )}
         </div>
       ) : (
         !error && <p className="text-zinc-500">Chargement…</p>

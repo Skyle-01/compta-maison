@@ -8,7 +8,7 @@
 ## To do / to investigate
 
 - Drop both parameters and the test cases that only cover them: `reportMonth(available)` returns the latest complete month, `statementMonths` always uses `STATEMENT_MONTHS`.
-- `statementMonths` moves with the statement in `backlog/feat/report-average-month.md`: do this in the same change or after it.
+- `statementMonths` now serves `components/StatementSection.tsx` (Statistiques); only its `count` parameter is unused.
 
 ## Progress
 

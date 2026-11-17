@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AverageNode, CategoryAverages, CategoryNode, MonthTotals } from "./api";
 import {
+  averageMonth,
   breakdown,
   buildStatement,
   dayMonth,
@@ -8,6 +9,7 @@ import {
   notable,
   partialInReport,
   exportLink,
+  reportCards,
   reportMonth,
   reportSummary,
   reportTitle,
@@ -232,6 +234,94 @@ describe("notable", () => {
 
   it("has nothing to compare with without an average", () => {
     expect(notable(500, null, false)).toBeNull();
+  });
+
+  it("on a month still filling, only highlights what is already above its average or target", () => {
+    expect(notable(70, 100, false, null, true)).toBeNull(); // spending below its average: not news yet
+    expect(notable(70, 100, true, null, true)).toBeNull(); // income below its average: not news yet
+    expect(notable(130, 100, false, null, true)).toBe("bad");
+    expect(notable(130, 100, true, null, true)).toBe("good");
+    expect(notable(460, 500, false, 450, true)).toBe("bad");
+  });
+});
+
+describe("breakdown on a month still filling", () => {
+  const groups = [node(1, "Courses", { expenses: 300, month_expenses: 100 })];
+
+  it("highlights nothing below the average, but the same amount on a complete month", () => {
+    const filling = averages({ month: "2026-09", current_month: "2026-09", groups });
+    const complete = averages({ month: "2026-08", current_month: "2026-09", groups });
+    expect(breakdown(filling, "expenses")[0].tone).toBeNull();
+    expect(breakdown(complete, "expenses")[0].tone).toBe("good");
+  });
+});
+
+describe("reportCards", () => {
+  it("lists the four cards, the savings amber and the reste red when negative", () => {
+    const cards = reportCards({ income: 2000, expenses: 1500, epargne: 100, desepargne: 400, reste: -200 });
+    expect(cards.map((c) => [c.label, c.value, c.tone])).toEqual([
+      ["Revenus", 2000, "good"],
+      ["Dépenses", 1500, "bad"],
+      ["Épargne", -300, "warn"],
+      ["Reste", -200, "bad"],
+    ]);
+  });
+});
+
+describe("averageMonth", () => {
+  // Salary 2000 under Fixe next to the rent, a refund offset of 10, 15 unclassed spending: the
+  // Dépenses card (net) is Fixe 800 + Courses 300 + Non classé 15 = 1115.
+  const avg = averages({
+    totals: { income: 2010, expenses: 1125, epargne: 250, desepargne: 50, reste: 685 },
+    groups: [
+      node(1, "Fixe", {
+        expenses: 800,
+        income: 2000,
+        children: [node(11, "Salaire", { income: 2000 }), node(12, "Loyer", { expenses: 800, target: 900 })],
+      }),
+      node(2, "Courses", { expenses: 300, target: 350 }),
+      node(3, "Vide", {}),
+    ],
+    uncategorized: { expenses: 15, income: 0, month_expenses: 0, month_income: 0 },
+    offset: { value: 10, month_value: 0 },
+    savings: [
+      { account_id: "LIVRET", name: "Livret", epargne: 250, desepargne: 50, month_epargne: 0, month_desepargne: 0 },
+      { account_id: "VIDE", name: "Vide", epargne: 0, desepargne: 0, month_epargne: 0, month_desepargne: 0 },
+    ],
+  });
+
+  it("ranks spending by average with the own target, and leaves a zero-average row out", () => {
+    const m = averageMonth(avg, "12");
+    expect(m?.period).toBe("sur 12 mois (septembre 2025 – août 2026)");
+    expect(m?.spending.map((g) => [g.name, g.value, g.target])).toEqual([
+      ["Fixe", 800, null],
+      ["Courses", 300, 350],
+    ]);
+    expect(m?.spending[0].leaves.map((l) => [l.name, l.value, l.target])).toEqual([["Loyer", 800, 900]]);
+    expect(m?.spendingUnclassified).toBe(15);
+    expect(m?.incomeUnclassified).toBeNull();
+    expect(m?.savings.map((l) => [l.name, l.value])).toEqual([["Livret", 200]]);
+  });
+
+  it("lists the income by group and as flat sources", () => {
+    const m = averageMonth(avg, "12");
+    expect(m?.income.map((g) => [g.name, g.value, g.leaves.map((l) => l.name)])).toEqual([["Fixe", 2000, ["Salaire"]]]);
+    expect(m?.incomeSources.map((l) => [l.name, l.value])).toEqual([["Salaire", 2000]]);
+  });
+
+  it("reconciles: rows + Non classé = the cards, and Revenus - Dépenses - Épargne = Reste", () => {
+    const m = averageMonth(avg, "12");
+    if (!m) throw new Error("no average month");
+    const [income, expenses, epargne, reste] = m.cards.map((c) => c.value);
+    const sum = (lines: { value: number }[]) => lines.reduce((total, l) => total + l.value, 0);
+    expect(sum(m.spending) + (m.spendingUnclassified ?? 0)).toBe(expenses);
+    expect(sum(m.incomeSources) + (m.incomeUnclassified ?? 0)).toBe(income);
+    expect(sum(m.savings)).toBe(epargne);
+    expect(income - expenses - epargne).toBe(reste);
+  });
+
+  it("is null while no budget month is complete", () => {
+    expect(averageMonth(averages({ months: 0, first_month: null, last_month: null }), "12")).toBeNull();
   });
 });
 

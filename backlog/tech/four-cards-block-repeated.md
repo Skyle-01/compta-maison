@@ -8,7 +8,7 @@ The four reconciling cards are spelled out by hand, each time with the same labe
 - `app/rapport/page.tsx`: `ReportStat` x 4, with the average and the gap.
 - `components/AveragesSection.tsx`: `AverageStat` x 4, the average first and the month below.
 
-Three card components (`Stat`, `ReportStat`, `AverageStat`) differ only by their sub-line. The « Un mois moyen » section of `backlog/feat/report-average-month.md` would add a fourth copy of the list, and the mobile report has a fifth in string form (`equationRow`).
+Three card components (`Stat`, `ReportStat`, `AverageStat`) differ only by their sub-line. The « Un mois moyen » section of the report added a fourth copy (`lib/report.ts::reportCards` gives it label, value and tone, without the "higher is better" flag; extend it here), and the mobile report has a fifth in string form (`equationRow`).
 
 ## To do / to investigate
 

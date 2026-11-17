@@ -9,7 +9,7 @@ import { buildMobileReport, reportFileName } from "@/lib/mobileReport";
 import { loadReport } from "@/lib/reportData";
 import { DEFAULT_OPTIONS, lastCompleteMonths, parseReportRequest, reportSearch } from "@/lib/reportRequest";
 
-/** How many months the « derniers mois clos » shortcut ticks (the statement's width). */
+/** How many months the « derniers mois clos » shortcut ticks. */
 const RECENT_MONTHS = 6;
 
 const PANEL = "rounded-lg border border-zinc-200 bg-white p-4";
@@ -50,7 +50,7 @@ export default function ExportPage() {
     // Open the tab inside the click, before the awaits: browsers block a window opened later.
     const preview = action === "preview" ? window.open("", "_blank") : null;
     try {
-      const reports = await Promise.all(chosen.map((m) => loadReport(months, m, htmlOperations)));
+      const reports = await Promise.all(chosen.map((m) => loadReport(m, htmlOperations)));
       const html = buildMobileReport({
         reports,
         months: chosen,

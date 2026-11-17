@@ -2,7 +2,7 @@ import AccountDot from "@/components/AccountDot";
 import SignedAmount from "@/components/SignedAmount";
 import { type Account, type CategoryNode, formatEuro, type Transaction, treeLabel } from "@/lib/api";
 import { dayMonth, splitNote } from "@/lib/report";
-import { NUM } from "./tableStyles";
+import { NUM } from "@/components/tableStyles";
 
 /** The dashboard's « Détail par catégorie » tree, fully open: paper has no drill-down. */
 export default function TreeRows({
