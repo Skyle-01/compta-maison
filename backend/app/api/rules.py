@@ -78,10 +78,7 @@ def list_rules(db_path: DbPath, category_id: int | None = None) -> list[RuleOut]
 def rule_problems(db_path: DbPath) -> dict[int, list[RuleIssue]]:
     """Per rule id, the problems of the rules that have any (duplicate, redundant, conflict, shadowed,
     unused), computed on demand."""
-    return {
-        rule_id: [RuleIssue(**vars(issue)) for issue in issues]
-        for rule_id, issues in rule_issues(db_path).items()
-    }
+    return rule_issues(db_path)  # FastAPI validates the dicts against RuleIssue
 
 
 @router.get("/preview")

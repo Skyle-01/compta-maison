@@ -1,7 +1,9 @@
 from app.core.categorize import apply_rules
-from app.core.rule_issues import RuleIssue, rule_issues
+from app.core.rule_issues import rule_issues
 from app.db import connect
 from tests.conftest import import_rows
+
+UNUSED = {"kind": "unused", "rule_ids": [], "count": 0, "masked": False}
 
 
 def _categories(db) -> dict[str, int]:
@@ -24,7 +26,7 @@ def _debit(libelle: str, account: str = "PERSO", day: int = 1) -> tuple:
     return (f"2026-06-{day:02d}", f"2026-06-{day:02d}", libelle, 10, 0, account)
 
 
-def _issues(db, *operations: tuple) -> dict[int, list[RuleIssue]]:
+def _issues(db, *operations: tuple) -> dict[int, list[dict]]:
     """Import `operations`, classify them with the rules in place, return the issues by rule id."""
     if operations:
         import_rows(db, *operations)
@@ -32,12 +34,12 @@ def _issues(db, *operations: tuple) -> dict[int, list[RuleIssue]]:
     return rule_issues(db)
 
 
-def _kinds(issues: dict[int, list[RuleIssue]], rule_id: int) -> list[str]:
-    return [i.kind for i in issues.get(rule_id, [])]
+def _kinds(issues: dict[int, list[dict]], rule_id: int) -> list[str]:
+    return [i["kind"] for i in issues.get(rule_id, [])]
 
 
-def _one(issues: dict[int, list[RuleIssue]], rule_id: int, kind: str) -> RuleIssue:
-    return next(i for i in issues[rule_id] if i.kind == kind)
+def _one(issues: dict[int, list[dict]], rule_id: int, kind: str) -> dict:
+    return next(i for i in issues[rule_id] if i["kind"] == kind)
 
 
 class TestDuplicate:
@@ -47,7 +49,7 @@ class TestDuplicate:
         second = _rule(db, cats["energie"], "EDF")
         issues = _issues(db, _debit("PRLV EDF"))
         assert _kinds(issues, first) == []
-        assert _one(issues, second, "duplicate").rule_ids == [first]
+        assert _one(issues, second, "duplicate")["rule_ids"] == [first]
         # It keeps no operation (the first one took it): a late duplicate is also unused.
         assert _kinds(issues, second) == ["duplicate", "unused"]
 
@@ -68,7 +70,7 @@ class TestRedundant:
         short = _rule(db, cats["energie"], "EDF")
         long = _rule(db, cats["energie"], "EDF CLIENTS")
         issues = _issues(db, _debit("PRLV EDF CLIENTS"))
-        assert _one(issues, long, "redundant").rule_ids == [short]
+        assert _one(issues, long, "redundant")["rule_ids"] == [short]
         assert _kinds(issues, short) == []
 
     def test_other_category_or_anchor_flag_is_not_redundant(self, db):
@@ -86,8 +88,8 @@ class TestRedundant:
         longer = _rule(db, cats["energie"], "EDF CLIENTS", "PERSO")
         equal = _rule(db, cats["energie"], "EDF", "JOINT")
         issues = _issues(db, _debit("PRLV EDF CLIENTS"))
-        assert _one(issues, longer, "redundant").rule_ids == [glob]
-        assert _one(issues, equal, "redundant").rule_ids == [glob]
+        assert _one(issues, longer, "redundant")["rule_ids"] == [glob]
+        assert _one(issues, equal, "redundant")["rule_ids"] == [glob]
         assert "redundant" not in _kinds(issues, glob)
 
     def test_a_global_rule_is_not_redundant_against_an_account_rule(self, db):
@@ -120,11 +122,14 @@ class TestConflict:
             _debit("CARTE LECLERC DRIVE", day=2),
             _debit("CARTE LECLERC", day=3),  # leclerc alone: no conflict
         )
-        assert (_one(issues, leclerc, "conflict").rule_ids, _one(issues, leclerc, "conflict").count) == (
+        assert (
+            _one(issues, leclerc, "conflict")["rule_ids"],
+            _one(issues, leclerc, "conflict")["count"],
+        ) == (
             [drive],
             2,
         )
-        assert (_one(issues, drive, "conflict").rule_ids, _one(issues, drive, "conflict").count) == (
+        assert (_one(issues, drive, "conflict")["rule_ids"], _one(issues, drive, "conflict")["count"]) == (
             [leclerc],
             2,
         )
@@ -149,7 +154,7 @@ class TestConflict:
         first = _rule(db, cats["courses"], "LECLERC", "PERSO")
         second = _rule(db, cats["bar"], "DRIVE", "PERSO")
         issues = _issues(db, _debit("CARTE LECLERC DRIVE", "PERSO"))
-        assert _one(issues, first, "conflict").rule_ids == [second]
+        assert _one(issues, first, "conflict")["rule_ids"] == [second]
         assert "conflict" not in _kinds(issues, glob)
 
     def test_manual_operations_and_transfers_are_left_out(self, db):
@@ -177,7 +182,7 @@ class TestShadowed:
             _debit("CARTE LECLERC", "PERSO", 3),  # still the global rule's
         )
         shadowed = _one(issues, glob, "shadowed")
-        assert (shadowed.rule_ids, shadowed.count, shadowed.masked) == ([scoped], 2, False)
+        assert (shadowed["rule_ids"], shadowed["count"], shadowed["masked"]) == ([scoped], 2, False)
         assert _kinds(issues, glob) == ["shadowed"]
         assert _kinds(issues, scoped) == []
 
@@ -187,14 +192,14 @@ class TestShadowed:
         scoped = _rule(db, cats["bar"], "LECLERC", "JOINT")
         issues = _issues(db, _debit("CARTE LECLERC", "JOINT"))
         shadowed = _one(issues, glob, "shadowed")
-        assert (shadowed.rule_ids, shadowed.count, shadowed.masked) == ([scoped], 1, True)
+        assert (shadowed["rule_ids"], shadowed["count"], shadowed["masked"]) == ([scoped], 1, True)
         assert "unused" not in _kinds(issues, glob)
 
     def test_an_account_rule_of_the_same_category_still_takes_the_operations(self, db):
         cats = _categories(db)
         glob = _rule(db, cats["courses"], "LECLERC")
         _rule(db, cats["courses"], "LECLERC", "JOINT")
-        assert _one(_issues(db, _debit("CARTE LECLERC", "JOINT")), glob, "shadowed").count == 1
+        assert _one(_issues(db, _debit("CARTE LECLERC", "JOINT")), glob, "shadowed")["count"] == 1
 
     def test_several_overriding_rules_are_listed_and_transfers_count(self, db):
         cats = _categories(db)
@@ -205,7 +210,7 @@ class TestShadowed:
         with connect(db) as conn:
             conn.execute("UPDATE transactions SET kind = 'transfer'")
         shadowed = _one(_issues(db), glob, "shadowed")
-        assert (shadowed.rule_ids, shadowed.count) == ([by_leclerc, by_drive], 1)
+        assert (shadowed["rule_ids"], shadowed["count"]) == ([by_leclerc, by_drive], 1)
 
     def test_manual_operations_are_not_lost(self, db):
         cats = _categories(db)
@@ -229,13 +234,13 @@ class TestUnused:
         used = _rule(db, cats["courses"], "LECLERC")
         unused = _rule(db, cats["bar"], "ANGELUS")
         issues = _issues(db, _debit("CARTE LECLERC"))
-        assert issues == {unused: [RuleIssue("unused")]}
+        assert issues == {unused: [UNUSED]}
         assert used not in issues
 
     def test_no_operation_at_all(self, db):
         cats = _categories(db)
         rule = _rule(db, cats["courses"], "LECLERC")
-        assert _issues(db) == {rule: [RuleIssue("unused")]}
+        assert _issues(db) == {rule: [UNUSED]}
 
     def test_a_rule_of_an_account_without_matching_operations(self, db):
         cats = _categories(db)

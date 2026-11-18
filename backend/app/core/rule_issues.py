@@ -1,7 +1,7 @@
 import sqlite3
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from app.core.categorize import find_conflicts
 from app.db import connect
@@ -10,17 +10,14 @@ from app.db import connect
 KINDS = ("duplicate", "redundant", "conflict", "shadowed", "unused")
 
 
-@dataclass
-class RuleIssue:
+def _issue(
+    kind: str, rule_ids: list[int] | None = None, count: int = 0, masked: bool = False
+) -> dict[str, Any]:
     """One problem of a rule. `rule_ids` = the other rules involved (the earlier twin, the rules
     containing it, the other side of a conflict, the account rules overriding it); `count` =
     operations concerned (common operations of a conflict, operations a shadowed rule loses), 0 for
     the kinds that are a test on the patterns. `masked`: a shadowed rule that keeps no operation."""
-
-    kind: str
-    rule_ids: list[int] = field(default_factory=list)
-    count: int = 0
-    masked: bool = False
+    return {"kind": kind, "rule_ids": rule_ids or [], "count": count, "masked": masked}
 
 
 def _rules(conn: sqlite3.Connection) -> dict[int, tuple[str, int, int, str | None]]:
@@ -32,12 +29,12 @@ def _rules(conn: sqlite3.Connection) -> dict[int, tuple[str, int, int, str | Non
     }
 
 
-def _pattern_issues(rules: dict[int, tuple[str, int, int, str | None]]) -> dict[int, list[RuleIssue]]:
+def _pattern_issues(rules: dict[int, tuple[str, int, int, str | None]]) -> dict[int, list[dict[str, Any]]]:
     """duplicate and redundant: tests on the patterns, case-sensitive like instr in apply_rules.
     A rule is redundant when another rule of the same category and anchor flag, at its level or
     global, matches everything it matches (its pattern is strictly contained in this one's, or
     equal for an account rule facing a global one: equal patterns at one level are duplicates)."""
-    issues: dict[int, list[RuleIssue]] = defaultdict(list)
+    issues: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for rule_id, (pattern, category_id, anchor, account_id) in rules.items():
         twins = []
         containing = []
@@ -52,13 +49,13 @@ def _pattern_issues(rules: dict[int, tuple[str, int, int, str | None]]) -> dict[
                 elif other_pattern == pattern and account_id is not None and other_account is None:
                     containing.append(other_id)
         if twins:
-            issues[rule_id].append(RuleIssue("duplicate", twins))
+            issues[rule_id].append(_issue("duplicate", twins))
         if containing:
-            issues[rule_id].append(RuleIssue("redundant", containing))
+            issues[rule_id].append(_issue("redundant", containing))
     return issues
 
 
-def _conflict_issues(conn: sqlite3.Connection) -> dict[int, list[RuleIssue]]:
+def _conflict_issues(conn: sqlite3.Connection) -> dict[int, list[dict[str, Any]]]:
     """One issue per (rule, other rule of another category) with the operations in conflict they
     share: exactly the operations categorize.find_conflicts reports (real flows, most specific level)."""
     shared: dict[int, dict[int, int]] = defaultdict(lambda: defaultdict(int))
@@ -68,7 +65,7 @@ def _conflict_issues(conn: sqlite3.Connection) -> dict[int, list[RuleIssue]]:
                 if other_category != category_id:
                     shared[rule_id][other_id] += 1
     return {
-        rule_id: [RuleIssue("conflict", [other_id], count) for other_id, count in sorted(others.items())]
+        rule_id: [_issue("conflict", [other_id], count) for other_id, count in sorted(others.items())]
         for rule_id, others in shared.items()
     }
 
@@ -99,7 +96,7 @@ def _shadowed(
     return overridden
 
 
-def rule_issues(db_path: Path) -> dict[int, list[RuleIssue]]:
+def rule_issues(db_path: Path) -> dict[int, list[dict[str, Any]]]:
     """The problems of every rule that has any, computed on demand from the rules and the current
     classification (apply_rules has run: `rule_id` on the transactions says what each rule keeps).
     A rule can carry several issues; `unused` (keeps no operation) never goes with `shadowed`."""
@@ -115,13 +112,15 @@ def rule_issues(db_path: Path) -> dict[int, list[RuleIssue]]:
         for rule_id, conflicts in _conflict_issues(conn).items():
             found[rule_id].extend(conflicts)
         for rule_id, (by, lost) in _shadowed(conn, rules).items():
-            found[rule_id].append(RuleIssue("shadowed", sorted(by), lost, masked=rule_id not in kept))
-        shadowed = {rule_id for rule_id, listed in found.items() if any(i.kind == "shadowed" for i in listed)}
+            found[rule_id].append(_issue("shadowed", sorted(by), lost, masked=rule_id not in kept))
+        shadowed = {
+            rule_id for rule_id, listed in found.items() if any(i["kind"] == "shadowed" for i in listed)
+        }
         for rule_id in rules:
             if rule_id not in kept and rule_id not in shadowed:
-                found[rule_id].append(RuleIssue("unused"))
+                found[rule_id].append(_issue("unused"))
     return {
-        rule_id: sorted(listed, key=lambda issue: KINDS.index(issue.kind))
+        rule_id: sorted(listed, key=lambda issue: KINDS.index(issue["kind"]))
         for rule_id, listed in sorted(found.items())
         if listed
     }
