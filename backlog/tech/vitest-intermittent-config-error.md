@@ -12,6 +12,8 @@
 
 ## Progress
 
+- 2026-11-18: root runs (`npm test --prefix frontend`) failed twice in a row, in two separate sequences (18 files each; one right after `npm run lint`, the other after lint, `npm run build` and the backend tests), and `npx vitest run` from `frontend/` passed at once each time (the first time only the guide heading test, expected, was red). So a repeated failure from the root is not always real: try the `frontend/` run before concluding.
+
 - 2026-11-18: 4 failed runs out of 11 now, and every failure came right after a `tsc --noEmit` or `eslint` run in the same shell (the first runs of a new command chain); a run from `frontend/` (`npx vitest run`) right after a failure passed, then the root runs passed several times in a row. Lead: something the previous tool leaves (a lock, the `tsconfig.tsbuildinfo` or a cache under `node_modules`) breaks the first vitest start. Next try: run `tsc` then `npm test --prefix frontend` in a loop and see whether the failure repeats.
 
 - 2026-11-17: noticed during a closeout; not investigated.
