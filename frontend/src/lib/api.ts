@@ -237,6 +237,43 @@ export interface RuleIssue {
   masked: boolean;
 }
 
+/** A flag on a recurring flow (GET /api/recurrences); the page writes the texts. The amounts and the
+ * date are set for `price_change` only. */
+export interface RecurrenceStatus {
+  kind: "missing" | "ended" | "price_change" | "doubled";
+  old_amount: number | null;
+  new_amount: number | null;
+  since: string | null;
+}
+
+/** One monthly recurring flow: an account, a side (debit or credit) and a label. */
+export interface Recurrence {
+  label: string;
+  account_id: string;
+  side: "debit" | "credit";
+  /** The majority category, null when unclassified. */
+  category_id: number | null;
+  amount_kind: "fixed" | "variable";
+  /** Median of the latest run (of every amount when variable). */
+  typical_amount: number;
+  last_amount: number;
+  occurrences: number;
+  first_date: string;
+  last_date: string;
+  /** Null once the flow has ended. */
+  next_expected: string | null;
+  status: RecurrenceStatus[];
+  /** The last 12 operations, newest first. */
+  last_operations: { id: number; date: string; amount: number }[];
+}
+
+/** `items`: expenses then income, largest typical amount first. The totals count the fixed flows that have not ended. */
+export interface Recurrences {
+  items: Recurrence[];
+  monthly_expenses: number;
+  monthly_income: number;
+}
+
 /** An operation matched by rules of different categories: left uncategorised until classed by hand. */
 export interface ConflictedOperation {
   transaction: Transaction;
@@ -598,6 +635,9 @@ export const api = {
   listRules: (): Promise<Rule[]> => request("/api/rules"),
   /** The problems of the rules that have any, by rule id (the keys are strings in the JSON). */
   ruleIssues: (): Promise<Record<number, RuleIssue[]>> => request("/api/rules/issues"),
+  /** The monthly recurring flows of every month (of one account, none = all accounts). */
+  recurrences: (account: string | null): Promise<Recurrences> =>
+    request(`/api/recurrences${account ? `?account=${encodeURIComponent(account)}` : ""}`),
   /** What a rule about to be saved would classify, and the rules it would conflict with
    *  (`ruleId`: the rule being edited, left out of the comparison; `accountId`: the account it is
    *  limited to, none = all accounts). */

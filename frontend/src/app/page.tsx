@@ -18,6 +18,7 @@ import {
   treeLabel,
 } from "@/lib/api";
 import BudgetGlance from "@/components/BudgetGlance";
+import RecurrencesGlance from "@/components/RecurrencesGlance";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import MonthNotice from "@/components/MonthNotice";
 import { useFilters } from "@/components/FiltersProvider";
@@ -241,6 +242,7 @@ export default function DashboardPage() {
       />
 
       <BudgetGlance budget={data.budget} />
+      <RecurrencesGlance />
 
       {data.transfers.count > 0 && (
         <p className="text-sm text-zinc-500">

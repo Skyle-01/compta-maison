@@ -5,6 +5,7 @@ export const NAV_GROUPS = [
     items: [
       { href: "/", label: "Le mois" },
       { href: "/budget", label: "Budget" },
+      { href: "/recurrents", label: "Récurrents" },
       { href: "/statistiques", label: "Statistiques" },
     ],
   },

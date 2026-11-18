@@ -18,7 +18,7 @@ Au premier lancement, l'application demande le **dossier de données** : indique
 
 Le cycle habituel : on dépose les relevés dans « Importer », on classe ce qui reste dans « À classer », puis on lit « Le mois » et le « Budget ».
 
-La navigation regroupe les pages en trois familles : **Analyser** (Le mois, Budget, Statistiques), **Traiter** (Transactions, À classer, Catégories, Importer) et **Configurer** (Réglages, Aide). Le nombre à côté de « À classer » est celui des opérations encore sans catégorie, et « Dernière opération » indique la date des relevés les plus récents.
+La navigation regroupe les pages en trois familles : **Analyser** (Le mois, Budget, Récurrents, Statistiques), **Traiter** (Transactions, À classer, Catégories, Règles, Importer) et **Configurer** (Réglages, Aide). Le nombre à côté de « À classer » est celui des opérations encore sans catégorie, et « Dernière opération » indique la date des relevés les plus récents.
 
 Le **mois** et le **compte** choisis en haut des pages sont partagés : choisir juillet dans « Le mois » affiche aussi juillet dans « Budget », « Statistiques », « Transactions » et « À classer », et le choix est retenu d'une visite à l'autre. « Dernier mois » revient au mois le plus récent. Sur « Transactions », « À classer » et « Statistiques », la case « Tous les mois » retire le filtre de mois (la liste est alors grisée) ; la décocher rend le dernier mois choisi. « Le mois » et « Budget » montrent toujours un seul mois et ignorent cette case. Le filtre de compte n'existe que sur « Transactions » et « À classer », qui le partagent. Un lien qui porte un mois ou un compte, comme « Les classer » de la page « Le mois », l'emporte sur le choix retenu.
 
@@ -31,6 +31,7 @@ En haut, le mois affiché (liste déroulante partagée, « Dernier mois » pour 
 - **Les quatre cartes** : Revenus, Dépenses, Épargne et Reste. Elles se réconcilient : Revenus - Dépenses - Épargne = Reste. Les variations par rapport au mois précédent sont indiquées.
 - **Reste mois par mois** : une barre par mois. Le mois affiché est en couleur pleine, le mois en cours (encore incomplet) est en pointillés. Un clic sur une barre bascule sur ce mois. Un mois « partiel » (voir ci-dessous) est signalé dans l'infobulle et dans la liste déroulante des mois.
 - **Résumé du budget** : une ligne (dépenses face aux objectifs, nombre de groupes dépassés) qui mène à la page « Budget ».
+- **Écarts sur les récurrents** : une ligne discrète « N écarts sur vos flux récurrents » qui mène à la page « Récurrents », absente quand il n'y a rien à signaler.
 - **Où part l'argent** : une ligne par grande catégorie de dépenses, la plus coûteuse d'abord, avec le montant du mois, une barre et, en petit sous le nom, la moyenne mensuelle et l'objectif s'il y en a un. Un clic sur une catégorie déplie ses sous-catégories. Un montant en gras rouge ou vert signale un mois inhabituel (dépassement d'objectif, ou au moins 20 € et 20 % d'écart avec la moyenne) ; sur le mois en cours, encore incomplet, seul un montant déjà au-dessus de son objectif ou de sa moyenne est signalé. Chaque catégorie est nette de ses remboursements : le total peut donc être plus bas que la carte Dépenses.
 - **Flux d'argent** : un diagramme de Sankey qui part des revenus, passe par le budget et finit dans les groupes de dépenses, l'épargne et le Reste (ou le Découvert quand les sorties dépassent les entrées).
 - **Détail par catégorie** : le total par catégorie, toujours déplié, avec sous chaque feuille ses opérations, chacune précédée de la pastille de couleur de son compte ; les lignes d'épargne d'un compte importé portent aussi la leur.
@@ -45,6 +46,24 @@ Pour chaque compte d'épargne, l'application calcule le net du mois : positif, c
 ![La page Budget](img/budget.png)
 
 La page « Budget » compare, pour le mois choisi (liste déroulante, « Dernier mois »), la dépense de chaque catégorie qui a un objectif à son plafond. Vert sous 90 %, orange entre 90 et 100 %, rouge au-delà. Le solde du budget (revenu de référence - objectifs de dépense - objectif d'épargne) passe au rouge s'il est négatif : c'est un avertissement, jamais un blocage. Les objectifs se fixent dans « Catégories ».
+
+## Récurrents
+
+![La page Récurrents](img/recurrents.png)
+
+La page « Récurrents » liste les flux qui reviennent chaque mois, reçus ou payés : le loyer, le salaire, les abonnements, les factures. Elle les trouve toute seule dans l'historique complet, sans choix de mois : un flux est récurrent quand le même libellé, sur le même compte et dans le même sens, revient dans au moins 3 mois différents, à peu près tous les 30 jours et une seule fois par mois. Les virements internes en sont exclus.
+
+Chaque ligne donne le libellé, le compte, la catégorie (un flux sans catégorie renvoie vers « À classer »), le montant habituel, le nombre d'opérations et la date de la dernière, la date de la prochaine opération attendue, et des pastilles. Le ▸ déplie les 12 dernières opérations. La ligne de résumé en haut donne ce que les flux fixes sortent et rentrent par mois. La date attendue est celle de la prochaine opération, jamais un solde : l'application ne suit que les flux.
+
+Les pastilles orange demandent un coup d'œil :
+
+- **Manquant** : l'opération habituelle n'est pas arrivée, alors que le relevé du compte est plus récent qu'elle. Un relevé en retard ne déclenche rien, la date de référence est celle du dernier relevé du compte.
+- **Un ancien prix → un nouveau prix** : le montant a changé. Une variation de moins de 2 % ou de 0,50 € est considérée comme le même montant. Un seul paiement au nouveau prix reste à confirmer par le suivant, et l'alerte disparaît si le prix habituel revient. Une opération exceptionnelle au milieu (une prime sur le salaire) est ignorée.
+- **Doublé** : deux opérations ce mois-ci pour un flux payé d'habitude une fois.
+
+La pastille grise **Terminé** signale un flux sans opération depuis deux mois ou plus : un abonnement résilié, ou un libellé que la banque a changé (il apparaît alors comme un nouveau flux).
+
+Les filtres : le compte, un écart (« Avec écart » ou une seule pastille) et la case « Avec les montants variables ». Elle est décochée au départ : une facture comme l'électricité, ou un commerce visité à peu près chaque mois, a un montant qui change, et la liste par défaut ne montre que les flux au montant fixe, les seuls comptés dans le résumé. Cochez-la pour voir aussi les factures.
 
 ## Statistiques
 

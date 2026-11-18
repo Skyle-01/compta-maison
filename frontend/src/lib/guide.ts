@@ -3,6 +3,7 @@
 export const GUIDE_ANCHORS = {
   "/": "le-mois",
   "/budget": "budget",
+  "/recurrents": "récurrents",
   "/statistiques": "statistiques",
   "/transactions": "transactions",
   "/a-classer": "à-classer",

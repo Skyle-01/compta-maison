@@ -13,6 +13,7 @@ from app.api import (
     dashboard,
     data_dir,
     imports,
+    recurrences,
     rules,
     transactions,
     transfer_markers,
@@ -52,6 +53,7 @@ def create_app(
     app.include_router(transactions.router)
     app.include_router(categories.router)
     app.include_router(rules.router)
+    app.include_router(recurrences.router)
     app.include_router(dashboard.router)
     app.include_router(accounts.router)
     app.include_router(transfer_markers.router)

@@ -311,6 +311,45 @@ class RuleIssue(BaseModel):
     masked: bool = Field(default=False, description="Shadowed only: the rule keeps no operation at all")
 
 
+class RecurrenceStatus(BaseModel):
+    kind: Literal["missing", "ended", "price_change", "doubled"]
+    old_amount: float | None = Field(
+        default=None, description="price_change only: the amount before the change"
+    )
+    new_amount: float | None = Field(
+        default=None, description="price_change only: the amount after the change"
+    )
+    since: str | None = Field(default=None, description="price_change only: value date of the change")
+
+
+class RecurrenceOperation(BaseModel):
+    id: int
+    date: str
+    amount: float
+
+
+class Recurrence(BaseModel):
+    label: str = Field(description="The most frequent raw label of the flow")
+    account_id: str
+    side: Literal["debit", "credit"]
+    category_id: int | None = Field(description="The majority category, null when unclassified")
+    amount_kind: Literal["fixed", "variable"]
+    typical_amount: float = Field(description="Median of the latest run (of every amount when variable)")
+    last_amount: float
+    occurrences: int
+    first_date: str
+    last_date: str
+    next_expected: str | None = Field(description="Null once the flow has ended")
+    status: list[RecurrenceStatus]
+    last_operations: list[RecurrenceOperation] = Field(description="The last 12, newest first")
+
+
+class Recurrences(BaseModel):
+    items: list[Recurrence] = Field(description="Expenses then income, largest typical amount first")
+    monthly_expenses: float = Field(description="Sum of the typical amounts of the fixed, not ended expenses")
+    monthly_income: float = Field(description="Sum of the typical amounts of the fixed, not ended income")
+
+
 class ConflictRule(BaseModel):
     rule_id: int
     pattern: str
