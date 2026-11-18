@@ -19,11 +19,12 @@ backend/
       periods.py       # paycheck-anchored budget months (recompute_budget_months, budget_starts), GAP_TOLERANCE_DAYS, partial_months
       recompute.py     # recompute_all: budget months, transfers, rules - the one tail after any import/rebuild (rule mutations only need apply_rules + periods, see api/rules.py)
       transfers.py     # auto-pair internal transfers across accounts (recompute_transfers), transfer_candidates
+      rule_issues.py   # on-demand rule diagnostics (duplicate, redundant, conflict, shadowed, unused), behind GET /api/rules/issues; never stored
       inputs.py        # inputs/ archive of uploads (archive_statement); import_inputs_dir = the one loop importing every inputs/*.csv into an existing DB (no recompute), shared by reset_db, import_inputs.py and POST /api/imports/inputs; gap_warning + account_coverage (GET /api/imports/coverage)
       categorize.py    # apply_rules, category_tree, income_and_expenses, monthly_totals, budget_status, category_averages (+ averaging_window), uncategorized_balance, transfers_summary
       config_export.py # config CSVs written from the DB (export_config, *_rows builders), backups_dir, save_config (the Réglages « Enregistrer la configuration » button); reset_db.py's snapshots use export_config too; export_statements (POST /api/config/export-statements: the operations as re-importable DEFAULT_PROFILE CSVs, one per raw account, into backups/<ts>/inputs/)
       triage.py        # « À classer » logic: label_key, default_pattern + is_generic, SuggestionIndex, uncategorized_groups, rule_preview
-    api/               # routers: imports, transactions, categories, rules, dashboard, accounts, transfer_markers, config (POST /api/config/export); deps.py (Annotated deps); errors.py (French request-validation messages + the non-UTF-8 body 400)
+    api/               # routers: imports, transactions, categories, rules (+ GET /api/rules/issues), dashboard, accounts, transfer_markers, config (POST /api/config/export); deps.py (Annotated deps); errors.py (French request-validation messages + the non-UTF-8 body 400)
   scripts/reset_db.py  # THE rebuild CLI (see Rebuild model)
   scripts/import_inputs.py # incremental CLI (or ./import_inputs.ps1): new inputs/*.csv rows into the existing DB (deduped, nothing deleted) + recompute; the Import page's « Importer les nouveaux relevés » button does the same
   scripts/import_csv.py # config/taxonomy CSV loaders used by reset_db (import_accounts/categories/rules/overrides); not a CLI
