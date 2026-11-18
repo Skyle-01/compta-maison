@@ -484,3 +484,30 @@ class TestBudgetTargets:
         assert body["reste"] == body["by_category"]["balance"]
         every = client.get("/api/dashboard", params={"month": "all"}).json()["budget"]
         assert (every["months"], every["target"]) == (1, 50)
+
+
+class TestRuleIssues:
+    def test_issues_by_rule_id(self, seeded_db, client):
+        _upload(client)  # CARTE SUPERMARCHE lands on JOINT
+        courses, bar = _category_id(client, "courses"), _category_id(client, "bar")
+        rules = {r["pattern"]: r["id"] for r in client.get("/api/rules").json()}
+        twin = client.post("/api/rules", json={"category_id": courses, "pattern": "SUPERMARCHE"}).json()["id"]
+        scoped = client.post(
+            "/api/rules", json={"category_id": bar, "pattern": "SUPERMARCHE", "account_id": "JOINT"}
+        ).json()["id"]
+
+        resp = client.get("/api/rules/issues")
+
+        assert resp.status_code == 200
+        shadowed = {"kind": "shadowed", "rule_ids": [scoped], "count": 1, "masked": True}
+        assert resp.json() == {
+            str(rules["SUPERMARCHE"]): [shadowed],
+            str(rules["LECLERC"]): [{"kind": "unused", "rule_ids": [], "count": 0, "masked": False}],
+            str(twin): [
+                {"kind": "duplicate", "rule_ids": [rules["SUPERMARCHE"]], "count": 0, "masked": False},
+                shadowed,
+            ],
+        }
+
+    def test_no_issue_gives_an_empty_object(self, client):
+        assert client.get("/api/rules/issues").json() == {}

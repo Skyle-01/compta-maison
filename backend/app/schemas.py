@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -296,6 +296,19 @@ class RulePreview(BaseModel):
     conflicts: list[RuleConflict] = Field(
         description="Other rules, of another category, matching operations the new pattern matches"
     )
+
+
+class RuleIssue(BaseModel):
+    kind: Literal["duplicate", "redundant", "conflict", "shadowed", "unused"]
+    rule_ids: list[int] = Field(
+        description="The other rules involved: the earlier twin, the rules containing this one, the other "
+        "side of a conflict, the account rules overriding a shadowed rule; empty for unused"
+    )
+    count: int = Field(
+        description="Operations concerned: those in conflict with the other rule, those a shadowed rule "
+        "loses; 0 for the other kinds"
+    )
+    masked: bool = Field(default=False, description="Shadowed only: the rule keeps no operation at all")
 
 
 class ConflictRule(BaseModel):

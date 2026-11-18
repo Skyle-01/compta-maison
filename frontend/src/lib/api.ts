@@ -225,6 +225,18 @@ export interface RuleConflict {
   count: number;
 }
 
+/** A problem of a rule (GET /api/rules/issues); the page writes the texts. */
+export interface RuleIssue {
+  kind: "duplicate" | "redundant" | "conflict" | "shadowed" | "unused";
+  /** The other rules involved: the earlier twin, the rules containing this one, the other side of a
+   * conflict, the account rules overriding a shadowed rule; empty for unused. */
+  rule_ids: number[];
+  /** Operations concerned: in conflict with the other rule, or lost by a shadowed rule; 0 otherwise. */
+  count: number;
+  /** Shadowed only: the rule keeps no operation at all. */
+  masked: boolean;
+}
+
 /** An operation matched by rules of different categories: left uncategorised until classed by hand. */
 export interface ConflictedOperation {
   transaction: Transaction;
@@ -584,6 +596,8 @@ export const api = {
     request(`/api/categories/${categoryId}/move`, json("POST", move)),
 
   listRules: (): Promise<Rule[]> => request("/api/rules"),
+  /** The problems of the rules that have any, by rule id (the keys are strings in the JSON). */
+  ruleIssues: (): Promise<Record<number, RuleIssue[]>> => request("/api/rules/issues"),
   /** What a rule about to be saved would classify, and the rules it would conflict with
    *  (`ruleId`: the rule being edited, left out of the comparison; `accountId`: the account it is
    *  limited to, none = all accounts). */

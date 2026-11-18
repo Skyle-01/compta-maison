@@ -87,6 +87,18 @@ class TestResetDb:
         assert kinds["transfer"] > 0 and kinds["income"] > 0 and kinds["expense"] > 0
         assert 0 < uncategorised < kinds["expense"] / 5  # a few rows left to classify, not most
 
+    def test_demo_rules_show_every_kind_of_issue(self, tmp_path, monkeypatch):
+        reset_db = isolate_reset_db(tmp_path, monkeypatch)
+        shutil.copytree(EXAMPLE_PROFILES.parent / "demo", reset_db.INPUTS_DIR)
+        db_path = tmp_path / "demo.db"
+        reset_db.reset(db_path, "defaults", None)
+
+        with TestClient(create_app(db_path)) as client:
+            issues = client.get("/api/rules/issues").json()
+
+        kinds = {issue["kind"] for listed in issues.values() for issue in listed}
+        assert kinds == {"duplicate", "redundant", "conflict", "shadowed", "unused"}
+
     def test_demo_averages_reconcile_with_the_history(self, tmp_path, monkeypatch):
         reset_db = isolate_reset_db(tmp_path, monkeypatch)
         shutil.copytree(EXAMPLE_PROFILES.parent / "demo", reset_db.INPUTS_DIR)

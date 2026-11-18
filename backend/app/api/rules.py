@@ -8,9 +8,10 @@ from app.api.categories import reject_group_target
 from app.api.deps import DbPath
 from app.core.categorize import apply_rules
 from app.core.periods import recompute_budget_months
+from app.core.rule_issues import rule_issues
 from app.core.triage import rule_preview
 from app.db import connect, euros
-from app.schemas import RuleConflict, RuleIn, RuleOut, RulePreview
+from app.schemas import RuleConflict, RuleIn, RuleIssue, RuleOut, RulePreview
 
 router = APIRouter(prefix="/api/rules", tags=["rules"])
 
@@ -71,6 +72,16 @@ def list_rules(db_path: DbPath, category_id: int | None = None) -> list[RuleOut]
     with connect(db_path) as conn:
         rows = conn.execute(query + " GROUP BY r.id ORDER BY r.id", params).fetchall()
     return [_to_model(row) for row in rows]
+
+
+@router.get("/issues")
+def rule_problems(db_path: DbPath) -> dict[int, list[RuleIssue]]:
+    """Per rule id, the problems of the rules that have any (duplicate, redundant, conflict, shadowed,
+    unused), computed on demand."""
+    return {
+        rule_id: [RuleIssue(**vars(issue)) for issue in issues]
+        for rule_id, issues in rule_issues(db_path).items()
+    }
 
 
 @router.get("/preview")
