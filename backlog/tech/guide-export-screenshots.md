@@ -13,4 +13,4 @@ The Export page replaced the « Rapport PDF » link of « Le mois » (button « 
 ## Progress
 
 - 2026-11-12: item created when the Export page and the mobile HTML export were added; the page was checked on the demo DB but no guide image was updated.
-- 2026-11-12: two more changes will date the images, and the owner chose to retake everything here rather than with them: `statistiques.png` gains the « Les derniers mois » section (done 2026-11-17) and `dashboard.png` the « Où part l'argent » section (`backlog/feat/month-spending-breakdown.md`). Retake after both have landed.
+- 2026-11-12: two more changes will date the images, and the owner chose to retake everything here rather than with them: `statistiques.png` gains the « Les derniers mois » section (done 2026-11-17) and `dashboard.png` the « Où part l'argent » section (done 2026-11-17, now on « Le mois »; `dashboard.png` is not retaken yet). Retake once the « Règles » page of `backlog/feat/rules-page.md` has landed, so the guide is shot in one pass.
