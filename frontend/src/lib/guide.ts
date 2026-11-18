@@ -7,6 +7,7 @@ export const GUIDE_ANCHORS = {
   "/transactions": "transactions",
   "/a-classer": "à-classer",
   "/categories": "catégories",
+  "/regles": "règles",
   "/import": "importer-des-relevés",
   "/export": "export",
   "/settings": "réglages",

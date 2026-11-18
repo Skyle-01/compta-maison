@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { errorMessage, notifyUncategorizedChanged, type Category, type Rule, shortPath } from "./api";
+import {
+  api,
+  errorMessage,
+  notifyUncategorizedChanged,
+  type Category,
+  type Rule,
+  shortPath,
+  type Transaction,
+} from "./api";
 import { conflictsMessage } from "./triage";
 
 const UNDO_DELAY_MS = 8000;
@@ -74,6 +82,20 @@ export function useChanges(load: () => Promise<unknown>, categories: Category[])
     return () => window.removeEventListener("keydown", onKey);
   }, [undo]);
 
+  /** « Classer à part »: class a rule's operation by hand in another leaf; undoing hands it back to its rule. */
+  function classAside(tx: Transaction, categoryId: number) {
+    const target = categories.find((c) => c.id === categoryId);
+    if (!target) return;
+    act(async () => {
+      await api.updateTransaction(tx.id, { category_id: categoryId });
+      return {
+        message: `« ${tx.libelle} » classée à la main dans « ${shortPath(target)} »`,
+        // Clearing the manual category hands the row back to its rule.
+        undo: () => api.updateTransaction(tx.id, { category_id: null }),
+      };
+    });
+  }
+
   function warnOfConflicts(rule: Rule) {
     if (!rule.conflicts.length) return;
     const pathOf = (id: number) => {
@@ -85,5 +107,5 @@ export function useChanges(load: () => Promise<unknown>, categories: Category[])
     );
   }
 
-  return { error, setError, warning, toast, run, act, undo, warnOfConflicts };
+  return { error, setError, warning, toast, run, act, undo, classAside, warnOfConflicts };
 }

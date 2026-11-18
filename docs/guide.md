@@ -98,6 +98,25 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 - **Règles** : déplier une feuille pour voir ses règles (ancre de revenu, opérations touchées), les modifier, les supprimer, ou « ＋ règle ». Une règle s'applique par défaut à « Tous les comptes » ; le champ compte la limite à un seul compte (pour deux comptes sur trois, créer deux règles). Une règle d'un compte l'emporte toujours sur une règle de tous les comptes : ce n'est pas un conflit, c'est la façon de classer le même libellé autrement selon le compte. Il n'y a pas d'autre priorité : si deux règles de catégories différentes du même niveau (deux règles de tous les comptes, ou deux règles du même compte) correspondent à la même opération, c'est un **conflit** (voir « À classer »). Une règle d'ancre de revenu limitée à un compte n'ouvre un mois que pour les crédits de ce compte. Enregistrer une règle qui crée un conflit affiche un avertissement, la règle est enregistrée quand même. Deux règles de la même catégorie ne sont jamais en conflit.
 - **Déplacer des règles ou des opérations** : cocher, choisir la feuille cible. Une opération scindée apparaît sous ses deux catégories avec sa part (« scindée, sur N € ») ; la déplacer la met en entier dans la feuille cible et supprime le split. Une opération classée par règle ne se déplace pas seule : « Classer à part » la rend manuelle.
 - **Recherche** : sur les noms, les motifs de règles et les libellés ou notes manuels (sans tenir compte des accents ni de la casse).
+- **Voir une règle dans la page Règles** : chaque ligne de règle a un lien « voir dans Règles » qui ouvre la page Règles sur son motif.
+
+## Règles
+
+![La page Règles](img/regles.png)
+
+Toutes les règles sur une seule page, pour les chercher, repérer une erreur et nettoyer. On n'y crée pas de règle : cela se fait dans « À classer » ou sous une catégorie, dans Catégories.
+
+- **La liste** : une ligne par règle, triée par motif (les motifs qui se recouvrent, comme `EDF` et `EDF CLIENTS`, se suivent). Chaque ligne montre le motif, sa catégorie, son compte (« Tous » pour une règle de tous les comptes), ses problèmes éventuels, le nombre d'opérations et leur total. Ces nombres portent sur tous les mois. ▸ déplie les opérations de la règle.
+- **Chercher, filtrer, trier** : la recherche porte sur le motif, la description et la catégorie (sans tenir compte des accents ni de la casse). Les filtres sont le compte (ses règles et celles de tous les comptes), la catégorie (un groupe prend tout ce qu'il contient) et le problème. « Trier par » propose le motif, la catégorie, le compte et le nombre d'opérations.
+- **Les problèmes** : une règle peut en avoir plusieurs. Ils sont calculés à la demande, jamais enregistrés.
+  - **Doublon** : même motif, même compte et même catégorie qu'une règle plus ancienne.
+  - **Redondante** : une autre règle de la même catégorie, du même compte ou de tous les comptes, classe déjà tout ce qu'elle classe. Les deux règles se recouvrent : supprimer une règle d'un compte rend ses opérations aux règles de tous les comptes, ce qui peut créer un conflit.
+  - **Conflit** : des opérations correspondent aussi à une règle d'une autre catégorie, au même niveau. Elles restent sans catégorie.
+  - **Masquée** ou **en partie masquée** : une règle de tous les comptes perd des opérations (ou toutes) au profit d'une règle d'un compte.
+  - **Inutilisée** : la règle ne classe aucune opération.
+- **Comparer deux règles** : cliquer sur un problème qui nomme une autre règle réduit la liste à ces règles. La pastille « Comparaison » (✕) ramène la liste complète.
+- **Changer la catégorie d'une règle** : choisir une autre feuille dans la ligne la déplace avec toutes ses opérations. « Annuler » (ou Alt+Z) la remet.
+- **Modifier ou supprimer** : ✎ ouvre l'édition (motif, compte, description, ancre de revenu), ✕ supprime après confirmation. Enregistrer une règle qui crée un conflit affiche un avertissement, la règle est enregistrée quand même.
 
 ## Importer des relevés
 
@@ -110,6 +129,8 @@ L'arbre des catégories, avec pour chacune les règles, les opérations classée
 - La couverture par compte signale les trous entre deux relevés.
 
 ## Export
+
+![La page Export](img/export.png)
 
 Le rapport du foyer, pour quelqu'un qui ne connaît pas l'application, en PDF ou en page web pour téléphone. Le bouton « Exporter » de la page « Le mois » ouvre cette page avec le mois affiché déjà coché.
 

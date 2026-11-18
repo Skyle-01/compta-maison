@@ -14,6 +14,7 @@ export const NAV_GROUPS = [
       { href: "/transactions", label: "Transactions" },
       { href: "/a-classer", label: "À classer" },
       { href: "/categories", label: "Catégories" },
+      { href: "/regles", label: "Règles" },
       { href: "/import", label: "Importer" },
     ],
   },

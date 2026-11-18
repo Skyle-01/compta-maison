@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { useState } from "react";
 import type { Category, Rule, Transaction } from "@/lib/api";
 import { emptyRuleForm, type RuleForm } from "@/lib/ruleForm";
+import { rulesPageLink } from "@/lib/rules";
 import ManualRow from "./ManualRow";
 import RuleEditor from "@/components/RuleEditor";
 import RuleRow from "@/components/RuleRow";
@@ -81,6 +83,15 @@ export default function LeafContents({
             onSave={(form) => actions.updateRule(r.id, form)}
             onDelete={() => actions.deleteRule(r)}
             onClassAside={actions.classAside}
+            extra={
+              <Link
+                href={rulesPageLink(r.pattern)}
+                className="whitespace-nowrap text-xs text-zinc-600 hover:text-zinc-900"
+                title="Ouvrir cette règle dans la page Règles"
+              >
+                voir dans Règles
+              </Link>
+            }
           />
         ))}
         {adding && (

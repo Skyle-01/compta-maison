@@ -89,7 +89,10 @@ export default function CategoriesPage() {
       ),
     [],
   );
-  const { error, setError, warning, toast, run, act, undo, warnOfConflicts } = useChanges(load, categories);
+  const { error, setError, warning, toast, run, act, undo, classAside, warnOfConflicts } = useChanges(
+    load,
+    categories,
+  );
 
   useEffect(() => {
     load()
@@ -153,18 +156,7 @@ export default function CategoriesPage() {
     deleteRule(rule) {
       if (confirm(`Supprimer la règle « ${rule.pattern} » ?`)) run(() => api.deleteRule(rule.id));
     },
-    classAside(tx, categoryId) {
-      const target = byId.get(categoryId);
-      if (!target) return;
-      act(async () => {
-        await api.updateTransaction(tx.id, { category_id: categoryId });
-        return {
-          message: `« ${tx.libelle} » classée à la main dans « ${shortPath(target)} »`,
-          // Clearing the manual category hands the row back to its rule.
-          undo: () => api.updateTransaction(tx.id, { category_id: null }),
-        };
-      });
-    },
+    classAside,
     saveNote: (id, note) => run(() => api.updateTransaction(id, { note: note.trim() || null })),
     removeAssignment(tx) {
       // Clearing the category lets the rules engine reclaim the row; the note goes with it.
