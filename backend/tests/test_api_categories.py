@@ -1,6 +1,7 @@
 import pytest
 
 from app.core.categorize import apply_rules
+from app.core.transfers import recompute_transfers
 from app.db import connect, init_db
 from scripts.import_csv import import_csv
 from tests.api_helpers import _category_id, _export, _upload
@@ -386,6 +387,29 @@ class TestBudgetTargets:
         )
         budget = client.get("/api/dashboard", params={"month": "2026-06"}).json()["budget"]
         assert budget["income_reference"] == 2000
+
+    def test_no_target_under_deficit(self, seeded_db, client):
+        deficit = client.post("/api/categories", json={"name": "Déficit", "parent_id": None}).json()["id"]
+        retrait = client.post("/api/categories", json={"name": "Retrait", "parent_id": deficit}).json()["id"]
+        for category_id, path in ((deficit, "Déficit"), (retrait, "Déficit / Retrait")):
+            resp = client.put(f"/api/categories/{category_id}/target", json={"budget_target": 10})
+            assert resp.status_code == 422
+            message = resp.json()["detail"][0]
+            assert f"« {path} »" in message and message.endswith("se fixe sur « Épargne »")
+
+    def test_savings_actual_is_the_epargne_card(self, seeded_db, client):
+        # June: 500 into the LIVRET (a paired transfer); July: 200 taken out of it.
+        import_rows(
+            seeded_db,
+            ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "VIR de COMPTE", 0, 500, "LIVRET"),
+            ("2026-07-10", "2026-07-10", "RETRAIT LIVRET", 200, 0, "LIVRET"),
+        )
+        recompute_transfers(seeded_db)
+        for month, saved, dipped in (("2026-06", 500, 0), ("2026-07", 0, 200), ("all", 500, 200)):
+            body = client.get("/api/dashboard", params={"month": month}).json()
+            assert (body["epargne"], body["desepargne"]) == (saved, dipped)
+            assert body["budget"]["savings_actual"] == saved - dipped == body["epargne"] - body["desepargne"]
 
     def test_dashboard_without_transactions(self, seeded_db, client):
         """A fresh DB with targets (data/ ships some) but nothing imported yet."""

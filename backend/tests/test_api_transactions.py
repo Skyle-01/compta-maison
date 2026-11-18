@@ -93,15 +93,19 @@ class TestTransactions:
 
     def test_clear_manual_assignment_drops_note(self, seeded_db, client):
         _upload(client)
-        tx = client.get("/api/transactions", params={"uncategorized": True}).json()["items"][0]
-        courses = _category_id(client, "courses")
+        items = client.get("/api/transactions").json()["items"]
+        tx = next(t for t in items if t["libelle"] == "BAR ANGELUS")  # matched by the ANGELUS rule
+        bar, courses = _category_id(client, "bar"), _category_id(client, "courses")
+        rule_id = tx["rule_id"]
+        assert (tx["category_id"], rule_id is not None) == (bar, True)
         client.patch(f"/api/transactions/{tx['id']}", json={"category_id": courses, "note": "x"})
-        # Deleting the assignment: clear category (rules reclaim the row) and the note.
+        # Deleting the assignment: clear category (the rule reclaims the row) and the note.
         resp = client.patch(f"/api/transactions/{tx['id']}", json={"category_id": None, "note": None})
         assert resp.status_code == 200
         body = resp.json()
         assert body["category_manual"] is False
         assert body["note"] is None
+        assert (body["category_id"], body["rule_id"]) == (bar, rule_id)
 
     def test_manual_filter_returns_only_manual_rows(self, seeded_db, client):
         _upload(client)
@@ -118,8 +122,10 @@ class TestTransactions:
         salary = next(t for t in items if "EMPLOYEUR" in t["libelle"])
         # Rule-classified (not manual): carries the matching rule's id + pattern for provenance.
         assert salary["category_manual"] is False
-        assert salary["rule_id"] is not None
-        assert salary["rule_pattern"] and salary["rule_pattern"] in salary["libelle"]
+        rules = client.get("/api/rules").json()
+        expected = next(r for r in rules if r["pattern"] == "EMPLOYEUR")
+        assert salary["rule_id"] == expected["id"]
+        assert salary["rule_pattern"] == "EMPLOYEUR"
 
     def test_override_rejects_unknown_category(self, seeded_db, client):
         _upload(client)

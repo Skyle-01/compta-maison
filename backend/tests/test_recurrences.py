@@ -1,3 +1,7 @@
+from datetime import date, timedelta
+
+import pytest
+
 from app.core.categorize import apply_rules
 from app.core.recurrences import recurrences
 from app.db import connect
@@ -123,6 +127,62 @@ class TestDetection:
             "VIR EMPLOYEUR SALAIRE",
             "VIR CAF PRESTATION",
         ]
+
+
+def _every(libelle: str, days: int, count: int, start: date = date(2026, 1, 1), amount: float = 20.0):
+    """`count` operations of `amount`, `days` apart from `start`."""
+    rows = []
+    for i in range(count):
+        when = (start + timedelta(days=i * days)).isoformat()
+        rows.append((when, when, libelle, amount, 0, "PERSO"))
+    return rows
+
+
+class TestThresholds:
+    """Each limit of the detection, one value inside and one just outside."""
+
+    @pytest.mark.parametrize(("gap_days", "detected"), [(24, False), (25, True), (35, True), (36, False)])
+    def test_the_median_gap_must_be_25_to_35_days(self, db, gap_days, detected):
+        import_rows(db, *_every("PRLV ASSURANCE", gap_days, 6))
+        assert bool(recurrences(db)) is detected
+
+    @pytest.mark.parametrize(
+        ("days", "detected"),
+        [
+            # March holds two operations: 4 of 5 months with a single one = 80 %, 3 of 4 = 75 %.
+            (["2026-01-05", "2026-02-05", "2026-03-05", "2026-03-30", "2026-04-30", "2026-05-30"], True),
+            (["2026-01-05", "2026-02-05", "2026-03-05", "2026-03-30", "2026-04-30"], False),
+        ],
+    )
+    def test_at_least_80_percent_of_the_months_hold_a_single_operation(self, db, days, detected):
+        import_rows(db, *[(d, d, "PRLV SALLE", 30, 0, "PERSO") for d in days])
+        assert bool(recurrences(db)) is detected
+
+    @pytest.mark.parametrize(
+        ("amounts", "kept"),
+        [
+            ([65, 80, 100, 120, 135], True),  # the extremes sit exactly 35 % from the median
+            ([64, 80, 100, 120, 136], False),
+        ],
+    )
+    def test_a_variable_bill_stays_within_35_percent_of_its_median(self, db, amounts, kept):
+        import_rows(db, *_series("PRLV EDF", [float(a) for a in amounts]))
+        assert bool(recurrences(db)) is kept
+
+    @pytest.mark.parametrize(
+        ("base", "last", "is_a_step"),
+        [
+            (10.00, 10.50, False),  # under 25 EUR the 0.50 EUR floor applies
+            (10.00, 10.51, True),
+            (100.00, 102.00, False),  # above it the 2 % rate applies
+            (100.00, 102.01, True),
+        ],
+    )
+    def test_the_amount_tolerance_is_2_percent_with_a_50_cent_floor(self, db, base, last, is_a_step):
+        import_rows(db, *_series("PRLV NETFLIX.COM", [base, base, last]))
+        item = _one(db, "PRLV NETFLIX.COM")
+        assert item["amount_kind"] == "fixed"
+        assert _kinds(item) == (["price_change"] if is_a_step else [])
 
 
 class TestAmounts:

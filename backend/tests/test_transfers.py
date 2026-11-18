@@ -56,13 +56,17 @@ class TestRecomputeTransfers:
         )
         assert recompute_transfers(db) == 0
 
-    def test_outside_date_window_not_paired(self, db):
+    @pytest.mark.parametrize(
+        ("credit_day", "legs_paired"),
+        [("2026-06-06", 0), ("2026-06-07", 2), ("2026-06-13", 2), ("2026-06-14", 0), ("2026-06-20", 0)],
+    )
+    def test_date_window_is_three_days_either_way(self, db, credit_day, legs_paired):
         import_rows(
             db,
             ("2026-06-10", "2026-06-10", "VIR vers LIVRET", 500, 0, "PERSO"),
-            ("2026-06-20", "2026-06-20", "VIR de COMPTE", 0, 500, "LIVRET"),
+            (credit_day, credit_day, "VIR de COMPTE", 0, 500, "LIVRET"),
         )
-        assert recompute_transfers(db) == 0
+        assert recompute_transfers(db) == legs_paired
 
     def test_transfers_excluded_from_totals_and_balance(self, db):
         import_rows(
@@ -171,10 +175,6 @@ class TestTransferMarkers:
         import_rows(db, ("2026-06-10", "2026-06-10", "vers Livret Enfant", 25, 0, "JOINT"))
         assert recompute_transfers(db) == 1
 
-
-class TestPairingAmbiguity:
-    """A pair forms only when nothing else could be the other leg: a wrong pair silently hides an
-    income (the tenant's rent) or an expense, an unpaired leg merely waits for a manual decision."""
     def test_external_savings_pattern_ignores_imported_savings_rows(self, db):
         # The pattern funds from checking accounts only: a row of the imported LIVRET containing it
         # (interest) stays income, while the same label on a checking account becomes a transfer.
@@ -186,6 +186,10 @@ class TestPairingAmbiguity:
         assert recompute_transfers(db) == 1
         assert _kinds(db) == {"INTERETS VERS LIVRET ENFANT": "income", "VERS LIVRET ENFANT": "transfer"}
 
+
+class TestPairingAmbiguity:
+    """A pair forms only when nothing else could be the other leg: a wrong pair silently hides an
+    income (the tenant's rent) or an expense, an unpaired leg merely waits for a manual decision."""
 
     RENT = ("2026-09-03", "2026-09-03", "VIR INST LOCATAIRE DUPONT", 0, 570, "LOCATIF")
 
@@ -466,10 +470,6 @@ class TestManualTransfers:
         with pytest.raises(ValueError, match="épargne externe"):
             pair_manually(db, ids["VIR vers Livret Enfant"], ids["VIR SEPA MAMIE"])
 
-    def test_manual_unpair_survives_recompute(self, db):
-        import_rows(db, *self.LEGS)
-        recompute_transfers(db)
-        touched = set_transfer_mode(db, self._ids(db)["VIR vers LIVRET"], "none")
     def test_imported_savings_row_with_the_pattern_can_be_paired_manually(self, db):
         # Accepted side effect of restricting external deposits to checking accounts: a LIVRET row
         # containing the pattern is an ordinary row again.
@@ -482,6 +482,10 @@ class TestManualTransfers:
         pair_manually(db, ids["RETRAIT DAB"], ids["INTERETS VERS LIVRET ENFANT"])
         assert self._state(db)["INTERETS VERS LIVRET ENFANT"][0] == "transfer"
 
+    def test_manual_unpair_survives_recompute(self, db):
+        import_rows(db, *self.LEGS)
+        recompute_transfers(db)
+        touched = set_transfer_mode(db, self._ids(db)["VIR vers LIVRET"], "none")
         assert len(touched) == 2
         recompute_transfers(db)
         assert self._state(db) == {

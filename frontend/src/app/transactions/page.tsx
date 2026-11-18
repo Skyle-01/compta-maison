@@ -43,6 +43,7 @@ export default function TransactionsPage() {
         if (id !== request.current) return;
         setItems(page.items);
         setTotal(page.total);
+        setError(null); // the list loaded: drop the notice of an earlier failure
       })
       .catch((e) => {
         if (id === request.current) setError(errorMessage(e));

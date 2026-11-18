@@ -1,3 +1,5 @@
+import pytest
+
 from app.core.periods import budget_starts, recompute_budget_months
 from app.db import connect
 from tests.conftest import import_rows
@@ -39,6 +41,17 @@ class TestRecomputeBudgetMonths:
         with connect(seeded_db) as conn:
             assert list(budget_starts(conn).values()) == ["2026-05-28"]
         assert _months(seeded_db)["CARTE LECLERC"] == "2026-06"
+
+    @pytest.mark.parametrize(
+        ("day", "budget_month"),
+        [("2026-05-14", "2026-05"), ("2026-05-15", "2026-06"), ("2026-12-15", "2027-01")],
+    )
+    def test_a_deposit_from_the_15th_pays_for_the_next_month(self, seeded_db, day, budget_month):
+        import_rows(seeded_db, (day, day, "VIR EMPLOYEUR", 0, 2500, "PERSO"))
+        recompute_budget_months(seeded_db)
+        assert _months(seeded_db)["VIR EMPLOYEUR"] == budget_month
+        with connect(seeded_db) as conn:
+            assert list(budget_starts(conn)) == [budget_month]
 
     def test_spending_after_paycheck_rolls_into_next_month(self, seeded_db):
         import_rows(

@@ -21,7 +21,9 @@ export function useMonthDashboard({ allowAll = false }: { allowAll?: boolean } =
     api
       .dashboard(period || undefined)
       .then((d) => {
-        if (!stale) setData(d);
+        if (stale) return;
+        setData(d);
+        setError(null); // the backend answers again: drop the notice of an earlier failure
       })
       .catch((e) => {
         if (!stale) setError(errorMessage(e));
