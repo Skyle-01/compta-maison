@@ -77,6 +77,12 @@ class TestParseCsv:
         with pytest.raises(CsvValidationError, match="Ligne 2 : montant invalide.*« Debit »"):
             parse_csv(_csv('"06/06/2026";"06/06/2026";"X";"abc";""'))
 
+    @pytest.mark.parametrize("amount", ["NaN", "-nan", "inf", "-inf", "Infinity"])
+    def test_non_finite_amount_rejected(self, amount):
+        # These would pass float() and then crash the import (to_cents) after the file was archived.
+        with pytest.raises(CsvValidationError, match="Ligne 2 : montant invalide.*« Credit »"):
+            parse_csv(_csv(f'"06/06/2026";"06/06/2026";"X";"";"{amount}"'))
+
     def test_binary_file_rejected(self):
         with pytest.raises(CsvValidationError, match="illisible en utf-8-sig, cp1252"):
             parse_csv(b"PK\x03\x04\x81\x8d")
@@ -294,6 +300,20 @@ class TestProfileParsing:
         pairs = [(r["Debit"], r["Credit"]) for r in rows]
         assert pairs == [(12.5, 0.0), (0.0, 1200.0), (0.0, 0.0)]
         assert all(str(v) == "0.0" for pair in pairs for v in pair if v == 0)  # never "-0.0"
+
+    @pytest.mark.parametrize("amount", ["12,50", "1,23", "12,5000", ",5", "1,2,3", "1234,567.00"])
+    def test_dot_decimal_rejects_a_comma_that_is_not_a_thousands_separator(self, amount):
+        # '12,50' with a dot decimal is a misdeclared profile: it used to read as 1250.
+        with pytest.raises(CsvValidationError, match="montant invalide"):
+            parse_csv(_signed_csv(f'2026-06-01,A,"{amount}"'), self.profiles)
+
+    @pytest.mark.parametrize(
+        ("amount", "debit", "credit"),
+        [("1,234.56", 0.0, 1234.56), ("-1,234,567.00", 1234567.0, 0.0), ("1234.56", 0.0, 1234.56)],
+    )
+    def test_dot_decimal_accepts_thousands_commas(self, amount, debit, credit):
+        rows = parse_csv(_signed_csv(f'2026-06-01,A,"{amount}"'), self.profiles)
+        assert (rows[0]["Debit"], rows[0]["Credit"]) == (debit, credit)
 
     def test_comma_decimal_signed(self):
         profile = parse_bank_profiles(_toml(**{**SIGNED, "delimiter": ";", "decimal": ","}))[0]

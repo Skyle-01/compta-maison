@@ -108,7 +108,7 @@ npm run build --prefix frontend                        # type-check only (Next 1
 
 ### Rebuild model
 - **`reset_db.py` is the one rebuild CLI.** A rebuild = fresh DB + load `accounts.csv` + import every `inputs/*.csv` (account inferred from the filename via the aliases, deduped by hash) + load a taxonomy (categories, rules, overrides) from `--source {live|defaults|backup}`, then recompute periods + transfers and re-apply rules.
-- **Transactions always come from `inputs/`**, so a snapshot is **config-only**: a full restore point = the latest `backups/<ts>/` **plus** the current `inputs/`. Whenever a DB exists, `reset_db.py` snapshots it *before* deleting (and `--source live` rebuilds from that very snapshot).
+- **Transactions always come from `inputs/`**, so a snapshot is **config-only**: a full restore point = the latest `backups/<ts>/` **plus** the current `inputs/`. Whenever a DB exists, `reset_db.py` snapshots it first (and `--source live` rebuilds from that very snapshot), then builds the new DB in `<db>.tmp` and replaces the live file (`os.replace`) only once everything loaded: a failed rebuild leaves the previous DB untouched.
 - **Manual overrides** (`category_manual=1`, `kind_manual=1`, a manual `note`) reference rebuilt ids, so they survive a rebuild only through `overrides.csv` (snapshot or config dir), keyed by the stable `import_hash` with an identity-column fallback. Format and matching: `.claude/rules/config-files.md`.
 - `bank_profiles.toml` and `settings.toml` are read from the config dir (`app.state.config_dir` = `$COMPTA_CONFIG_DIR` else `config/` of the data folder) on every call, by the server (`app.state.config_dir`) and `reset_db.py` whatever `--source` - never from a snapshot.
 

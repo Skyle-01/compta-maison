@@ -40,6 +40,16 @@ class TestImports:
         )
         assert resp.status_code == 422
 
+    @pytest.mark.parametrize("amount", ["NaN", "inf"])
+    def test_non_finite_amount_rejected_and_not_archived(self, seeded_db, client, tmp_path, amount):
+        # A 500 after archiving would leave the file in inputs/, to fail every later rebuild.
+        resp = _upload(client, content=_csv(f'"06/06/2026";"06/06/2026";"X";"{amount}";""'))
+        assert resp.status_code == 422
+        assert "montant invalide" in resp.json()["detail"][0]
+        assert not list((tmp_path / "inputs").glob("*.csv"))
+        with connect(seeded_db) as conn:
+            assert conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0] == 0
+
     def test_missing_account_rejected(self, client):
         resp = client.post(
             "/api/imports",

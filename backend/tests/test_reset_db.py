@@ -279,6 +279,30 @@ class TestResetDb:
         assert seeded_db.exists()
         assert not backups.exists()
 
+    def test_failed_rebuild_leaves_the_previous_db_unchanged(self, seeded_db, tmp_path, monkeypatch):
+        # The taxonomy loads last, after the accounts and the statements: a failure there used to
+        # leave no database at all.
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
+        config = tmp_path / "config"
+        config.mkdir()
+        (config / "accounts.csv").write_text(
+            "code;label;type;sort_order\nMAIN;Mon compte;checking;1\n", encoding="utf-8"
+        )
+        (config / "categories.csv").write_text("path;budget_target\nVariable;inf\n", encoding="utf-8")
+        (config / "rules.csv").write_text("category_path;pattern;is_income_anchor\n", encoding="utf-8")
+        before = seeded_db.read_bytes()
+
+        with pytest.raises(ValueError, match=r"categories\.csv line 2: budget_target"):
+            reset_db.reset(seeded_db, "defaults", None)
+
+        assert seeded_db.read_bytes() == before
+        assert not seeded_db.with_name(seeded_db.name + ".tmp").exists()
+
+    def test_successful_rebuild_leaves_no_temporary_file(self, seeded_db, tmp_path, monkeypatch):
+        reset_db, backups = self._isolate(tmp_path, monkeypatch)
+        reset_db.reset(seeded_db, "live", None)
+        assert not seeded_db.with_name(seeded_db.name + ".tmp").exists()
+
 
 class TestUploadMatchesRebuild:
     """An upload hashes its rows like reset_db.py rebuilds them, and lands in inputs/, so manual

@@ -1,5 +1,7 @@
 import csv
 import io
+import math
+import re
 from collections.abc import Sequence
 from datetime import date, datetime
 
@@ -37,20 +39,31 @@ def infer_account(filename: str, profiles: Sequence[BankProfile] = (DEFAULT_PROF
 _THOUSANDS_SEPARATORS = (" ", " ", " ")
 
 
+# Dot-decimal number holding commas: a leading group of 1-3 digits, then groups of exactly 3 ('-1,200.00').
+_COMMA_THOUSANDS = re.compile(r"[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?")
+
+
 def _parse_number(value: str, decimal: str) -> float | None:
     """'1 234,56' (decimal ',') or '1,234.56' (decimal '.') to a signed float.
-    Empty/missing -> 0.0; unparseable -> None."""
+    Empty/missing -> 0.0; unparseable or not finite (NaN, inf) -> None."""
     cleaned = value.strip()
     for sep in _THOUSANDS_SEPARATORS:
         cleaned = cleaned.replace(sep, "")
-    # With a comma decimal this is exactly the historical parsing, which import_hash depends on.
-    cleaned = cleaned.replace(",", ".") if decimal == "," else cleaned.replace(",", "")
+    if decimal == ",":
+        # Exactly the historical parsing, which import_hash depends on.
+        cleaned = cleaned.replace(",", ".")
+    elif "," in cleaned:
+        # With a dot decimal a comma is only a thousands separator: '12,50' is a wrong profile, not 1250.
+        if not _COMMA_THOUSANDS.fullmatch(cleaned):
+            return None
+        cleaned = cleaned.replace(",", "")
     if cleaned in ("", "nan"):
         return 0.0
     try:
-        return float(cleaned)
+        number = float(cleaned)
     except ValueError:
         return None
+    return number if math.isfinite(number) else None
 
 
 def _parse_amount(value: str, decimal: str = ",") -> float | None:

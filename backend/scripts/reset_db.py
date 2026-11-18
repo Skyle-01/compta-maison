@@ -17,7 +17,8 @@ load a taxonomy (categories, rules, and manual overrides) from one source:
 Transactions always come from inputs/*.csv (the durable bank-statement archive). The taxonomy
 snapshot under backups/ is therefore taxonomy-only: a full restore point = the latest
 backups/<ts>/ **plus** your current inputs/. Whenever a DB already exists it is snapshotted to
-backups/<ts>/ before being deleted, so every rebuild leaves a recoverable restore point.
+backups/<ts>/ first, so every rebuild leaves a recoverable restore point; the new DB is built in
+<db>.tmp and replaces the old one only when the whole rebuild succeeded.
 backups/ sits next to the DB (--db, else $COMPTA_DB, else compta.db in the data folder).
 
 Personal data lives in one data folder outside the tracked files ($COMPTA_DATA_DIR, else the folder
@@ -32,6 +33,7 @@ config dir.
 """
 
 import argparse
+import os
 import sys
 from datetime import date
 from pathlib import Path
@@ -128,16 +130,23 @@ def _rebuild(
 ) -> None:
     """Fresh DB: load accounts, import inputs, then load the taxonomy + overrides from the given
     CSVs. Accounts come first so statement filenames resolve; inputs is imported *before* the
-    taxonomy so overrides reattach by import_hash."""
-    if db_path.exists():
-        db_path.unlink()
-    init_db(db_path)
-    load_accounts_csv(accounts_csv, db_path)
-    load_transfer_markers_csv(markers_csv, db_path)
-    n_new = _import_inputs(db_path, profiles, start_date)
-    # import_csv rebuilds cats/rules from the CSVs, reattaches overrides by import_hash, and
-    # recomputes periods + transfers + rules over the freshly imported transactions.
-    import_csv(cat_csv, rules_csv, db_path, overrides_csv)
+    taxonomy so overrides reattach by import_hash.
+
+    Built in `<db>.tmp` beside the target and moved over it only once everything loaded: a failure
+    (SystemExit included) leaves the previous database untouched and removes the temporary file."""
+    tmp_path = db_path.with_name(db_path.name + ".tmp")
+    tmp_path.unlink(missing_ok=True)
+    try:
+        init_db(tmp_path)
+        load_accounts_csv(accounts_csv, tmp_path)
+        load_transfer_markers_csv(markers_csv, tmp_path)
+        n_new = _import_inputs(tmp_path, profiles, start_date)
+        # import_csv rebuilds cats/rules from the CSVs, reattaches overrides by import_hash, and
+        # recomputes periods + transfers + rules over the freshly imported transactions.
+        import_csv(cat_csv, rules_csv, tmp_path, overrides_csv)
+        os.replace(tmp_path, db_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
     print(f"Rebuilt {db_path} ({n_new} transactions imported).")
 
 

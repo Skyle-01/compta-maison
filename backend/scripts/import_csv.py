@@ -117,7 +117,7 @@ def _parse_target(raw: str | None, line_no: int) -> int | None:
         return None
     try:
         cents = to_cents(float(text))
-    except ValueError:
+    except (ValueError, OverflowError):  # not a number, or inf (nan raises ValueError)
         cents = 0
     if cents <= 0:
         raise ValueError(
