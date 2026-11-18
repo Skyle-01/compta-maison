@@ -209,6 +209,22 @@ def savings_accounts(conn: sqlite3.Connection) -> list[tuple[str, str, str | Non
     ).fetchall()
 
 
+def deposit_match_clause(alias: str = "") -> str:
+    """SQL predicate (one `?` = the deposit_pattern) for the rows funding an external savings
+    account: a checking-account row whose libellé contains the pattern, any case. The one definition
+    shared by recompute_transfers (marks them), the savings net (sums them) and the drill-down."""
+    p = f"{alias}." if alias else ""
+    return (
+        f"(instr(casefold({p}libelle), casefold(?)) > 0 "
+        f"AND {p}account_id IN (SELECT code FROM accounts WHERE type = 'checking'))"
+    )
+
+
+def checking_codes(conn: sqlite3.Connection) -> set[str]:
+    """Codes of the checking accounts (the python twin of deposit_match_clause's account test)."""
+    return {code for (code,) in conn.execute("SELECT code FROM accounts WHERE type = 'checking'")}
+
+
 def upsert_accounts(
     conn: sqlite3.Connection,
     accounts: list[tuple[str, str, str, int, str | None]],
@@ -337,7 +353,8 @@ def _row_hash(
 @contextmanager
 def connect(db_path: Path) -> Iterator[sqlite3.Connection]:
     """Connection with foreign keys on; commits on success, rolls back on error, always closes."""
-    conn = sqlite3.connect(db_path)
+    # Routes run in a thread pool: wait up to 30 s (not the default 5) for another request's write.
+    conn = sqlite3.connect(db_path, timeout=30)
     conn.execute("PRAGMA foreign_keys = ON")
     # SQLite's lower() folds ASCII only; this lets SQL fold case exactly like Python does
     # (deposit_pattern matching, core/transfers.py::_is_external_deposit).

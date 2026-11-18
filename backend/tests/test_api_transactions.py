@@ -44,6 +44,15 @@ class TestTransactions:
         body = client.get("/api/transactions", params={"deposit_pattern": "VERS LIVRET ENFANT"}).json()
         assert [t["libelle"] for t in body["items"]] == ["vers Livret Enfant"]
 
+    def test_deposit_pattern_filter_returns_checking_rows_only(self, db, client):
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "VERS LIVRET ENFANT", 25, 0, "JOINT"),
+            ("2026-06-11", "2026-06-11", "INTERETS VERS LIVRET ENFANT", 0, 1, "LIVRET"),
+        )
+        body = client.get("/api/transactions", params={"deposit_pattern": "VERS LIVRET ENFANT"}).json()
+        assert [t["libelle"] for t in body["items"]] == ["VERS LIVRET ENFANT"]
+
     def test_categorized_transaction_carries_name(self, seeded_db, client):
         _upload(client)
         items = client.get("/api/transactions", params={"month": "2026-06"}).json()["items"]

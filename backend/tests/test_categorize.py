@@ -371,6 +371,21 @@ class TestSavingsTreeNodes:
         assert leaf["libelle_match"] == "VERS LIVRET ENFANT"
         assert _find(tree, "Épargne") == {}
 
+    def test_external_savings_ignores_imported_savings_rows(self, db):
+        # A LIVRET row whose libellé contains the ENFANT pattern (interest) is LIVRET's own income:
+        # it neither lowers the ENFANT deposit nor leaves the income, so epargne = 1.00 + 0.20.
+        import_rows(
+            db,
+            ("2026-05-10", "2026-05-10", "VERS LIVRET ENFANT", 1, 0, "PERSO"),
+            ("2026-05-12", "2026-05-12", "INTERETS VERS LIVRET ENFANT", 0, 0.2, "LIVRET"),
+        )
+        recompute_transfers(db)
+        tree = category_tree(db, "2026-05")
+        assert _find(_find(tree, "Épargne"), "Livret enfant")["balance"] == -1
+        assert _find(_find(tree, "Épargne"), "Livret A")["balance"] == -0.2
+        assert income_and_expenses(db, "2026-05") == (0.2, 0.0)
+        assert monthly_totals(db)[0]["epargne"] == 1.2
+
     def test_checking_movements_are_not_savings(self, db):
         import_rows(db, ("2026-06-10", "2026-06-10", "SALAIRE", 0, 500, "PERSO"))
         tree = category_tree(db, "2026-06")

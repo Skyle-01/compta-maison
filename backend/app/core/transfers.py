@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Literal, NamedTuple
 
 from app.core.triage import label_key
-from app.db import account_names, connect, get_transfer_markers, savings_accounts
+from app.db import (
+    account_names,
+    checking_codes,
+    connect,
+    deposit_match_clause,
+    get_transfer_markers,
+    savings_accounts,
+)
 
 TRANSFER_WINDOW_DAYS = 3
 # Label prefixes that mark a bank line as a virement. French banks start transfer labels with
@@ -62,9 +69,13 @@ def _deposit_patterns(conn: sqlite3.Connection) -> list[str]:
     return [pattern for _code, _label, pattern in savings_accounts(conn) if pattern]
 
 
-def _is_external_deposit(libelle: str, patterns: Sequence[str]) -> bool:
-    """Same case-insensitive substring test as the external-savings pass (SQL casefold + instr):
-    banks don't keep a payee's casing ('vers LIVRET' for a 'VERS LIVRET' pattern)."""
+def _is_external_deposit(
+    libelle: str, account_id: str | None, patterns: Sequence[str], checking: Collection[str]
+) -> bool:
+    """Same test as db.deposit_match_clause: a checking-account row whose libellé contains a pattern,
+    case-insensitively (banks don't keep a payee's casing: 'vers LIVRET' for a 'VERS LIVRET' pattern)."""
+    if account_id not in checking:
+        return False
     label = libelle.casefold()
     return any(pattern.casefold() in label for pattern in patterns)
 
@@ -168,6 +179,7 @@ def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> 
     # External-savings deposits are single-legged by design (see recompute_transfers): pairing one
     # with an unrelated same-amount credit would hide that credit from income.
     patterns = _deposit_patterns(conn)
+    checking = checking_codes(conn)
     names = _libelle_names(conn)
     rows = conn.execute(
         f"SELECT id, account_id, {amount_col}, date_operation, libelle FROM transactions "
@@ -178,7 +190,9 @@ def _legs(conn: sqlite3.Connection, amount_col: str, markers: Sequence[str]) -> 
     for id_, account_id, cents, day, libelle in rows:
         refs = account_refs(libelle, account_id, names)
         # Naming one of your accounts is as good a sign as a marker ("vers LIVRET A" has no VIR).
-        if (has_transfer_marker(libelle, markers) or refs) and not _is_external_deposit(libelle, patterns):
+        if (has_transfer_marker(libelle, markers) or refs) and not _is_external_deposit(
+            libelle, account_id, patterns, checking
+        ):
             legs.append(Leg(id_, account_id, cents, date.fromisoformat(day).toordinal(), libelle, refs))
     return legs
 
@@ -223,6 +237,12 @@ def _next_group(conn: sqlite3.Connection) -> int:
 
 
 def recompute_transfers(db_path: Path) -> int:
+    """recompute_transfers_in on its own connection."""
+    with connect(db_path) as conn:
+        return recompute_transfers_in(conn)
+
+
+def recompute_transfers_in(conn: sqlite3.Connection) -> int:
     """Auto-pair internal transfers between canonical accounts and flag both legs.
 
     A transfer is a debit on one account matched to a credit on a *different* account with the
@@ -247,41 +267,40 @@ def recompute_transfers(db_path: Path) -> int:
     external-savings deposits (re)marked on this run (the reset above restores everything to
     income/expense first, so the count is stable across runs, not strictly "newly changed").
     """
-    with connect(db_path) as conn:
-        # Reset prior auto-pairings back to their amount-derived flow before re-pairing.
-        conn.execute(
-            "UPDATE transactions SET transfer_group_id = NULL, "
-            "kind = CASE WHEN credit_cents > 0 THEN 'income' ELSE 'expense' END "
-            "WHERE kind_manual = 0"
-        )
-        markers = effective_markers(conn)
-        pairs = pair_legs(_legs(conn, "debit_cents", markers), _legs(conn, "credit_cents", markers))
-        first_group = _next_group(conn)
-        conn.executemany(
-            "UPDATE transactions SET transfer_group_id = ?, kind = 'transfer' WHERE id IN (?, ?)",
-            [(first_group + i, debit_id, credit_id) for i, (debit_id, credit_id) in enumerate(pairs)],
-        )
-        marked = 2 * len(pairs)
+    # Reset prior auto-pairings back to their amount-derived flow before re-pairing.
+    conn.execute(
+        "UPDATE transactions SET transfer_group_id = NULL, "
+        "kind = CASE WHEN credit_cents > 0 THEN 'income' ELSE 'expense' END "
+        "WHERE kind_manual = 0"
+    )
+    markers = effective_markers(conn)
+    pairs = pair_legs(_legs(conn, "debit_cents", markers), _legs(conn, "credit_cents", markers))
+    first_group = _next_group(conn)
+    conn.executemany(
+        "UPDATE transactions SET transfer_group_id = ?, kind = 'transfer' WHERE id IN (?, ?)",
+        [(first_group + i, debit_id, credit_id) for i, (debit_id, credit_id) in enumerate(pairs)],
+    )
+    marked = 2 * len(pairs)
 
-        # External savings deposits: a checking-account row whose libellé contains the pattern (any case)
-        # of a savings account that has no statement of its own. Mark as transfer (out of
-        # expenses); the reset above already restored these to income/expense, so this is safe.
-        for _code, _label, pattern in savings_accounts(conn):
-            if not pattern:
-                continue
-            cur = conn.execute(
-                "UPDATE transactions SET kind = 'transfer' "
-                "WHERE kind_manual = 0 AND kind != 'transfer' AND instr(casefold(libelle), casefold(?)) > 0",
-                (pattern,),
-            )
-            marked += cur.rowcount
-
-        # A transfer has no category by design: a row that just became one (here or through a manual
-        # decision, which ends by calling this) loses its split, keeping its 1st category.
-        conn.execute(
-            "DELETE FROM transaction_splits WHERE transaction_id IN (SELECT id FROM transactions WHERE kind = 'transfer')"
+    # External savings deposits: a checking-account row whose libellé contains the pattern (any case)
+    # of a savings account that has no statement of its own. Mark as transfer (out of
+    # expenses); the reset above already restored these to income/expense, so this is safe.
+    for _code, _label, pattern in savings_accounts(conn):
+        if not pattern:
+            continue
+        cur = conn.execute(
+            "UPDATE transactions SET kind = 'transfer' "
+            f"WHERE kind_manual = 0 AND kind != 'transfer' AND {deposit_match_clause()}",
+            (pattern,),
         )
-        return marked
+        marked += cur.rowcount
+
+    # A transfer has no category by design: a row that just became one (here or through a manual
+    # decision, which ends by calling this) loses its split, keeping its 1st category.
+    conn.execute(
+        "DELETE FROM transaction_splits WHERE transaction_id IN (SELECT id FROM transactions WHERE kind = 'transfer')"
+    )
+    return marked
 
 
 def _partner_ids(conn: sqlite3.Connection, transaction_id: int) -> list[int]:
@@ -323,12 +342,13 @@ def pair_manually(db_path: Path, a_id: int, b_id: int) -> int:
             (a_id, b_id),
         ):
             rows[id_] = (account_id, debit, credit)
-            labels.append(libelle)
+            labels.append((libelle, account_id))
         missing = [id_ for id_ in (a_id, b_id) if id_ not in rows]
         if missing:
             raise LookupError(f"Opération {missing[0]} introuvable")
         patterns = _deposit_patterns(conn)
-        if any(_is_external_deposit(label, patterns) for label in labels):
+        checking = checking_codes(conn)
+        if any(_is_external_deposit(label, acc, patterns, checking) for label, acc in labels):
             raise ValueError("Un versement vers une épargne externe ne peut pas être associé")
         debits = [id_ for id_, (_acc, debit, _credit) in rows.items() if debit > 0]
         credits = [id_ for id_, (_acc, _debit, credit) in rows.items() if credit > 0]
@@ -348,7 +368,8 @@ def pair_manually(db_path: Path, a_id: int, b_id: int) -> int:
             "WHERE id IN (?, ?)",
             (group, a_id, b_id),
         )
-    recompute_transfers(db_path)
+        # Same transaction as the decision: a failure here must not leave it stored without the cleanup.
+        recompute_transfers_in(conn)
     return group
 
 
@@ -390,16 +411,18 @@ def set_transfer_mode(db_path: Path, transaction_id: int, mode: TransferMode) ->
             _release(conn, touched)
         patterns = _deposit_patterns(conn)
         if patterns:
+            checking = checking_codes(conn)
             placeholders = ", ".join("?" * len(touched))
             _release(
                 conn,
                 [
                     id_
-                    for id_, libelle in conn.execute(
-                        f"SELECT id, libelle FROM transactions WHERE id IN ({placeholders})", touched
+                    for id_, libelle, account_id in conn.execute(
+                        f"SELECT id, libelle, account_id FROM transactions WHERE id IN ({placeholders})",
+                        touched,
                     )
-                    if _is_external_deposit(libelle, patterns)
+                    if _is_external_deposit(libelle, account_id, patterns, checking)
                 ],
             )
-    recompute_transfers(db_path)
+        recompute_transfers_in(conn)  # same transaction as the decision
     return touched

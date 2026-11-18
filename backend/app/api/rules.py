@@ -6,8 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.api.categories import reject_group_target
 from app.api.deps import DbPath
-from app.core.categorize import apply_rules
-from app.core.periods import recompute_budget_months
+from app.core.categorize import apply_rules_in
+from app.core.periods import recompute_budget_months_in
 from app.core.rule_issues import rule_issues
 from app.core.triage import rule_preview
 from app.db import connect, euros
@@ -58,8 +58,9 @@ def _reject_unknown_account(conn: sqlite3.Connection, account_id: str | None) ->
 
 def _refresh(db_path: Path) -> None:
     """Rule changes can move both category assignments and (for anchors) period boundaries."""
-    apply_rules(db_path)
-    recompute_budget_months(db_path)
+    with connect(db_path) as conn:  # one transaction: both steps apply or neither
+        apply_rules_in(conn)
+        recompute_budget_months_in(conn)
 
 
 @router.get("")

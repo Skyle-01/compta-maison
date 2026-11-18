@@ -10,7 +10,7 @@ from app.core.categorize import apply_rules
 from app.core.config_export import category_paths
 from app.core.transfers import pair_manually, set_transfer_mode, transfer_candidates
 from app.core.triage import conflicted_operations, uncategorized_groups
-from app.db import connect, euros, real_flow_clause, to_cents
+from app.db import connect, deposit_match_clause, euros, real_flow_clause, to_cents
 from app.schemas import (
     CategorySuggestion,
     ConflictedOperation,
@@ -115,9 +115,9 @@ def _filter_clause(
         where.append("instr(t.libelle, ?) > 0")
         params.append(libelle_contains)
     if deposit_pattern:
-        # An external savings account's deposits: the same case-insensitive test as
-        # recompute_transfers and the derived Épargne leaves (the dashboard drill-down).
-        where.append("instr(casefold(t.libelle), casefold(?)) > 0")
+        # An external savings account's deposits: the same test as recompute_transfers and the
+        # derived Épargne leaves (the dashboard drill-down).
+        where.append(deposit_match_clause("t"))
         params.append(deposit_pattern)
     if rule_id is not None:
         where.append("t.rule_id = ?")

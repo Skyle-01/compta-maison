@@ -42,6 +42,12 @@ def budget_starts(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def recompute_budget_months(db_path: Path) -> int:
+    """recompute_budget_months_in on its own connection."""
+    with connect(db_path) as conn:
+        return recompute_budget_months_in(conn)
+
+
+def recompute_budget_months_in(conn: sqlite3.Connection) -> int:
     """Re-assign every transaction to a paycheck-to-paycheck budget month.
 
     Anchors are credit transactions matching any rule flagged `is_income_anchor`
@@ -54,41 +60,40 @@ def recompute_budget_months(db_path: Path) -> int:
     whose budget_month changed. Idempotent: anchors derive from dates, not from
     previously stored budget_month values.
     """
-    with connect(db_path) as conn:
-        starts = budget_starts(conn)
-        if not starts:
-            cur = conn.execute(
-                "UPDATE transactions SET budget_month = substr(date_valeur, 1, 7) "
-                "WHERE budget_month != substr(date_valeur, 1, 7)"
-            )
-            return cur.rowcount
-
-        anchors = list(starts.items())  # [(month, opening date)]
-
-        changed = 0
-        first_start = anchors[0][1]
+    starts = budget_starts(conn)
+    if not starts:
         cur = conn.execute(
             "UPDATE transactions SET budget_month = substr(date_valeur, 1, 7) "
-            "WHERE date_valeur < ? AND budget_month != substr(date_valeur, 1, 7)",
-            (first_start,),
+            "WHERE budget_month != substr(date_valeur, 1, 7)"
         )
-        changed += cur.rowcount
+        return cur.rowcount
 
-        for i, (month, start) in enumerate(anchors):
-            if i + 1 < len(anchors):
-                next_start = anchors[i + 1][1]
-                cur = conn.execute(
-                    "UPDATE transactions SET budget_month = ? "
-                    "WHERE date_valeur >= ? AND date_valeur < ? AND budget_month != ?",
-                    (month, start, next_start, month),
-                )
-            else:
-                cur = conn.execute(
-                    "UPDATE transactions SET budget_month = ? WHERE date_valeur >= ? AND budget_month != ?",
-                    (month, start, month),
-                )
-            changed += cur.rowcount
-        return changed
+    anchors = list(starts.items())  # [(month, opening date)]
+
+    changed = 0
+    first_start = anchors[0][1]
+    cur = conn.execute(
+        "UPDATE transactions SET budget_month = substr(date_valeur, 1, 7) "
+        "WHERE date_valeur < ? AND budget_month != substr(date_valeur, 1, 7)",
+        (first_start,),
+    )
+    changed += cur.rowcount
+
+    for i, (month, start) in enumerate(anchors):
+        if i + 1 < len(anchors):
+            next_start = anchors[i + 1][1]
+            cur = conn.execute(
+                "UPDATE transactions SET budget_month = ? "
+                "WHERE date_valeur >= ? AND date_valeur < ? AND budget_month != ?",
+                (month, start, next_start, month),
+            )
+        else:
+            cur = conn.execute(
+                "UPDATE transactions SET budget_month = ? WHERE date_valeur >= ? AND budget_month != ?",
+                (month, start, month),
+            )
+        changed += cur.rowcount
+    return changed
 
 
 def partial_months(conn: sqlite3.Connection) -> set[str]:

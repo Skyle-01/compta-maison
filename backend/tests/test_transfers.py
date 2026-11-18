@@ -175,6 +175,17 @@ class TestTransferMarkers:
 class TestPairingAmbiguity:
     """A pair forms only when nothing else could be the other leg: a wrong pair silently hides an
     income (the tenant's rent) or an expense, an unpaired leg merely waits for a manual decision."""
+    def test_external_savings_pattern_ignores_imported_savings_rows(self, db):
+        # The pattern funds from checking accounts only: a row of the imported LIVRET containing it
+        # (interest) stays income, while the same label on a checking account becomes a transfer.
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "INTERETS VERS LIVRET ENFANT", 0, 1, "LIVRET"),
+            ("2026-06-10", "2026-06-10", "VERS LIVRET ENFANT", 25, 0, "PERSO"),
+        )
+        assert recompute_transfers(db) == 1
+        assert _kinds(db) == {"INTERETS VERS LIVRET ENFANT": "income", "VERS LIVRET ENFANT": "transfer"}
+
 
     RENT = ("2026-09-03", "2026-09-03", "VIR INST LOCATAIRE DUPONT", 0, 570, "LOCATIF")
 
@@ -459,6 +470,18 @@ class TestManualTransfers:
         import_rows(db, *self.LEGS)
         recompute_transfers(db)
         touched = set_transfer_mode(db, self._ids(db)["VIR vers LIVRET"], "none")
+    def test_imported_savings_row_with_the_pattern_can_be_paired_manually(self, db):
+        # Accepted side effect of restricting external deposits to checking accounts: a LIVRET row
+        # containing the pattern is an ordinary row again.
+        import_rows(
+            db,
+            ("2026-06-10", "2026-06-10", "RETRAIT DAB", 50, 0, "PERSO"),
+            ("2026-06-10", "2026-06-10", "INTERETS VERS LIVRET ENFANT", 0, 50, "LIVRET"),
+        )
+        ids = self._ids(db)
+        pair_manually(db, ids["RETRAIT DAB"], ids["INTERETS VERS LIVRET ENFANT"])
+        assert self._state(db)["INTERETS VERS LIVRET ENFANT"][0] == "transfer"
+
         assert len(touched) == 2
         recompute_transfers(db)
         assert self._state(db) == {

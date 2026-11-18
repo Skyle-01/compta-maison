@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.periods import partial_months
-from app.db import connect, euros, real_flow_clause, savings_accounts
+from app.db import connect, deposit_match_clause, euros, real_flow_clause, savings_accounts
 
 UNBALANCED_TOLERANCE_CENTS = 1
 
@@ -36,6 +36,12 @@ def find_conflicts(conn: sqlite3.Connection) -> dict[int, list[tuple[int, str, i
 
 
 def apply_rules(db_path: Path) -> None:
+    """apply_rules_in on its own connection."""
+    with connect(db_path) as conn:
+        apply_rules_in(conn)
+
+
+def apply_rules_in(conn: sqlite3.Connection) -> None:
     """Re-categorise all non-manual transactions from label_rules.
 
     Patterns are plain substrings matched case-sensitively against libelle
@@ -44,23 +50,22 @@ def apply_rules(db_path: Path) -> None:
     wins, except on a real-flow operation matched by rules of different categories at its level (a
     conflict, see find_conflicts): it stays uncategorised rather than pick a winner.
     """
-    with connect(db_path) as conn:
-        conn.execute("UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE category_manual = 0")
-        rules = conn.execute(
-            "SELECT id, category_id, pattern, account_id FROM label_rules ORDER BY account_id IS NULL, id"
-        ).fetchall()
-        for rule_id, category_id, pattern, account_id in rules:
-            conn.execute(
-                "UPDATE transactions SET category_id = ?, rule_id = ? "
-                "WHERE category_manual = 0 AND category_id IS NULL AND instr(libelle, ?) > 0 "
-                "AND (? IS NULL OR account_id = ?)",
-                (category_id, rule_id, pattern, account_id, account_id),
-            )
-        conflicted = list(find_conflicts(conn))
-        conn.executemany(
-            "UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE id = ?",
-            [(transaction_id,) for transaction_id in conflicted],
+    conn.execute("UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE category_manual = 0")
+    rules = conn.execute(
+        "SELECT id, category_id, pattern, account_id FROM label_rules ORDER BY account_id IS NULL, id"
+    ).fetchall()
+    for rule_id, category_id, pattern, account_id in rules:
+        conn.execute(
+            "UPDATE transactions SET category_id = ?, rule_id = ? "
+            "WHERE category_manual = 0 AND category_id IS NULL AND instr(libelle, ?) > 0 "
+            "AND (? IS NULL OR account_id = ?)",
+            (category_id, rule_id, pattern, account_id, account_id),
         )
+    conflicted = list(find_conflicts(conn))
+    conn.executemany(
+        "UPDATE transactions SET category_id = NULL, rule_id = NULL WHERE id = ?",
+        [(transaction_id,) for transaction_id in conflicted],
+    )
 
 
 def uncategorized_balance(db_path: Path, month: str | None = None) -> dict[str, Any]:
@@ -589,7 +594,7 @@ def _savings_month_nets(conn, code: str, pattern: str | None, month: str | None)
     if pattern:
         query = (
             "SELECT budget_month, COALESCE(SUM(debit_cents), 0) - COALESCE(SUM(credit_cents), 0) "
-            "FROM transactions WHERE instr(casefold(libelle), casefold(?)) > 0"
+            f"FROM transactions WHERE {deposit_match_clause()}"
         )
         params: list = [pattern]
     else:
